@@ -31,6 +31,7 @@
     "lint": "eslint . && prettier --check .",
     "format": "prettier --write .",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "pretest:integration": "npm run build && tsc -p tsconfig.integration.json",
     "test:integration": "vscode-test",
     "package": "vsce package --no-dependencies"
