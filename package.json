@@ -1,0 +1,211 @@
+{
+  "name": "swage",
+  "displayName": "Swage",
+  "description": "An editor-native coding agent for VS Code whose agent loop runs on TrueForge.",
+  "version": "0.0.1",
+  "publisher": "swage-dev",
+  "license": "MIT",
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tanaygit0530/Swage.git"
+  },
+  "engines": {
+    "vscode": "^1.96.0",
+    "node": ">=22.14.0"
+  },
+  "categories": [
+    "AI",
+    "Programming Languages",
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "swage.inlineEdit",
+        "title": "Inline Edit",
+        "category": "Swage"
+      },
+      {
+        "command": "swage.openAgent",
+        "title": "Open Agent",
+        "category": "Swage"
+      },
+      {
+        "command": "swage.stop",
+        "title": "Stop",
+        "category": "Swage"
+      },
+      {
+        "command": "swage.reviewChanges",
+        "title": "Review Changes",
+        "category": "Swage"
+      },
+      {
+        "command": "swage.undoLastChangeSet",
+        "title": "Undo Last Change Set",
+        "category": "Swage"
+      },
+      {
+        "command": "swage.switchModel",
+        "title": "Switch Model",
+        "category": "Swage"
+      },
+      {
+        "command": "swage.doctor",
+        "title": "Doctor",
+        "category": "Swage"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "swage.inlineEdit",
+        "key": "ctrl+k ctrl+i",
+        "mac": "cmd+k cmd+i",
+        "when": "editorTextFocus && !editorReadonly"
+      },
+      {
+        "command": "swage.stop",
+        "key": "escape",
+        "when": "swage.running"
+      },
+      {
+        "command": "swage.stop",
+        "key": "ctrl+alt+.",
+        "mac": "cmd+alt+.",
+        "when": "swage.running"
+      }
+    ],
+    "configuration": {
+      "title": "Swage",
+      "properties": {
+        "swage.models": {
+          "type": "array",
+          "markdownDescription": "Ordered model profiles. The first is the primary; the rest are fallbacks tried in order. Each profile names a TrueForge model only. API keys and provider URLs never go here; they live in TrueForge's own configuration (blueprint section 9).",
+          "default": [],
+          "items": {
+            "type": "object",
+            "required": [
+              "name",
+              "trueforgeModel"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Profile name, for example primary or fallback-1."
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "hosted",
+                  "local"
+                ],
+                "default": "hosted",
+                "description": "Where the model runs."
+              },
+              "trueforgeModel": {
+                "type": "string",
+                "description": "The model identifier as configured in TrueForge, for example <provider>/<model>."
+              },
+              "params": {
+                "type": "object",
+                "properties": {
+                  "temperature": {
+                    "type": "number",
+                    "default": 0
+                  },
+                  "max_tokens": {
+                    "type": "integer",
+                    "default": 4096
+                  }
+                }
+              },
+              "timeouts": {
+                "type": "object",
+                "properties": {
+                  "connectMs": {
+                    "type": "integer",
+                    "default": 10000
+                  },
+                  "firstTokenMs": {
+                    "type": "integer",
+                    "default": 45000
+                  },
+                  "stallMs": {
+                    "type": "integer",
+                    "default": 30000
+                  },
+                  "totalMs": {
+                    "type": "integer",
+                    "default": 600000
+                  }
+                }
+              }
+            }
+          }
+        },
+        "swage.budgets": {
+          "type": "object",
+          "markdownDescription": "Context token budgets (blueprint section 7). Tokens are estimated as characters divided by 4.",
+          "default": {
+            "repoMapTokens": 1500,
+            "hintsFiles": 5,
+            "hintsTokens": 1000,
+            "toolResultTokens": 4000,
+            "readsPerRunTokens": 30000
+          },
+          "properties": {
+            "repoMapTokens": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Budget for the repository map."
+            },
+            "hintsFiles": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Maximum number of files in the hints block."
+            },
+            "hintsTokens": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Budget for the hints block."
+            },
+            "toolResultTokens": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Budget for a single tool result before truncation."
+            },
+            "readsPerRunTokens": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Total full-file read budget per run."
+            }
+          }
+        },
+        "swage.ignore": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "markdownDescription": "Extra glob patterns the agent must never read or edit, on top of `.gitignore`."
+        },
+        "swage.truefoundry.baseUrl": {
+          "type": "string",
+          "format": "uri",
+          "default": "http://localhost:8790",
+          "markdownDescription": "Base URL of the local TrueForge server."
+        },
+        "swage.autoStart": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Start TrueForge automatically when the extension activates."
+        }
+      }
+    }
+  }
+}
