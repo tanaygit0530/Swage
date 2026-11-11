@@ -1,6 +1,8 @@
 import * as vscode from 'vscode';
 import type { ChangeSet } from '../../changeset/changeSet';
 import { ReviewSession } from '../session';
+import { ReviewCodeLens } from './codelens';
+import { ReviewDecorations } from './decorations';
 import { BASE_SCHEME, openDiff, ReviewDocuments, STAGED_SCHEME } from './documents';
 import { ReviewTree, type ReviewNode } from './tree';
 
@@ -42,12 +44,16 @@ export class ReviewController implements vscode.Disposable {
   private sessionSub: { dispose(): void } | undefined;
   readonly documents: ReviewDocuments;
   readonly tree: ReviewTree;
+  readonly lenses: ReviewCodeLens;
+  readonly decorations: ReviewDecorations;
   private readonly disposables: vscode.Disposable[] = [];
   private readonly view: vscode.TreeView<ReviewNode>;
 
   constructor(readonly context: vscode.ExtensionContext) {
     this.documents = new ReviewDocuments(() => this.session);
     this.tree = new ReviewTree(() => this.session);
+    this.lenses = new ReviewCodeLens(() => this.session);
+    this.decorations = new ReviewDecorations(() => this.session);
     this.view = vscode.window.createTreeView(REVIEW_VIEW_ID, {
       treeDataProvider: this.tree,
       showCollapseAll: true,
@@ -60,6 +66,27 @@ export class ReviewController implements vscode.Disposable {
       vscode.commands.registerCommand('swage.review.openFile', (arg: unknown) =>
         this.openFile(arg),
       ),
+      vscode.languages.registerCodeLensProvider({ scheme: STAGED_SCHEME }, this.lenses),
+      this.decorations,
+      vscode.window.onDidChangeVisibleTextEditors((editors) => this.decorations.update(editors)),
+      vscode.workspace.onDidChangeTextDocument((e) => {
+        if (e.document.uri.scheme === STAGED_SCHEME) this.decorations.update();
+      }),
+      vscode.commands.registerCommand('swage.review.acceptBlock', (arg: unknown) =>
+        this.decide(arg, 'accept'),
+      ),
+      vscode.commands.registerCommand('swage.review.rejectBlock', (arg: unknown) =>
+        this.decide(arg, 'reject'),
+      ),
+      vscode.commands.registerCommand('swage.review.splitBlock', (arg: unknown) => this.split(arg)),
+      vscode.commands.registerCommand('swage.review.acceptFile', (arg: unknown) =>
+        this.decideFile(arg, 'accept'),
+      ),
+      vscode.commands.registerCommand('swage.review.rejectFile', (arg: unknown) =>
+        this.decideFile(arg, 'reject'),
+      ),
+      vscode.commands.registerCommand('swage.review.acceptAll', () => this.decideAll('accept')),
+      vscode.commands.registerCommand('swage.review.rejectAll', () => this.decideAll('reject')),
     );
   }
 
@@ -90,6 +117,8 @@ export class ReviewController implements vscode.Disposable {
 
   protected refresh(): void {
     this.tree.refresh();
+    this.lenses.refresh();
+    this.decorations.update();
     const t = this.session?.totals();
     this.view.message = t ? '' : 'No change set to review. Run the agent first.';
     this.view.badge =
@@ -107,6 +136,38 @@ export class ReviewController implements vscode.Disposable {
     await vscode.commands.executeCommand('setContext', 'swage.reviewActive', false);
     this.refresh();
     cb?.(outcome);
+  }
+
+  /** Accepts or rejects one block. Returns false if there is no such block. */
+  decide(arg: unknown, decision: 'accept' | 'reject'): boolean {
+    const ref = toRef(arg);
+    if (!this.session || !ref?.blockId) return false;
+    return decision === 'accept'
+      ? this.session.accept(ref.path, ref.blockId)
+      : this.session.reject(ref.path, ref.blockId);
+  }
+
+  /** Splits one block into line-sized blocks; returns the new block ids. */
+  split(arg: unknown): string[] {
+    const ref = toRef(arg);
+    if (!this.session || !ref?.blockId) return [];
+    return this.session.split(ref.path, ref.blockId);
+  }
+
+  decideFile(arg: unknown, decision: 'accept' | 'reject'): boolean {
+    // From the diff editor title the argument is the staged URI; with none, use the active editor.
+    const ref = toRef(arg) ?? toRef(vscode.window.activeTextEditor?.document.uri);
+    if (!this.session || !ref || !this.session.file(ref.path)) return false;
+    if (decision === 'accept') this.session.acceptFile(ref.path);
+    else this.session.rejectFile(ref.path);
+    return true;
+  }
+
+  decideAll(decision: 'accept' | 'reject'): boolean {
+    if (!this.session) return false;
+    if (decision === 'accept') this.session.acceptAll();
+    else this.session.rejectAll();
+    return true;
   }
 
   async show(): Promise<void> {
@@ -129,5 +190,6 @@ export class ReviewController implements vscode.Disposable {
     for (const d of this.disposables) d.dispose();
     this.documents.dispose();
     this.tree.dispose();
+    this.lenses.dispose();
   }
 }

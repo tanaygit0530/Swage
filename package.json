@@ -82,6 +82,55 @@
         "title": "Open Diff",
         "category": "Swage",
         "icon": "$(diff)"
+      },
+      {
+        "command": "swage.review.acceptBlock",
+        "title": "Accept Block",
+        "category": "Swage",
+        "icon": "$(check)",
+        "enablement": "swage.reviewActive"
+      },
+      {
+        "command": "swage.review.rejectBlock",
+        "title": "Reject Block",
+        "category": "Swage",
+        "icon": "$(close)",
+        "enablement": "swage.reviewActive"
+      },
+      {
+        "command": "swage.review.splitBlock",
+        "title": "Split Block",
+        "category": "Swage",
+        "icon": "$(split-vertical)",
+        "enablement": "swage.reviewActive"
+      },
+      {
+        "command": "swage.review.acceptFile",
+        "title": "Accept All Blocks in File",
+        "category": "Swage",
+        "icon": "$(check-all)",
+        "enablement": "swage.reviewActive"
+      },
+      {
+        "command": "swage.review.rejectFile",
+        "title": "Reject All Blocks in File",
+        "category": "Swage",
+        "icon": "$(close-all)",
+        "enablement": "swage.reviewActive"
+      },
+      {
+        "command": "swage.review.acceptAll",
+        "title": "Accept All",
+        "category": "Swage",
+        "icon": "$(check-all)",
+        "enablement": "swage.reviewActive"
+      },
+      {
+        "command": "swage.review.rejectAll",
+        "title": "Reject All",
+        "category": "Swage",
+        "icon": "$(close-all)",
+        "enablement": "swage.reviewActive"
       }
     ],
     "menus": {
@@ -89,6 +138,85 @@
         {
           "command": "swage.review.openFile",
           "when": "false"
+        },
+        {
+          "command": "swage.review.acceptBlock",
+          "when": "false"
+        },
+        {
+          "command": "swage.review.rejectBlock",
+          "when": "false"
+        },
+        {
+          "command": "swage.review.splitBlock",
+          "when": "false"
+        },
+        {
+          "command": "swage.review.acceptFile",
+          "when": "swage.reviewActive"
+        },
+        {
+          "command": "swage.review.rejectFile",
+          "when": "swage.reviewActive"
+        },
+        {
+          "command": "swage.review.acceptAll",
+          "when": "swage.reviewActive"
+        },
+        {
+          "command": "swage.review.rejectAll",
+          "when": "swage.reviewActive"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "swage.review.acceptAll",
+          "when": "view == swage.review && swage.reviewActive",
+          "group": "navigation@1"
+        },
+        {
+          "command": "swage.review.rejectAll",
+          "when": "view == swage.review && swage.reviewActive",
+          "group": "navigation@2"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "swage.review.acceptFile",
+          "when": "view == swage.review && viewItem == swage.review.file",
+          "group": "inline@1"
+        },
+        {
+          "command": "swage.review.rejectFile",
+          "when": "view == swage.review && viewItem == swage.review.file",
+          "group": "inline@2"
+        },
+        {
+          "command": "swage.review.acceptBlock",
+          "when": "view == swage.review && viewItem =~ /^swage\\.review\\.block\\.(pending|rejected)$/",
+          "group": "inline@1"
+        },
+        {
+          "command": "swage.review.rejectBlock",
+          "when": "view == swage.review && viewItem =~ /^swage\\.review\\.block\\.(pending|accepted)$/",
+          "group": "inline@2"
+        },
+        {
+          "command": "swage.review.splitBlock",
+          "when": "view == swage.review && viewItem =~ /^swage\\.review\\.block\\./",
+          "group": "actions@1"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "swage.review.acceptFile",
+          "when": "resourceScheme == swage-staged && swage.reviewActive",
+          "group": "navigation@1"
+        },
+        {
+          "command": "swage.review.rejectFile",
+          "when": "resourceScheme == swage-staged && swage.reviewActive",
+          "group": "navigation@2"
         }
       ]
     },
