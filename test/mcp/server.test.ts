@@ -5,6 +5,9 @@ import { runTool, textResult, ToolError, type ToolContext } from '../../src/mcp/
 import { buildMcpServer, type ToolRegistration } from '../../src/mcp/server';
 import { startHarness, type Harness } from './harness';
 
+/** Called when the slow probe has started, so tests can cancel mid-call without timing races. */
+let onSlowStart: (() => void) | undefined;
+
 /** A probe tool that exercises runTool: echo, a ToolError, a crash, a secret, a slow call. */
 const probe: ToolRegistration = (server, ctx: ToolContext) => {
   server.registerTool(
@@ -16,6 +19,7 @@ const probe: ToolRegistration = (server, ctx: ToolContext) => {
       if (mode === 'crash') throw new Error('kaboom');
       if (mode === 'secret') return textResult(`key gs${'k_'}A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6`);
       if (mode === 'slow') {
+        onSlowStart?.();
         await new Promise((r) => setTimeout(r, ms ?? 50));
         call.signal.throwIfAborted();
       }
@@ -159,8 +163,8 @@ describe('runTool rules', () => {
 
   it('discards a late result when the task is cancelled mid-call', async () => {
     h.ctx.tasks.start('task-2', 'turn-a');
+    onSlowStart = () => h.ctx.tasks.cancel('task-2');
     const pending = h.call('probe', { mode: 'slow', ms: 100 });
-    setTimeout(() => h.ctx.tasks.cancel('task-2'), 20);
     const r = await pending;
     expect(r.isError).toBe(true);
     expect(JSON.parse(h.text(r)).error.code).toBe('cancelled');
@@ -168,9 +172,10 @@ describe('runTool rules', () => {
 
   it('discards a result whose turn changed while it ran', async () => {
     h.ctx.tasks.start('task-3', 'turn-a');
+    onSlowStart = () => h.ctx.tasks.setTurn('task-3', 'turn-b');
     const pending = h.call('probe', { mode: 'slow', ms: 60 });
-    setTimeout(() => h.ctx.tasks.setTurn('task-3', 'turn-b'), 10);
     expect(JSON.parse(h.text(await pending)).error.code).toBe('cancelled');
+    onSlowStart = undefined;
     expect(h.text(await h.call('probe', { mode: 'echo' }))).toBe('echo echo for task-3');
   });
 });
