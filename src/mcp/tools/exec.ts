@@ -23,7 +23,7 @@ export async function runInShadow(
   call: ToolCall,
   command: string,
   argv: readonly string[],
-  options: { runner?: string; timeoutS: number },
+  options: { runner?: string; timeoutS: number; env?: Record<string, string> },
 ): Promise<CallToolResult> {
   const t0 = performance.now();
   const shadow = await createShadow(ctx.root, ctx.guard, call.task.changeSet);
@@ -34,7 +34,7 @@ export async function runInShadow(
     const prepared = prepareCommand(argv, ctx.root, shadow.dir, options.runner);
     const run = await runProcess(prepared.argv, {
       cwd: shadow.dir,
-      env: prepared.env,
+      env: { ...prepared.env, ...(options.env ?? {}) },
       timeoutMs: options.timeoutS * 1000,
       signal: call.signal,
     });
