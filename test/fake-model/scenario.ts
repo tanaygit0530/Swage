@@ -52,7 +52,11 @@ export type ScenarioToolCall = z.infer<typeof ToolCallSchema>;
 export type ScenarioStep = z.infer<typeof StepSchema>;
 export type Scenario = z.infer<typeof ScenarioSchema>;
 
-export const SCENARIO_DIR = path.join(__dirname, 'scenarios');
+/** In bundled scripts (ESM) `__dirname` does not exist; they run from the repository root. */
+export const SCENARIO_DIR =
+  typeof __dirname === 'string'
+    ? path.join(__dirname, 'scenarios')
+    : path.join(process.cwd(), 'test', 'fake-model', 'scenarios');
 
 export function parseScenario(json: string, source = 'scenario'): Scenario {
   const result = ScenarioSchema.safeParse(JSON.parse(json));
