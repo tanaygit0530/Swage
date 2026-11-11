@@ -4,5 +4,7 @@
 !dist/webview-style.css
 !dist/wasm/*.wasm
 !package.json
+!media/**
+!trueforge/agents/*.json
 !README.md
 !LICENSE

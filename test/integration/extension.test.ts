@@ -21,4 +21,9 @@ suite('Swage extension', () => {
       assert.ok(all.includes(id), `missing command ${id}`);
     }
   });
+
+  test('contributes the agent panel view', async () => {
+    const all = await vscode.commands.getCommands(true);
+    assert.ok(all.includes('swage.agentView.focus'), 'agent view not registered');
+  });
 });

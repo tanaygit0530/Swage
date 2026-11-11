@@ -78,6 +78,24 @@
         "category": "Swage"
       }
     ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "swage",
+          "title": "Swage",
+          "icon": "media/swage.svg"
+        }
+      ]
+    },
+    "views": {
+      "swage": [
+        {
+          "type": "webview",
+          "id": "swage.agentView",
+          "name": "Agent"
+        }
+      ]
+    },
     "keybindings": [
       {
         "command": "swage.inlineEdit",
