@@ -25,6 +25,7 @@ export default defineConfig({
         'src/review/**/*.ts',
         'src/inline/**/*.ts',
         'src/resilience/**/*.ts',
+        'src/doctor/**/*.ts',
       ],
       // controller.ts and the vscode folders need VS Code, main.tsx a browser; the integration test and F5 cover them.
       exclude: [
@@ -33,6 +34,7 @@ export default defineConfig({
         'src/review/vscode/**',
         'src/inline/vscode/**',
         'src/resilience/vscode/**',
+        'src/doctor/vscode.ts',
         'src/ui/webview/main.tsx',
       ],
       reporter: ['text', 'text-summary', 'json-summary'],
