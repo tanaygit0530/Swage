@@ -40,7 +40,7 @@ export interface InlineEditOptions {
   /** Fallback across model profiles, exactly as in agent mode (Task C repeats Task A inline). */
   readonly resilience?: Pick<
     AgentRunOptions,
-    'router' | 'agentBase' | 'prepareAgent' | 'onSwitch' | 'clock'
+    'router' | 'agentBase' | 'prepareAgent' | 'onSwitch' | 'clock' | 'onEvent'
   >;
 }
 

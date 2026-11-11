@@ -4,5 +4,5 @@
     "types": ["node", "mocha"],
     "noEmit": true
   },
-  "include": ["test/integration/**/*.ts", "test/screenshots/**/*.ts"]
+  "include": ["test/integration/**/*.ts", "test/screenshots/**/*.ts", "test/rehearse/**/*.ts"]
 }

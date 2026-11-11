@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import type { SdkLike } from './client/client';
-import { AGENT_VIEW_ID, AgentController } from './agent/controller';
+import { AGENT_VIEW_ID, AgentController, type RunEventRecord } from './agent/controller';
 import { COMMANDS, RUNNING_CONTEXT_KEY, stubMessage } from './commands';
 import { DoctorController } from './doctor/vscode';
 import { InlineController } from './inline/vscode/controller';
@@ -19,6 +19,7 @@ export interface SwageTestApi {
   startRun(prompt: string): Promise<void>;
   runState(): string | undefined;
   resetRuntime(): Promise<void>;
+  onRunEvent(listener: (e: RunEventRecord) => void): vscode.Disposable;
   readonly review: ReviewController;
   readonly inline: InlineController;
   readonly models: ModelsController;
@@ -84,6 +85,7 @@ export function activate(context: vscode.ExtensionContext): SwageTestApi | undef
     startRun: (prompt) => agent.start(prompt),
     runState: () => agent.runState,
     resetRuntime: () => agent.resetRuntime(),
+    onRunEvent: (listener) => agent.onRunEvent(listener),
     review: reviewer,
     inline: inliner,
     models: modeller,

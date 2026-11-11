@@ -25,6 +25,7 @@ import {
 import type { ReviewController } from '../review/vscode/controller';
 import { parseWebviewMessage, type HostToWebview, type WebviewToHost } from '../ui/protocol';
 import { EventRelay } from './relay';
+import type { SwageEvent } from '../client/events';
 import { AgentRun, type AgentRunOptions } from './run';
 
 /**
@@ -58,10 +59,16 @@ function nonce(): string {
   return randomBytes(16).toString('base64');
 }
 
+/** One event of a run, as seen by onRunEvent listeners. */
+export type RunEventRecord =
+  | { readonly kind: 'agent' | 'inline'; readonly event: SwageEvent }
+  | { readonly kind: 'agent' | 'inline'; readonly switched: string };
+
 export class AgentController implements vscode.WebviewViewProvider, vscode.Disposable {
   private view: vscode.WebviewView | undefined;
   private runtime: Promise<Runtime> | undefined;
   private ready: Runtime | undefined;
+  private readonly eventListeners = new Set<(e: RunEventRecord) => void>();
   private run: AgentRun | undefined;
   private readonly logger: Logger;
   /** Test hook: replaces TrueForge with a scripted SDK (set only by the integration tests). */
@@ -300,15 +307,29 @@ export class AgentController implements vscode.WebviewViewProvider, vscode.Dispo
   resilience(
     rt: Runtime,
     agentBase: 'swage-main' | 'swage-inline',
-  ): Pick<AgentRunOptions, 'router' | 'agentBase' | 'prepareAgent' | 'onSwitch'> {
+  ): Pick<AgentRunOptions, 'router' | 'agentBase' | 'prepareAgent' | 'onSwitch' | 'onEvent'> {
+    const kind = agentBase === 'swage-main' ? 'agent' : 'inline';
+    const onEvent = (event: SwageEvent): void => {
+      for (const l of [...this.eventListeners]) l({ kind, event });
+    };
     const router = this.models?.router;
-    if (!router) return {};
+    if (!router) return { onEvent };
     return {
       router,
       agentBase,
       prepareAgent: rt.prepareAgent,
-      onSwitch: (d) => this.models?.notifySwitch(d),
+      onSwitch: (d) => {
+        for (const l of [...this.eventListeners]) l({ kind, switched: d.message });
+        this.models?.notifySwitch(d);
+      },
+      onEvent,
     };
+  }
+
+  /** Every run event (agent and inline), for the session log and rehearsal evidence. */
+  onRunEvent(listener: (e: RunEventRecord) => void): vscode.Disposable {
+    this.eventListeners.add(listener);
+    return new vscode.Disposable(() => this.eventListeners.delete(listener));
   }
 
   private async createRuntime(): Promise<Runtime> {

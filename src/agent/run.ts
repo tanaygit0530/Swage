@@ -70,6 +70,8 @@ export interface AgentRunOptions {
   readonly onSwitch?: (decision: Extract<Decision, { action: 'switch' }>) => void;
   /** Timer source for the watchdog and backoff sleeps (tests). */
   readonly clock?: Clock;
+  /** Every event of the current turn, as received (logs, evidence, the session export). */
+  readonly onEvent?: (event: SwageEvent) => void;
 }
 
 export type RunOutcome = 'done' | 'paused' | 'cancelled' | 'error';
@@ -386,6 +388,7 @@ export class AgentRun {
           }
           continue;
         }
+        this.opts.onEvent?.(event);
         if (watchdog) {
           if (event.type === 'text') watchdog.activity();
           else if (event.type === 'tool_start') watchdog.toolStarted(event.toolCallId);
