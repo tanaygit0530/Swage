@@ -276,6 +276,11 @@ export class AgentController implements vscode.WebviewViewProvider, vscode.Dispo
     await this.trackBusy(this.run.start(prompt));
   }
 
+  /** Task id of the current (or last) agent run, for tests and the session log. */
+  get runTaskId(): string | undefined {
+    return this.run?.taskId;
+  }
+
   /** State of the current run, for tests and the status bar. */
   get runState(): string | undefined {
     return this.run?.state;

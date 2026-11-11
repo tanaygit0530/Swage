@@ -73,6 +73,11 @@ function pytest(...args: string[]): { ok: boolean; summary: string; failed: stri
 const status = (): string => git('status', '--porcelain');
 
 async function reset(): Promise<void> {
+  // Nothing from an earlier run may still be going (an agent run left behind would refuse the next).
+  if (['starting', 'running'].includes(api.runState() ?? '')) {
+    await vscode.commands.executeCommand('swage.stop');
+    await waitFor(() => !['starting', 'running'].includes(api.runState() ?? ''), 30_000);
+  }
   if (api.review.current) await vscode.commands.executeCommand('swage.review.discard');
   await vscode.commands.executeCommand('workbench.action.closeAllEditors');
   git('reset', '--quiet', '--hard', 'HEAD');
@@ -454,13 +459,18 @@ async function taskB(id: string, opts: { keep?: boolean } = {}): Promise<boolean
   else await vscode.commands.executeCommand('workbench.action.closeAllEditors');
   const rec = new Recorder();
   const lag = lagMonitor();
+  const previous = api.runTaskId();
   void api.startRun(TASK_B);
-  const reviewed = await waitFor(
-    () =>
-      api.review.current !== undefined ||
-      ['done', 'error', 'cancelled'].includes(api.runState() ?? ''),
-    15 * 60_000,
-  );
+  // Wait for this run to exist before reading its state (the last run's state is still "done").
+  const started = await waitFor(() => api.runTaskId() !== previous, 120_000);
+  const reviewed =
+    started &&
+    (await waitFor(
+      () =>
+        api.review.current !== undefined ||
+        ['done', 'error', 'cancelled'].includes(api.runState() ?? ''),
+      15 * 60_000,
+    ));
   const toReviewMs = rec.ms;
   const base: Record<string, unknown> = {
     task: 'B',

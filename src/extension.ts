@@ -18,6 +18,7 @@ export interface SwageTestApi {
   setSdkFactory(factory: (mcp: { url: string; token: string }) => SdkLike): void;
   startRun(prompt: string): Promise<void>;
   runState(): string | undefined;
+  runTaskId(): string | undefined;
   resetRuntime(): Promise<void>;
   onRunEvent(listener: (e: RunEventRecord) => void): vscode.Disposable;
   readonly review: ReviewController;
@@ -84,6 +85,7 @@ export function activate(context: vscode.ExtensionContext): SwageTestApi | undef
     },
     startRun: (prompt) => agent.start(prompt),
     runState: () => agent.runState,
+    runTaskId: () => agent.runTaskId,
     resetRuntime: () => agent.resetRuntime(),
     onRunEvent: (listener) => agent.onRunEvent(listener),
     review: reviewer,
