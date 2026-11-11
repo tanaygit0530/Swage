@@ -27,4 +27,5 @@ These rules apply to every session working in this repo.
 - Before every commit run `npm run lint`, `npm test` and `npm run build` (once they exist). Never commit a red build.
 - After every logical change that builds and passes its tests, make a git commit with a Conventional Commit message (`feat`, `fix`, `test`, `docs`, `chore`, `refactor`).
 - Push to `origin main` after each phase and whenever a feature is demonstrably working.
+- Commits and pull requests are authored by tanaygit0530 only. Never add a `Co-Authored-By: Claude` trailer, a "Generated with Claude Code" footer or any other AI attribution line.
 - Keep `docs/PROGRESS.md` up to date: at the end of each phase append what was built, what was tested, and what is open.
