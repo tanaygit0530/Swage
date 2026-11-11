@@ -6,7 +6,13 @@ export default defineConfig({
     environment: 'node',
     coverage: {
       provider: 'v8',
-      include: ['src/changeset/**/*.ts', 'src/safety/**/*.ts', 'src/context/**/*.ts'],
+      include: [
+        'src/changeset/**/*.ts',
+        'src/safety/**/*.ts',
+        'src/context/**/*.ts',
+        'src/supervisor/**/*.ts',
+        'src/client/**/*.ts',
+      ],
       exclude: ['src/**/index.ts'],
       reporter: ['text', 'text-summary', 'json-summary'],
       thresholds: { lines: 90, statements: 90, functions: 90, branches: 90 },
