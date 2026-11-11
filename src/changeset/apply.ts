@@ -13,6 +13,19 @@ export interface WorkspaceFs {
   /** Writes the file, creating parent folders as needed. */
   write(path: string, content: string): Promise<void>;
   remove(path: string): Promise<void>;
+  /**
+   * Optional: writes every step at once, all or nothing (in VS Code, one WorkspaceEdit). When
+   * present it replaces the file-by-file writes and their rollback. It must throw if anything
+   * failed and leave the files unchanged.
+   */
+  writeAll?(steps: readonly WriteStep[]): Promise<void>;
+}
+
+/** One file write in an apply or undo: `to` undefined deletes, `from` undefined means it did not exist. */
+export interface WriteStep {
+  readonly path: string;
+  readonly from: string | undefined;
+  readonly to: string | undefined;
 }
 
 export interface CheckpointEntry {
@@ -237,9 +250,22 @@ export class Applier {
 
   /** Writes every step; on a failure, restores the steps already written. */
   private async writeAll(
-    steps: readonly { path: string; from: string | undefined; to: string | undefined }[],
+    steps: readonly WriteStep[],
   ): Promise<Extract<ApplyError, { code: 'write_failed' }> | undefined> {
-    const done: (typeof steps)[number][] = [];
+    if (this.fs.writeAll) {
+      try {
+        await this.fs.writeAll(steps);
+        return undefined;
+      } catch (err) {
+        return {
+          code: 'write_failed',
+          path: steps[0]?.path ?? '',
+          rolledBack: true,
+          message: `Could not apply the change set: ${(err as Error).message}. Nothing was changed.`,
+        };
+      }
+    }
+    const done: WriteStep[] = [];
     for (const step of steps) {
       try {
         await this.put(step.path, step.to);

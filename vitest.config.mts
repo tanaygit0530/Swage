@@ -21,6 +21,7 @@ export default defineConfig({
         'src/mcp/**/*.ts',
         'src/agent/**/*.ts',
         'src/ui/**/*.ts',
+        'src/review/**/*.ts',
       ],
       // controller.ts needs VS Code and main.tsx a browser; both are covered by the integration test and F5.
       exclude: ['src/**/index.ts', 'src/agent/controller.ts', 'src/ui/webview/main.tsx'],

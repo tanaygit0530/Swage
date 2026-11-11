@@ -359,6 +359,35 @@ export class ChangeSet {
   }
 
   /**
+   * Re-stages a file against new base content (for example after the user edited it on disk):
+   * the staged result is kept, blocks are recomputed against the new base and reset to pending,
+   * so the user reviews the change again. Returns undefined if the file is not staged.
+   */
+  rebase(path: string, newBase: string | undefined): StageSummary | undefined {
+    const p = normalizePath(path);
+    const file = this.files.get(p);
+    if (!file) return undefined;
+    const base = newBase ?? '';
+    const rebased: StagedFile = {
+      ...file,
+      base,
+      baseExists: newBase !== undefined,
+      baseHash: newBase === undefined ? undefined : hashText(base),
+      kind: file.kind === 'delete' ? 'delete' : newBase === undefined ? 'create' : 'modify',
+    };
+    rebased.blocks = computeBlocks(rebased.base, rebased.staged, p);
+    rebased.states = new Map(rebased.blocks.map((b) => [b.id, 'pending']));
+    rebased.fileDecision = 'pending';
+    this.files.set(p, rebased);
+    return summarize(rebased);
+  }
+
+  /** Base (original) content of a staged file, as staged against. */
+  base(path: string): string | undefined {
+    return this.files.get(normalizePath(path))?.base;
+  }
+
+  /**
    * The staged view of a file, for tools that read through the overlay. `undefined` when the
    * file is not staged; `deleted` when the change set deletes it.
    */
