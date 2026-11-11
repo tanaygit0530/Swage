@@ -51,9 +51,29 @@ const ctx = await esbuild.context({
   plugins: [problemMatcherPlugin],
 });
 
+// The agent panel webview: Preact bundled for the browser, with its stylesheet. No CDN.
+const webview = await esbuild.context({
+  entryPoints: { webview: 'src/ui/webview/main.tsx', 'webview-style': 'src/ui/webview/style.css' },
+  bundle: true,
+  format: 'iife',
+  platform: 'browser',
+  target: 'es2022',
+  outdir: 'dist',
+  jsx: 'automatic',
+  jsxImportSource: 'preact',
+  minify: production,
+  sourcemap: !production,
+  sourcesContent: false,
+  logLevel: 'silent',
+  plugins: [problemMatcherPlugin],
+});
+
 if (watch) {
   await ctx.watch();
+  await webview.watch();
 } else {
   await ctx.rebuild();
+  await webview.rebuild();
   await ctx.dispose();
+  await webview.dispose();
 }

@@ -1,5 +1,5 @@
 /**
- * Preact webview: agent panel, receipt and timeline (blueprint section 9).
- * Placeholder module; implementation lands in a later phase.
+ * Agent panel (blueprint sections 3 and 4): the typed webview protocol and the Preact UI in
+ * ./webview (bundled separately into dist/webview.js).
  */
-export {};
+export * from './protocol';

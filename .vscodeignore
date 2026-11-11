@@ -1,5 +1,7 @@
 **
 !dist/extension.js
+!dist/webview.js
+!dist/webview-style.css
 !dist/wasm/*.wasm
 !package.json
 !README.md
