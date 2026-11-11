@@ -76,8 +76,22 @@
         "command": "swage.doctor",
         "title": "Doctor",
         "category": "Swage"
+      },
+      {
+        "command": "swage.review.openFile",
+        "title": "Open Diff",
+        "category": "Swage",
+        "icon": "$(diff)"
       }
     ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "swage.review.openFile",
+          "when": "false"
+        }
+      ]
+    },
     "viewsContainers": {
       "activitybar": [
         {
@@ -93,9 +107,19 @@
           "type": "webview",
           "id": "swage.agentView",
           "name": "Agent"
+        },
+        {
+          "id": "swage.review",
+          "name": "Review"
         }
       ]
     },
+    "viewsWelcome": [
+      {
+        "view": "swage.review",
+        "contents": "Nothing to review yet.\nWhen the agent submits a change set, its files and change blocks appear here. Nothing is written to disk until you apply.\n[Open the agent](command:swage.openAgent)"
+      }
+    ],
     "keybindings": [
       {
         "command": "swage.inlineEdit",

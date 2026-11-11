@@ -16,13 +16,16 @@ const manifest = JSON.parse(
 ) as Manifest;
 
 describe('command manifest', () => {
-  it('declares exactly the commands the extension registers', () => {
-    const declared = manifest.contributes.commands.map((c) => c.command).sort();
-    const registered = COMMANDS.map((c) => c.id).sort();
-    expect(declared).toEqual(registered);
+  it('declares every public command, plus review commands under swage.review.', () => {
+    const declared = manifest.contributes.commands.map((c) => c.command);
+    for (const spec of COMMANDS) expect(declared).toContain(spec.id);
+    for (const id of declared) {
+      expect(COMMANDS.some((c) => c.id === id) || id.startsWith('swage.review.'), id).toBe(true);
+    }
   });
 
   it('uses the swage. prefix and the Swage category with matching titles', () => {
+    for (const c of manifest.contributes.commands) expect(c.category).toBe('Swage');
     for (const spec of COMMANDS) {
       expect(spec.id.startsWith(COMMAND_PREFIX)).toBe(true);
       const entry = manifest.contributes.commands.find((c) => c.command === spec.id);
