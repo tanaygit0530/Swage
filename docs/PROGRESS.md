@@ -153,7 +153,7 @@ Real TrueForge 0.184.2 and SDK 0.184.1. Every API shape was verified against the
 
 - **User action: Flask venv.** It has pytest 9.2.0, which cannot run Flask 3.1.3's tests (`monkeypatch.notset`); run `~/Desktop/Hackthons/flask/.venv/bin/pip install pytest==9.0.2`.
 - **User action: Groq model.** Pick a Groq model this key can use in TrueForge Settings, Models, then update `config/models.json`.
-- **Re-run S9** for Ollama and llama.cpp with TrueForge started from `trueforge/start.sh` in a visible terminal, one local model loaded at a time; find out why TrueForge stopped during the Ollama trial.
+- **S9 second run** (see `docs/SPIKES.md`): Groq still 404 with the re-saved key, so the model ID must change; Ollama `qwen2.5-coder:7b` 0/10 (cold-load header timeouts, then text replies without tool calls); llama.cpp not measured because `llama-server` had stopped. TrueForge survived the Ollama run but stopped soon after, cause unknown. Next: choose a Groq model the key can use, try a tool-capable local model (for example `qwen2.5:7b`), and re-test llama.cpp alone.
 - Unit coverage of `supervisor.ts` is 85% (the real clock and process kill paths are exercised only by the spikes).
 
 ## Phase 4: Local MCP server and editor tools (11 November 2026)

@@ -140,3 +140,22 @@ Findings so far:
 - Gemini Flash calls tools reliably when it has quota; the free tier's rate limit is the real risk for the recording, so record within the quota and keep one request at a time (blueprint section 14).
 - New error shapes for the classifier: `429 … exceeded your current quota` (retry with backoff, then switch), `404 … does not exist or you do not have access` (switch at once: model not found), and `Output truncated: hit the N token limit` (not a provider failure; raise `max_tokens`).
 - The local models must be re-run with TrueForge started from `trueforge/start.sh` in a visible terminal, one local model loaded at a time (8 GB RAM).
+
+### Spike S9: second run (11 November 2026)
+
+TrueForge 0.184.2 started from `trueforge/start.sh` (correct `SQLITE_PATH`, loopback allowed, `HOST=127.0.0.1`); the Groq key was re-saved in TrueForge before this run.
+
+| Profile    | Model                          | Valid tool calls | Notes                                                                                                                                                                                                                                                                                                                                     |
+| ---------- | ------------------------------ | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| fallback-1 | `groq/llama-3-3-70b-versatile` | **0/10**         | Same `404 The model llama-3.3-70b-versatile does not exist or you do not have access to it` with the re-saved key, in 0.2 to 0.6 s. The model ID is the problem, not the key: list the key's models with `GET https://api.groq.com/openai/v1/models` and pick a tool-calling model.                                                       |
+| fallback-2 | `ollama/qwen-2-5-coder-7b`     | **0/10**         | Trials 1 and 2 failed after 81 to 84 s with `Cannot connect to API: Headers Timeout Error`: the 7B model's cold load on 8 GB exceeds TrueForge's 20 s header timeout (twice, with retries). Trial 3 answered after 55 s; trials 3 to 10 ended `done` in 1.9 to 3.3 s **without calling the tool**. TrueForge stayed up for the whole run. |
+| fallback-3 | `llamacpp/qwen-2-5-coder-3b`   | not measured     | Every trial failed in 12 to 160 ms with `connect ECONNREFUSED 127.0.0.1:8080`: `llama-server` was no longer running when its turn came.                                                                                                                                                                                                   |
+
+After the run, TrueForge answered `/healthz`, but about a minute later both TrueForge and `llama-server` were gone. Both ran in the user's own terminal windows, so their exit messages were not visible here. The cause is not known.
+
+Findings:
+
+- `qwen2.5-coder:7b` through Ollama's OpenAI-compatible endpoint does not produce structured tool calls in this setup, so it cannot drive the agent. Candidates for the local fallback: a model Ollama lists with tool support (for example `qwen2.5:7b`, already pulled), or `llama-server` with `--jinja`, which needs a stable run first.
+- TrueForge's model header timeout (20 s, `MODEL_HTTP_HEADERS_TIMEOUT_MS`) is shorter than a local model's cold start on 8 GB. Options: warm the model before use (Doctor can send a one-token request), or start TrueForge with a larger `MODEL_HTTP_HEADERS_TIMEOUT_MS` for local profiles.
+- A further error shape for the classifier: `Cannot connect to API: Headers Timeout Error` on a local profile usually means "still loading"; retry once after a warm-up instead of switching at once.
+- On 8 GB of RAM, running TrueForge, Ollama with a 7B model, `llama-server` and an editor together appears unstable; keep one local model loaded at a time.
