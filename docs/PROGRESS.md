@@ -354,9 +354,38 @@ Blueprint section 3 (F1, F13 and F16), section 6 (inline agent) and section 10 (
   - `-k debug_flag`: 5 passed.
 - **Undo:** Undo restored the file (`git status --porcelain` empty). A second Undo reported `nothing_to_undo`.
 
+### Task A on real TrueForge (11 November 2026, what I saw)
+
+`npm run rehearse:task-a:live` (`test/rehearsal/taskA.live.test.ts`, skipped unless `SWAGE_LIVE=1`) runs the same rehearsal against the running TrueForge 0.184.2. It registers the editor tools and the inline agent, then the real model edits the Flask clone. `SWAGE_MODEL` picks any TrueForge model.
+
+- **`google-gemini/gemini-3-5-flash` (the primary profile):**
+  - Setup registered `editor-tools` (9 tools) and created `swage-inline-primary`.
+  - The cancel demo returned "Cancelled. Workspace unchanged." with `git status` clean.
+  - In the edit run the model first called TrueForge's `list_tools`, then `declare_context`. Then Gemini answered **429, quota exceeded**, about 40 s after the instruction; no edit was staged.
+  - There is no automatic fallback yet (resilience, F6, is a later phase), so the run ended in that error.
+- **`groq/gpt-oss-120b` (fallback-1):** not configured in TrueForge yet ("Unknown model"). TrueForge currently has the Gemini models, `groq/llama-3-3-70b-versatile`, `ollama/qwen-2-5-coder-7b` and `llamacpp/qwen-2-5-coder-3b`.
+- **`google-gemini/gemini-3-5-flash-lite` (via `SWAGE_MODEL`): passed end to end.**
+  - Cancel demo:
+    - "Cancelled. Workspace unchanged." and `git status` clean.
+    - The live trigger fires as soon as the run is going, so Stop landed during the model's first request, before any token. It shows the cancel path, not mid-token streaming.
+  - Edit:
+    - The status bar went "Assembling context…", "Running…", "declare_context…", "Staging the edit…", then the streamed reply.
+    - Tools: `declare_context`, `stage_edit`, with no anchor retry needed.
+    - **Instruction to diff took 12.8 s** (target 15 s); this includes creating the TrueForge session.
+  - The model proposed 2 blocks, both inside the selection:
+    - Block 1/2 (+1 -0) adds the docstring line `Treats "0", "false", "no", "off", and "n" as false (case-insensitively).`
+    - Block 2/2 (+1 -1) changes the return line to `not in {"0", "false", "no", "off", "n"}`.
+  - Rejecting block 1 changed the preview; accepting it again restored the proposal. Apply wrote `src/flask/helpers.py | 3 ++-`.
+  - Verification:
+    - `FLASK_DEBUG=off ... print(get_debug_flag())` printed `False`.
+    - OFF, n, N, no, False and 0 gave False; 1, on and yes gave True.
+    - The `pytest tests/test_helpers.py` results matched the baseline (only `test_async_view` fails, as before); `-k debug_flag` gave 5 passed; `py_compile` passed.
+  - Undo left `git status` clean, and a second Undo reported `nothing_to_undo`.
+
 ### Open
 
-- **Not yet run on real TrueForge with a real model.** The 15-second Task A target in blueprint section 10 needs a real model. When TrueForge is on: F5, open Flask, cursor in `get_debug_flag`, press Cmd+Alt+K and type the exact instruction. Check the time from instruction to diff and that the model produces two blocks.
+- Real TrueForge: the run above went through the engine on a Flask clone, not the VS Code UI. Still to do by hand: F5, open Flask, cursor in `get_debug_flag`, Cmd+Alt+K, the exact instruction, and time it on screen. The primary Gemini 3.5 Flash hit its free-tier quota (429). For the recording, use a model with quota (Flash Lite passed), or configure Groq `openai/gpt-oss-120b` in TrueForge.
+- The primary model spent a step on TrueForge's `list_tools` even though both inline tools are preloaded. Watch for this; it costs latency.
 - The Flask rehearsal exercises the engine and the review model, not the VS Code UI; the VS Code integration test covers the UI on the demo workspace.
 - The instruction box is a quick input at the top of the window, not a widget inside the editor.
 - Flask's own `get_debug_flag` tests do not cover "off" or "n"; Task A does not ask for a test, so none was added.
