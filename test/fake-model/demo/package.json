@@ -1,0 +1,1 @@
+{ "name": "swage-demo", "private": true, "scripts": { "test": "node check.js" } }

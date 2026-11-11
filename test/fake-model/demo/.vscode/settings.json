@@ -1,0 +1,13 @@
+{
+  "swage.truefoundry.baseUrl": "http://localhost:8790",
+  "swage.autoStart": false,
+  "swage.models": [
+    {
+      "name": "fake",
+      "kind": "local",
+      "trueforgeModel": "swage-fake/three-file-edit",
+      "params": { "temperature": 0, "max_tokens": 4096 },
+      "timeouts": { "connectMs": 10000, "firstTokenMs": 30000, "stallMs": 30000, "totalMs": 600000 }
+    }
+  ]
+}

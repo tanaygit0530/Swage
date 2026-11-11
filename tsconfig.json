@@ -22,6 +22,8 @@
     "test/unit/**/*.ts",
     "test/retrieval-eval/*.ts",
     "test/mcp/**/*.ts",
+    "test/fake-model/*.ts",
+    "test/agent/**/*.ts",
     "scripts/**/*.ts",
     "*.config.mts"
   ]

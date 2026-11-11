@@ -13,6 +13,7 @@ export default tseslint.config(
       '.vscode-test/**',
       '*.vsix',
       'test/retrieval-eval/fixture/**',
+      'test/fake-model/demo/**',
     ],
   },
   js.configs.recommended,

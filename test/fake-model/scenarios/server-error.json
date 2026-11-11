@@ -1,0 +1,9 @@
+{
+  "name": "server-error",
+  "description": "Every request gets HTTP 500.",
+  "steps": [
+    {
+      "error": 500
+    }
+  ]
+}

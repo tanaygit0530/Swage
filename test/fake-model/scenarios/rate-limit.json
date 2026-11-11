@@ -1,0 +1,9 @@
+{
+  "name": "rate-limit",
+  "description": "Every request gets HTTP 429.",
+  "steps": [
+    {
+      "error": 429
+    }
+  ]
+}

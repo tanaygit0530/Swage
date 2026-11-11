@@ -1,0 +1,11 @@
+{
+  "name": "stall",
+  "description": "Streams two chunks, then stalls for 30 s before finishing.",
+  "steps": [
+    {
+      "text": ["Starting ", "to answer ", "and then ", "finishing."],
+      "stallAfterChunks": 2,
+      "stallMs": 30000
+    }
+  ]
+}

@@ -1,0 +1,56 @@
+{
+  "name": "approval",
+  "description": "Stages one docs edit and submits it, to approve or deny the submit_change_set pause.",
+  "steps": [
+    {
+      "toolCalls": [
+        {
+          "name": "declare_context",
+          "arguments": {
+            "plan": [
+              "Add a config command that prints the configuration as JSON with secrets masked",
+              "Cover it with a test",
+              "Document it next to the other commands"
+            ],
+            "files": [
+              {
+                "path": "docs/cli.md",
+                "reason": "documents the built-in commands"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "toolCalls": [
+        {
+          "name": "stage_edit",
+          "arguments": {
+            "path": "docs/cli.md",
+            "kind": "edit",
+            "edits": [
+              {
+                "find": "Show the registered routes.\n",
+                "replace": "Show the registered routes.\n\n## config\n\nPrint the configuration as JSON with secret values masked.\n"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "toolCalls": [
+        {
+          "name": "submit_change_set",
+          "arguments": {
+            "summary": "Documented the config command."
+          }
+        }
+      ]
+    },
+    {
+      "text": ["Understood."]
+    }
+  ]
+}

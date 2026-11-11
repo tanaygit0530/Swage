@@ -1,0 +1,11 @@
+{
+  "name": "flaky",
+  "description": "The first attempt gets HTTP 429, the retry succeeds.",
+  "steps": [
+    {
+      "error": 429,
+      "errorTimes": 1,
+      "text": ["Recovered after a retry."]
+    }
+  ]
+}

@@ -37,6 +37,7 @@
     "package": "vsce package --no-dependencies",
     "setup": "node scripts/run.mjs scripts/setup.ts",
     "smoke": "node scripts/run.mjs scripts/smoke.ts",
+    "fake-model": "node scripts/run.mjs scripts/fake-model.ts",
     "spike": "node scripts/run.mjs"
   },
   "contributes": {

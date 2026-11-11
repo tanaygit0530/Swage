@@ -6,6 +6,8 @@ export default defineConfig({
       'test/unit/**/*.test.ts',
       'test/retrieval-eval/**/*.test.ts',
       'test/mcp/**/*.test.ts',
+      'test/fake-model/**/*.test.ts',
+      'test/agent/**/*.test.ts',
     ],
     environment: 'node',
     coverage: {

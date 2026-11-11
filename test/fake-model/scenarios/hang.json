@@ -1,0 +1,9 @@
+{
+  "name": "hang",
+  "description": "The request is accepted and never answered.",
+  "steps": [
+    {
+      "error": "hang"
+    }
+  ]
+}

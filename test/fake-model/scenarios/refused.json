@@ -1,0 +1,9 @@
+{
+  "name": "refused",
+  "description": "The connection is dropped without a response.",
+  "steps": [
+    {
+      "error": "refused"
+    }
+  ]
+}

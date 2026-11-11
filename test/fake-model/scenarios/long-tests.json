@@ -1,0 +1,57 @@
+{
+  "name": "long-tests",
+  "description": "Stages an edit, then runs a two-minute test command, to cancel during run_tests.",
+  "steps": [
+    {
+      "toolCalls": [
+        {
+          "name": "declare_context",
+          "arguments": {
+            "plan": [
+              "Add a config command that prints the configuration as JSON with secrets masked",
+              "Cover it with a test",
+              "Document it next to the other commands"
+            ],
+            "files": [
+              {
+                "path": "docs/cli.md",
+                "reason": "docs change for the long-test scenario"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "toolCalls": [
+        {
+          "name": "stage_edit",
+          "arguments": {
+            "path": "docs/cli.md",
+            "kind": "edit",
+            "edits": [
+              {
+                "find": "Show the registered routes.\n",
+                "replace": "Show the registered routes.\n\n## config\n\nPrint the configuration as JSON with secret values masked.\n"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "toolCalls": [
+        {
+          "name": "run_tests",
+          "arguments": {
+            "command": "npm test -- --slow",
+            "timeout_seconds": 300
+          }
+        }
+      ]
+    },
+    {
+      "text": ["Tests finished."]
+    }
+  ]
+}
