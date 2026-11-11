@@ -41,3 +41,7 @@ __pycache__/
 .AppleDouble
 .LSOverride
 ._*
+
+# Local model profiles (no secrets, but personal)
+config/models.json
+models.local.*
