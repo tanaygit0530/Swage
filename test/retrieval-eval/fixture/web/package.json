@@ -1,0 +1,1 @@
+{ "name": "taskboard-web", "private": true, "dependencies": { "react": "^18.3.1" } }

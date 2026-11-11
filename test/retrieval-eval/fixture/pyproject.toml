@@ -1,0 +1,7 @@
+[project]
+name = "taskboard"
+version = "0.4.0"
+dependencies = ["click>=8.1", "werkzeug>=3.0"]
+
+[project.scripts]
+taskboard = "taskboard.cli:main"

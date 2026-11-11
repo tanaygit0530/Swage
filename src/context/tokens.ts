@@ -19,10 +19,11 @@ export const STOP_WORDS: ReadonlySet<string> = new Set([
   'via', 'per', 'eg', 'ie', 'etc', 'like', 'one', 'two', 'way', 'ensure', 'make', 'sure',
   'please', 'add', 'adds', 'added', 'new', 'use', 'used', 'using', 'need', 'needs', 'want',
   'let', 'lets', 'get', 'set', 'well', 'still', 'instead',
-  // Keywords that appear in almost every file
-  'def', 'class', 'self', 'cls', 'return', 'returns', 'import', 'const', 'var', 'function',
+  // Keywords that appear in almost every file. `import` and `export` stay searchable
+  // because they are also everyday task words ("export tasks as CSV").
+  'def', 'class', 'self', 'cls', 'return', 'returns', 'const', 'var', 'function',
   'while', 'elif', 'none', 'null', 'undefined', 'true', 'false', 'try', 'except', 'finally',
-  'raise', 'throw', 'throws', 'catch', 'pass', 'lambda', 'yield', 'async', 'await', 'export',
+  'raise', 'throw', 'throws', 'catch', 'pass', 'lambda', 'yield', 'async', 'await',
   'public', 'private', 'protected', 'static', 'readonly', 'void', 'str', 'int', 'bool', 'float',
   'string', 'number', 'boolean', 'object', 'any', 'unknown', 'never', 'typeof', 'instanceof',
   'require', 'module', 'exports', 'args', 'kwargs', 'init', 'todo', 'fixme', 'noqa', 'param',
@@ -39,12 +40,17 @@ export function splitIdentifier(identifier: string): string[] {
     .filter((p) => p.length > 0);
 }
 
+/** `logg` -> `log`, `mapp` -> `map`: a doubled final consonant left by `-ing` or `-ed`. */
+function undouble(w: string): string {
+  return /([^aeiouslz])\1$/.test(w) ? w.slice(0, -1) : w;
+}
+
 /** A tiny suffix stemmer; the same rule runs on queries and documents, so it only has to be consistent. */
 export function stem(word: string): string {
   let w = word;
   if (w.length > 4 && w.endsWith('ies')) w = `${w.slice(0, -3)}y`;
-  else if (w.length > 5 && w.endsWith('ing')) w = w.slice(0, -3);
-  else if (w.length > 4 && w.endsWith('ed')) w = w.slice(0, -2);
+  else if (w.length > 5 && w.endsWith('ing')) w = undouble(w.slice(0, -3));
+  else if (w.length > 4 && w.endsWith('ed')) w = undouble(w.slice(0, -2));
   else if (w.length > 3 && w.endsWith('s') && !w.endsWith('ss') && !w.endsWith('us'))
     w = w.slice(0, -1);
   if (w.length > 4 && w.endsWith('e')) w = w.slice(0, -1);
@@ -55,10 +61,17 @@ function keep(part: string): boolean {
   return part.length >= 2 && !/^\d+$/.test(part) && !STOP_WORDS.has(part);
 }
 
-/** Tokens of free text or code, in order, with duplicates. */
-export function tokenize(text: string): string[] {
+/** Words that are syntax in code files but meaningful in prose ("export tasks"). */
+export const CODE_ONLY_KEYWORDS: ReadonlySet<string> = new Set(['import', 'export']);
+
+/**
+ * Tokens of free text or code, in order, with duplicates. `skipWords` drops whole words
+ * (not identifier parts), so `export` the keyword goes but `export_json` still yields `export`.
+ */
+export function tokenize(text: string, skipWords?: ReadonlySet<string>): string[] {
   const out: string[] = [];
   for (const word of text.match(/[A-Za-z_$][A-Za-z0-9_$]*/g) ?? []) {
+    if (skipWords?.has(word)) continue;
     for (const part of splitIdentifier(word)) {
       if (keep(part)) out.push(stem(part));
     }
@@ -66,10 +79,13 @@ export function tokenize(text: string): string[] {
   return out;
 }
 
-/** Term frequencies of `tokenize(text)`. */
-export function termFrequencies(text: string): Map<string, number> {
+/** Term frequencies of `tokenize(text, skipWords)`. */
+export function termFrequencies(
+  text: string,
+  skipWords?: ReadonlySet<string>,
+): Map<string, number> {
   const tf = new Map<string, number>();
-  for (const t of tokenize(text)) tf.set(t, (tf.get(t) ?? 0) + 1);
+  for (const t of tokenize(text, skipWords)) tf.set(t, (tf.get(t) ?? 0) + 1);
   return tf;
 }
 

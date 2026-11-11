@@ -4,7 +4,7 @@ import * as path from 'node:path';
 import ignore, { type Ignore } from 'ignore';
 import { parseIgnoreFile, PathGuard } from '../safety/pathGuard';
 import { grammarOf, type CodeParser, type CodeSymbol } from './symbols';
-import { estimateTokens, termFrequencies } from './tokens';
+import { CODE_ONLY_KEYWORDS, estimateTokens, termFrequencies } from './tokens';
 
 /**
  * Workspace index for lexical retrieval (blueprint section 7). Walks the workspace while
@@ -368,7 +368,7 @@ export class WorkspaceIndex {
     const text = new TextDecoder().decode(bytes);
     const grammar = grammarOf(rel);
     const parsed = grammar ? this.parser.parse(text, grammar) : { symbols: [], imports: [] };
-    const tf = termFrequencies(text);
+    const tf = termFrequencies(text, grammar ? CODE_ONLY_KEYWORDS : undefined);
     let tokenCount = 0;
     for (const n of tf.values()) tokenCount += n;
     return {

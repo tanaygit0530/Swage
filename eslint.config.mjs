@@ -5,7 +5,15 @@ import globals from 'globals';
 
 export default tseslint.config(
   {
-    ignores: ['dist/**', 'out/**', 'node_modules/**', 'coverage/**', '.vscode-test/**', '*.vsix'],
+    ignores: [
+      'dist/**',
+      'out/**',
+      'node_modules/**',
+      'coverage/**',
+      '.vscode-test/**',
+      '*.vsix',
+      'test/retrieval-eval/fixture/**',
+    ],
   },
   js.configs.recommended,
   ...tseslint.configs.strict,
@@ -19,7 +27,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ['esbuild.mjs', 'scripts/**'],
+    files: ['esbuild.mjs', 'scripts/**', 'test/retrieval-eval/**'],
     rules: { 'no-console': 'off' },
   },
   prettier,

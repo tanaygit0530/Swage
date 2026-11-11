@@ -17,5 +17,11 @@
     "resolveJsonModule": true,
     "noEmit": true
   },
-  "include": ["src/**/*.ts", "test/unit/**/*.ts", "scripts/**/*.ts", "*.config.mts"]
+  "include": [
+    "src/**/*.ts",
+    "test/unit/**/*.ts",
+    "test/retrieval-eval/*.ts",
+    "scripts/**/*.ts",
+    "*.config.mts"
+  ]
 }
