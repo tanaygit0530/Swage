@@ -243,3 +243,48 @@ Blueprint sections 3 (F2, F3, F5, F14, F15), 4, 8 and 10.
 - The panel's Retry starts a fresh run with the same request (a new session); resuming a stopped session is not offered.
 - Reload safety (F11) and the session log export (F12) are not built.
 - The webview bundle is 834 KB unminified (zod validates messages inside the webview too); the production build is minified.
+
+## Phase 6: Review experience (11 November 2026)
+
+Blueprint section 8, built on the Phase 2 change-set engine.
+
+### Built
+
+- `src/review/model.ts` and `session.ts`: a VS Code-free review session per task.
+  - It handles per-block accept, reject and split, plus accept or reject per file and for everything.
+  - The preview drops rejected blocks, so the diff shows exactly what Apply will write.
+  - Stats per file: blocks, added and removed lines.
+  - `rebase` re-stages a file from new disk content.
+- Native diff: read-only `swage-base:` and `swage-staged:` documents opened with `vscode.diff`. The Review tree lists files with block counts and +/- lines, and each file has block rows under it.
+- CodeLens per block shows "Block i/n · +a -r", Accept, Reject and Split (Split only when the block has more than one line on a side). Decided blocks show "Accepted | Reject instead" or "Rejected | Accept instead". Gutter and overview-ruler marks show each block's state.
+- Commands are available as buttons and in the palette: Accept and Reject block, file and all; Apply; Discard. Accepting or rejecting refreshes the tree, lenses, decorations and diff live.
+  - Swage contributes `diffEditor.codeLens: true` as a default, because VS Code turns lenses off in diff editors otherwise.
+- Apply builds one atomic `WorkspaceEdit` from the accepted result after a hash check against disk (an unsaved open document counts as disk).
+  - On conflict, a clear message offers "Re-stage from current files". Nothing is partially applied.
+  - Pending blocks need a confirmation; they are not applied.
+- Undo: `swage.undoLastChangeSet` restores checkpoints two levels deep.
+  - History persists in global storage (`checkpoints-<hash>.json`, written atomically), so it survives a reload.
+  - A notification with an Undo button follows every Apply.
+- The agent's `submit_change_set` approval is driven by the review: Apply approves (the tool result lists accepted and not-applied block ids), Discard denies with a reason. The panel's Approve and Deny buttons map to Apply and Discard.
+- Screenshots: `npm run screenshots` captures `docs/images/review-diff.png` and `review-decisions.png` from a test VS Code over the remote debugging port. They use only fake-model content and contain no secrets.
+
+### Tested
+
+- 416 unit tests pass (1 skipped: Flask evaluation); lint and build pass. Coverage is 96.9% statements and 90.1% branches; `src/review/vscode/*` is excluded from unit coverage because it needs VS Code, and the integration test covers it.
+- New unit tests cover:
+  - the preview model, with one and many blocks;
+  - session decisions, split and rebase;
+  - checkpoint save and load, including a simulated reload followed by two undos;
+  - an atomic `writeAll` failure that leaves files unchanged;
+  - the applied summary from `submit_change_set`.
+- VS Code integration test (`@vscode/test-cli`, 3 passing) on a temp copy of the demo workspace runs a scripted fake-model task that edits three files.
+  - It accepts the `app/cli.py` block, rejects the `docs/cli.md` block and leaves the test file pending.
+  - Apply writes only `app/cli.py`, and the agent run finishes `done`.
+  - Undo restores every file; a second Undo reports nothing to undo.
+
+### Open
+
+- Reload survival is tested at the storage layer (save, load in a fresh applier, undo twice), not by reloading a real window.
+- The integration test applies with `confirmPending: false`; the modal confirmation and the conflict re-stage dialog were checked by hand, not automated.
+- The screenshots use a narrow sidebar, so the Review tree's labels are cut off.
+- Still open from Phase 5: reload safety for a running task (F11) and the session log export (F12).
