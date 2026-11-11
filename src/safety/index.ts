@@ -1,5 +1,7 @@
 /**
- * Path guard, secret redaction and the run_tests allowlist (blueprint section 9).
- * Placeholder module; implementation lands in a later phase.
+ * Path guard, secret redaction and the run_tests command policy (blueprint sections 6 and 9).
+ * Pure TypeScript with no `vscode` import.
  */
-export {};
+export * from './commandPolicy';
+export * from './pathGuard';
+export * from './redact';
