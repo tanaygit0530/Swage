@@ -131,6 +131,20 @@
         "category": "Swage",
         "icon": "$(close-all)",
         "enablement": "swage.reviewActive"
+      },
+      {
+        "command": "swage.review.apply",
+        "title": "Apply Accepted Blocks",
+        "category": "Swage",
+        "icon": "$(save-all)",
+        "enablement": "swage.reviewActive"
+      },
+      {
+        "command": "swage.review.discard",
+        "title": "Discard Change Set",
+        "category": "Swage",
+        "icon": "$(trash)",
+        "enablement": "swage.reviewActive"
       }
     ],
     "menus": {
@@ -166,9 +180,22 @@
         {
           "command": "swage.review.rejectAll",
           "when": "swage.reviewActive"
+        },
+        {
+          "command": "swage.review.apply",
+          "when": "swage.reviewActive"
+        },
+        {
+          "command": "swage.review.discard",
+          "when": "swage.reviewActive"
         }
       ],
       "view/title": [
+        {
+          "command": "swage.review.apply",
+          "when": "view == swage.review && swage.reviewActive",
+          "group": "navigation@0"
+        },
         {
           "command": "swage.review.acceptAll",
           "when": "view == swage.review && swage.reviewActive",
@@ -178,6 +205,11 @@
           "command": "swage.review.rejectAll",
           "when": "view == swage.review && swage.reviewActive",
           "group": "navigation@2"
+        },
+        {
+          "command": "swage.review.discard",
+          "when": "view == swage.review && swage.reviewActive",
+          "group": "navigation@3"
         }
       ],
       "view/item/context": [
