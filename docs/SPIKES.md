@@ -165,3 +165,18 @@ Findings:
 Source: `packages/trueforge-core/src/core/runtime/DeferredTool.ts` at tag 0.184.2. For an MCP server whose tools are deferred, TrueForge gives the model four meta tools: `list_tools { mcp_server }`, `get_tool_info { mcp_server, tool_name }`, `get_tool_output_schema { mcp_server, tool_name }` and `call_tool { mcp_server, tool_name, input }` (`input` defaults to `{}`). For `call_tool`, `toolCallInfo` resolves the underlying tool, so the event's tool info names the real tool (`run_tests`), but `function.arguments` stays the `call_tool` envelope.
 
 Effect: Swage unwraps `input` before summarising arguments or reading a `run_command` command for approval (`parseToolArgs`), the fake-model scenarios call deferred tools (`run_tests`) through `call_tool`, and the scripted TrueForge stand-in resolves `call_tool` the same way.
+
+## Rehearsal finding: `preload_tools` and TrueForge's deferred-tools instruction (11 November 2026)
+
+**Observed.** In the first real Task A rehearsal run, the inline agent (`preload: false`, `preload_tools: [declare_context, stage_edit]`) called `list_tools`, `get_tool_info` twice, and then both tools through `call_tool`. That cost about 6 s, three extra model turns and most of the run's 16,998 tokens. The stored manifest (`agents.get`) did have `preloadTools` set.
+
+**Verified in TrueForge 0.184.2's code** (`@truefoundry/trueforge-core/dist`):
+
+- `core/mcp/ToolSelectorPolicy.js` marks each `preload_tools` entry as preloaded.
+- `core/mcp/convertMCPServers.js` gives those tools to the model directly.
+- But `core/runtime/DeferredTool.js` `buildInstruction` lists every server with `preload: false` under "Their tools are NOT pre-loaded. The Agent MUST use list_tools and get_tool_info to discover tools before calling them.", even when some of its tools are preloaded. The model follows that instruction.
+
+**Design change.**
+
+- The inline agent sets `preload: true`. It enables only `declare_context` and `stage_edit`, so this adds no tool definitions, and the instruction goes away.
+- The main agent keeps `preload: false` with `preload_tools`, so deferred discovery of `run_tests`, `get_symbol`, `repo_map` and `run_command` stays visible for B4. Its instructions now name the tools that are already loaded and say to call them directly.

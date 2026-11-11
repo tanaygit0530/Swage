@@ -27,6 +27,9 @@ describe('agent manifests (blueprint section 6)', () => {
     };
     expect(wire.mcp_servers[0]?.enable_tools).toEqual(['declare_context', 'stage_edit']);
     expect(wire.mcp_servers[0]?.preload_tools).toEqual(['declare_context', 'stage_edit']);
+    // preload true: TrueForge then adds no "tools are NOT pre-loaded, MUST use list_tools"
+    // instruction (trueforge-core DeferredTool.js), so the model calls the two tools directly.
+    expect((wire.mcp_servers[0] as { preload?: boolean } | undefined)?.preload).toBe(true);
     expect(wire.config.iteration_limit).toBe(8);
     expect(wire.instructions).toMatch(/^Inline edit: change only the editable range/);
   });
@@ -35,7 +38,7 @@ describe('agent manifests (blueprint section 6)', () => {
     expect(toWireManifest(manifests['swage-main'])).toEqual({
       model: { name: '<provider>/<model>', params: { temperature: 0, max_tokens: 4096 } },
       instructions:
-        'Short workflow: plan, retrieve, declare, stage, test, submit. Done means code, test and docs are updated.',
+        'Short workflow: plan, retrieve, declare, stage, test, submit. Done means code, test and docs are updated. find_relevant_code, read_files, declare_context, stage_edit and submit_change_set are already loaded: call them directly. Use list_tools and get_tool_info only for the other editor tools, such as run_tests.',
       mcp_servers: [
         {
           name: 'editor-tools',

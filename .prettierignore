@@ -8,3 +8,4 @@ docs/BLUEPRINT.md
 *.pdf
 test/retrieval-eval/fixture/
 test/fake-model/demo/
+docs/evidence/

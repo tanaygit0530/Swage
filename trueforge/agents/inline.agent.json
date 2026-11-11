@@ -5,7 +5,7 @@
     {
       "name": "editor-tools",
       "enable_tools": ["declare_context", "stage_edit"],
-      "preload": false,
+      "preload": true,
       "preload_tools": ["declare_context", "stage_edit"],
       "require_approval_for_tools": ["submit_change_set", "run_command"]
     }
