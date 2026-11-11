@@ -3,7 +3,7 @@ import { promises as fsp } from 'node:fs';
 import { homedir } from 'node:os';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
-import { SwageClient } from '../client/client';
+import { SwageClient, type SdkLike } from '../client/client';
 import { agentNameFor, type ModelProfile } from '../client/manifest';
 import { formatReport, loadManifests, runSetup } from '../client/setup';
 import { Bm25Searcher } from '../context/bm25';
@@ -20,6 +20,7 @@ import {
   TrueForgeSupervisor,
   type Logger,
 } from '../supervisor/supervisor';
+import type { ReviewController } from '../review/vscode/controller';
 import { parseWebviewMessage, type HostToWebview, type WebviewToHost } from '../ui/protocol';
 import { EventRelay } from './relay';
 import { AgentRun } from './run';
@@ -56,10 +57,13 @@ export class AgentController implements vscode.WebviewViewProvider, vscode.Dispo
   private runtime: Promise<Runtime> | undefined;
   private run: AgentRun | undefined;
   private readonly logger: Logger;
+  /** Test hook: replaces TrueForge with a scripted SDK (set only by the integration tests). */
+  sdkFactory: ((mcp: { url: string; token: string }) => SdkLike) | undefined;
 
   constructor(
     private readonly context: vscode.ExtensionContext,
     private readonly output: vscode.OutputChannel,
+    private readonly review?: ReviewController,
   ) {
     this.logger = redactingLogger({
       info: (m) => output.appendLine(m),
@@ -138,6 +142,13 @@ export class AgentController implements vscode.WebviewViewProvider, vscode.Dispo
         await this.stop();
         return;
       case 'approve': {
+        // The change-set card is decided in the Review view: Approve applies, Deny discards.
+        if (this.run?.isReviewCall(msg.toolCallId)) {
+          await vscode.commands.executeCommand(
+            msg.allow ? 'swage.review.apply' : 'swage.review.discard',
+          );
+          return;
+        }
         const pending = this.run?.decide(msg.toolCallId, msg.allow, msg.reason);
         await this.trackBusy(pending);
         return;
@@ -207,8 +218,21 @@ export class AgentController implements vscode.WebviewViewProvider, vscode.Dispo
       view: { post: (m) => this.post(m) },
       budgets: rt.budgets,
       logger: this.logger,
+      ...(this.review
+        ? {
+            review: (taskId: string, changeSet: Parameters<ReviewController['start']>[1]) =>
+              new Promise<{ applied: boolean; message: string }>((resolve) => {
+                void this.review?.start(taskId, changeSet, (outcome) => resolve(outcome));
+              }),
+          }
+        : {}),
     });
     await this.trackBusy(this.run.start(prompt));
+  }
+
+  /** State of the current run, for tests and the status bar. */
+  get runState(): string | undefined {
+    return this.run?.state;
   }
 
   async stop(): Promise<void> {
@@ -288,7 +312,14 @@ export class AgentController implements vscode.WebviewViewProvider, vscode.Dispo
       logger: this.logger,
     });
     let baseUrl: string;
-    if (s.autoStart) {
+    let client: SwageClient;
+    if (this.sdkFactory) {
+      baseUrl = 'scripted (tests)';
+      client = new SwageClient({
+        baseUrl: 'http://swage-test.invalid',
+        sdk: this.sdkFactory({ url: server.url, token: server.token }),
+      });
+    } else if (s.autoStart) {
       baseUrl = await supervisor.start();
     } else {
       const version = await supervisor.health(s.baseUrl);
@@ -300,8 +331,7 @@ export class AgentController implements vscode.WebviewViewProvider, vscode.Dispo
       }
       baseUrl = s.baseUrl;
     }
-
-    const client = new SwageClient({ baseUrl });
+    client ??= new SwageClient({ baseUrl });
     const report = await runSetup({
       client,
       profiles: [profile],

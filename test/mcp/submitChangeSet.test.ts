@@ -66,4 +66,27 @@ describe('submit_change_set', () => {
     );
     expect(late.error.code).toBe('not_staging');
   });
+
+  it('reports what the user applied when the review already applied the change set', async () => {
+    const task = h.ctx.tasks.start('t3');
+    await h.call('declare_context', {
+      plan: ['p'],
+      files: [{ path: 'a.py', reason: 'two edits here' }],
+    });
+    await h.call('stage_edit', {
+      path: 'a.py',
+      kind: 'write',
+      content: 'def keep():\n    return 1\n\n\ndef gone():\n    return 2\n',
+    });
+    const [b1, b2] = task.changeSet.review()[0]?.blocks ?? [];
+    task.changeSet.accept('a.py', b1?.id ?? '');
+    task.changeSet.reject('a.py', b2?.id ?? '');
+    task.changeSet.markApplied();
+    const text = h.text(await h.call('submit_change_set', { summary: 'two return values' }));
+    expect(text).toContain(
+      'The user reviewed the change set and applied it: 1 block(s) accepted, 1 not applied.',
+    );
+    expect(text).toContain(`Accepted: ${b1?.id ?? ''}`);
+    expect(text).toContain(`Not applied: ${b2?.id ?? ''}`);
+  });
 });

@@ -28,6 +28,20 @@ export const submitChangeSet: ToolRegistration = (server, ctx: ToolContext) => {
     },
     runTool(ctx, 'submit_change_set', async (args: { summary: string }, call) => {
       const { task } = call;
+      if (task.changeSet.status === 'applied') {
+        // The user reviewed and applied before approving this call (blueprint section 6, approval flow).
+        const r = task.changeSet.result();
+        return textResult(
+          [
+            `The user reviewed the change set and applied it: ${r.accepted.length} block(s) accepted, ${r.rejected.length + r.pending.length} not applied.`,
+            ...(r.accepted.length ? [`Accepted: ${r.accepted.join(', ')}`] : []),
+            ...(r.rejected.length + r.pending.length
+              ? [`Not applied: ${[...r.rejected, ...r.pending].join(', ')}`]
+              : []),
+            'Do not stage these edits again. If a rejected block mattered, explain why instead.',
+          ].join('\n'),
+        );
+      }
       if (task.submission !== undefined) return textResult(task.submission);
       const files = task.changeSet.review();
       if (files.length === 0) {

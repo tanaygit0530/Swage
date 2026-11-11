@@ -3,6 +3,7 @@ import type { TrueForgeApi } from '@truefoundry/trueforge-sdk';
 import { describeError, type ApprovalDecision, type SwageClient } from '../client/client';
 import type { PendingToolCall, SwageEvent } from '../client/events';
 import { DEFAULT_BUDGETS, type Budgets } from '../context/budget';
+import type { ChangeSet } from '../changeset/changeSet';
 import type { ApprovalList, ToolContext } from '../mcp/context';
 import type { Logger } from '../supervisor/supervisor';
 import { parseToolArgs, summarizeArgs, type HostToWebview, type RunState } from '../ui/protocol';
@@ -30,6 +31,14 @@ export interface AgentRunOptions {
   readonly view: AgentView;
   readonly budgets?: Budgets;
   readonly logger?: Logger;
+  /**
+   * Opens the Review view for a submitted change set and resolves when the user applies or
+   * discards it (blueprint section 6, approval flow). Without it, the panel card decides.
+   */
+  readonly review?: (
+    taskId: string,
+    changeSet: ChangeSet,
+  ) => Promise<{ applied: boolean; message: string }>;
   /** Upper bound for draining a cancelled stream before giving up on `turn.done`. */
   readonly drainTimeoutMs?: number;
 }
@@ -262,6 +271,23 @@ export class AgentRun {
           summary: this.approvalSummary(p, task?.changeSet.review() ?? []),
         })),
       });
+      const submit = this.pending.find((p) => p.name === 'submit_change_set');
+      if (submit && this.opts.review && task) {
+        this.setState(
+          'paused',
+          'Review the change set: accept or reject blocks, then Apply or Discard',
+        );
+        void this.opts
+          .review(this.taskId, task.changeSet)
+          .then((outcome) =>
+            this.decide(
+              submit.toolCallId,
+              outcome.applied,
+              outcome.applied ? undefined : outcome.message,
+            ),
+          );
+        return;
+      }
       this.setState('paused', 'Waiting for your approval');
       return;
     }
@@ -370,6 +396,14 @@ export class AgentRun {
   /** True while a stream is still being drained (for tests and the controller). */
   get draining(): boolean {
     return this.drains.size > 0;
+  }
+
+  /** True if this pending call is the change-set submission handled by the Review view. */
+  isReviewCall(toolCallId: string): boolean {
+    return (
+      this.opts.review !== undefined &&
+      this.pending.some((p) => p.toolCallId === toolCallId && p.name === 'submit_change_set')
+    );
   }
 
   /** The TrueForge session id, once created. */

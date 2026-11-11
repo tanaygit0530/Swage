@@ -74,6 +74,40 @@ export class FakeTrueForge {
     await this.client?.close();
   }
 
+  // Setup calls (MCP registration and agent upsert) are accepted and recorded.
+  readonly agents = {
+    list: (): Promise<AsyncGenerator<{ id: string; name: string }>> =>
+      Promise.resolve((async function* () {})()),
+    create: (req: { name: string }): Promise<{ data: { id: string } }> => {
+      this.log.push(`agent.create ${req.name}`);
+      return Promise.resolve({ data: { id: `agent-${req.name}` } });
+    },
+    update: (id: string): Promise<{ data: { id: string } }> => Promise.resolve({ data: { id } }),
+  };
+
+  readonly settings = {
+    mcpServers: {
+      createOrUpdate: (req: {
+        manifest: { name: string; url: string };
+      }): Promise<{ data: object }> => {
+        this.log.push(`mcp.register ${req.manifest.name}`);
+        return Promise.resolve({ data: {} });
+      },
+    },
+  };
+
+  readonly mcpServers = {
+    listTools: async (): Promise<{ data: { name: string }[] }> => {
+      const tools = await (await this.mcp()).listTools();
+      return { data: tools.tools.map((t) => ({ name: t.name })) };
+    },
+  };
+
+  readonly models = {
+    list: (): Promise<{ data: { name: string }[] }> =>
+      Promise.resolve({ data: [{ name: `swage-fake/${this.opts.scenario.name}` }] }),
+  };
+
   readonly sessions = {
     create: (req: { agent: { name?: string } }): Promise<{ data: { id: string } }> => {
       const id = `sess-${++this.counter}`;
