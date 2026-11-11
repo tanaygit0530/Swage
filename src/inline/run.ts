@@ -34,6 +34,8 @@ export interface InlineEditOptions {
   readonly logger?: Logger;
   /** Status line updates while the run streams (the status bar shows them). */
   readonly onStatus?: (text: string) => void;
+  /** Every panel-style event of the run (tool rows, text), for logs and rehearsals. */
+  readonly onEvent?: (event: HostToWebview) => void;
   readonly drainTimeoutMs?: number;
 }
 
@@ -97,6 +99,7 @@ export class InlineEdit {
   }
 
   private onPost(m: HostToWebview): void {
+    this.opts.onEvent?.(m);
     switch (m.type) {
       case 'status':
         if (m.message !== undefined) this.lastMessage = m.message;

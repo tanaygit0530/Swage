@@ -1,8 +1,9 @@
 /**
- * Task A rehearsal (blueprint section 10) on a fresh clone of Flask 3.1.3, with no TrueForge and
- * no model: the scripted TrueForge stand-in plays test/rehearsal/task-a-flask.json against the
- * real MCP server, InlineEdit and the review and apply machinery, then runs the statement's
- * verification command and the Flask tests in the clone. The original checkout is never touched.
+ * Task A rehearsal (blueprint section 10) on a fresh clone of Flask 3.1.3. Scripted mode needs no
+ * TrueForge and no model: the stand-in plays test/rehearsal/task-a-flask.json. Live mode registers
+ * the editor tools and the inline agent with a running TrueForge and lets the real model edit.
+ * Both go through the real MCP server, InlineEdit and the review and apply machinery, then run the
+ * statement's verification command and the Flask tests in the clone. The original is never touched.
  *
  * Run: npm run rehearse:task-a (SWAGE_FLASK_DIR defaults to ../flask).
  */
@@ -13,6 +14,9 @@ import * as path from 'node:path';
 import { EventRelay } from '../../src/agent/relay';
 import { Applier, type WorkspaceFs } from '../../src/changeset/apply';
 import { SwageClient } from '../../src/client/client';
+import { agentNameFor, type ModelProfile } from '../../src/client/manifest';
+import { formatReport, loadManifests, runSetup } from '../../src/client/setup';
+import type { HostToWebview } from '../../src/ui/protocol';
 import { Bm25Searcher } from '../../src/context/bm25';
 import { WorkspaceIndex } from '../../src/context/indexer';
 import { createParser } from '../../src/context/symbols';
@@ -28,6 +32,11 @@ import { parseScenario } from '../fake-model/scenario';
 const TASK_A =
   "In get_debug_flag, treat the values 'off' and 'n' as false as well, case-insensitively, and update the docstring to list every value that is treated as false.";
 const HELPERS = 'src/flask/helpers.py';
+
+export interface LiveOptions {
+  readonly baseUrl: string;
+  readonly profile: ModelProfile;
+}
 
 export interface TaskAReport {
   readonly a0: { outcome: string; tools: number; status: string };
@@ -91,6 +100,7 @@ function scenario(name: string): ReturnType<typeof parseScenario> {
 export async function rehearseTaskA(
   flaskDir: string,
   say: (line?: string) => void,
+  live?: LiveOptions,
 ): Promise<TaskAReport> {
   python = path.join(flaskDir, '.venv', 'bin', 'python');
   const values: Record<string, string> = {};
@@ -126,6 +136,22 @@ export async function rehearseTaskA(
       logger,
     });
     const server = await startEditorToolsServer({ context: ctx, tools: EDITOR_TOOLS });
+    let liveClient: SwageClient | undefined;
+    let liveAgent = '';
+    if (live) {
+      liveClient = new SwageClient({ baseUrl: live.baseUrl });
+      const setup = await runSetup({
+        client: liveClient,
+        profiles: [live.profile],
+        manifests: loadManifests(path.join(__dirname, '..', '..', 'trueforge', 'agents')),
+        mcp: { url: server.url, bearerToken: server.token },
+      });
+      for (const line of formatReport(setup)) say(`setup: ${line}`);
+      liveAgent = agentNameFor('swage-inline', live.profile);
+      say(
+        `Live: TrueForge ${live.baseUrl}, agent ${liveAgent}, model ${live.profile.trueforgeModel}`,
+      );
+    }
 
     const text = readFileSync(path.join(root, HELPERS), 'utf8');
     const symbols = index.get(HELPERS)?.symbols ?? [];
@@ -155,42 +181,61 @@ export async function rehearseTaskA(
 
     async function inline(
       name: string,
-      onStart?: (edit: InlineEdit) => Promise<void>,
+      onStart?: (edit: InlineEdit, statuses: string[]) => Promise<void>,
     ): Promise<{
       edit: InlineEdit;
       outcome: InlineOutcome;
-      fake: FakeTrueForge;
+      fake: FakeTrueForge | undefined;
       ms: number;
       statuses: string[];
+      tools: string[];
     }> {
-      const fake = new FakeTrueForge({
-        scenario: scenario(name),
-        mcp: { url: server.url, token: server.token },
-      });
+      const fake = live
+        ? undefined
+        : new FakeTrueForge({
+            scenario: scenario(name),
+            mcp: { url: server.url, token: server.token },
+          });
       const statuses: string[] = [];
+      const tools: string[] = [];
+      const names = new Map<string, string>();
+      const onEvent = (m: HostToWebview): void => {
+        if (m.type === 'tool_start') names.set(m.toolCallId, m.name);
+        if (m.type === 'tool_end')
+          tools.push(`${names.get(m.toolCallId) ?? '?'}${m.error ? ' (error)' : ''}`);
+      };
       const edit = new InlineEdit({
-        client: new SwageClient({ baseUrl: 'http://fake', sdk: fake.sdk }),
+        client: liveClient ?? new SwageClient({ baseUrl: 'http://fake', sdk: fake?.sdk }),
         ctx,
         relay: new EventRelay(),
         approvals: new ApprovalList(),
-        agentName: 'swage-inline-rehearsal',
+        agentName: live ? liveAgent : 'swage-inline-rehearsal',
         request,
         onStatus: (s) => statuses.push(s),
+        onEvent,
         logger,
       });
       const started = performance.now();
       const running = edit.start();
-      if (onStart) await onStart(edit);
+      if (onStart) await onStart(edit, statuses);
       const outcome = await running;
       const ms = Math.round(performance.now() - started);
-      await fake.close();
-      return { edit, outcome, fake, ms, statuses };
+      // Let a cancelled stream drain before the next run.
+      for (let i = 0; i < 300 && edit.run.draining; i++)
+        await new Promise((r) => setTimeout(r, 50));
+      await fake?.close();
+      return { edit, outcome, fake, ms, statuses, tools };
     }
 
     // A0: the cancel demo.
     say('\n== A0: cancel mid-stream ==');
-    const a0 = await inline('task-a-flask-cancel', async (edit) => {
-      while (!edit.text.includes('token5')) await new Promise((r) => setTimeout(r, 20));
+    const a0 = await inline('task-a-flask-cancel', async (edit, statuses) => {
+      // Scripted: after the sixth token. Live: as soon as the model streams or calls a tool.
+      const streaming = (): boolean =>
+        live
+          ? statuses.length > 2 || (edit.run.state !== 'running' && edit.run.state !== 'starting')
+          : edit.text.includes('token5');
+      while (!streaming()) await new Promise((r) => setTimeout(r, 10));
       const c0 = performance.now();
       const cancelling = edit.cancel();
       say(
@@ -200,7 +245,7 @@ export async function rehearseTaskA(
     });
     say(`Outcome: ${a0.outcome.kind}: ${a0.outcome.message}`);
     say(
-      `Tools executed: ${a0.fake.log.filter((l) => l.startsWith('tool ')).length}; TrueForge cancel sent: ${a0.fake.log.includes('session.cancel sess-1')}`,
+      `Tools finished: ${a0.tools.length}${a0.fake ? `; TrueForge cancel sent: ${a0.fake.log.includes('session.cancel sess-1')}` : ''}`,
     );
     const a0Status = git(root, 'status', '--porcelain');
     say(`git status --porcelain: "${a0Status}"`);
@@ -216,11 +261,14 @@ export async function rehearseTaskA(
     say(
       `Status bar: ${[...new Set(a.statuses)].slice(0, 4).join(' -> ')} … ${a.statuses.at(-1) ?? ''}`,
     );
-    for (const l of a.fake.log.filter((x) => x.startsWith('tool '))) say(`  ${l.slice(0, 220)}`);
+    say(`Tools: ${a.tools.join(', ')}`);
+    say(`Model reply: ${a.edit.text.replace(/\s+/g, ' ').trim().slice(0, 300)}`);
+    for (const l of a.fake?.log.filter((x) => x.startsWith('tool ')) ?? [])
+      say(`  ${l.slice(0, 220)}`);
     if (a.outcome.kind !== 'review')
       throw new Error(`expected a review, got ${a.outcome.kind}: ${a.outcome.message}`);
     say(
-      `Instruction to diff: ${a.ms} ms (scripted model, 30 ms between chunks). ${a.outcome.message}`,
+      `Instruction to diff: ${a.ms} ms (${live ? `live model ${live.profile.trueforgeModel}` : 'scripted model, 30 ms between chunks'}). ${a.outcome.message}`,
     );
     const session = new ReviewSession(a.outcome.taskId, a.outcome.changeSet);
     const blocks = session.preview(HELPERS).blocks;
@@ -232,16 +280,18 @@ export async function rehearseTaskA(
       for (const l of raw?.oldLines ?? []) say(`    - ${l.replace(/\n$/, '')}`);
       for (const l of raw?.newLines ?? []) say(`    + ${l.replace(/\n$/, '')}`);
     }
-    const [doc, logic] = blocks;
-    session.reject(HELPERS, doc?.id ?? '');
+    // The video's sequence: reject block 1, revert it, then accept each block separately.
+    const block1 = blocks[0];
+    const withFirst = session.preview(HELPERS).content;
+    session.reject(HELPERS, block1?.id ?? '');
+    const withoutFirst = session.preview(HELPERS).content;
+    say(`Reject block 1: preview changed: ${withoutFirst !== withFirst}`);
+    session.accept(HELPERS, block1?.id ?? '');
     say(
-      `Reject block 1: preview has the docstring line: ${session.preview(HELPERS).content.includes('``off`` and ``n``')}`,
+      `Revert (accept block 1): preview back to the proposal: ${session.preview(HELPERS).content === withFirst}`,
     );
-    session.accept(HELPERS, doc?.id ?? '');
-    say(
-      `Revert (accept block 1): preview has the docstring line: ${session.preview(HELPERS).content.includes('``off`` and ``n``')}`,
-    );
-    session.accept(HELPERS, logic?.id ?? '');
+    for (const b of blocks.slice(1)) session.accept(HELPERS, b.id);
+    say(`Outside the selection: ${JSON.stringify([...a.outcome.outside])}`);
     say(`Totals: ${JSON.stringify(session.totals())}`);
 
     const applier = new Applier(new NodeFs(root), { maxUndo: 2 });
@@ -282,7 +332,7 @@ export async function rehearseTaskA(
     return {
       a0: {
         outcome: `${a0.outcome.kind}: ${a0.outcome.message}`,
-        tools: a0.fake.log.filter((l) => l.startsWith('tool ')).length,
+        tools: a0.tools.length,
         status: a0Status,
       },
       blocks: blocks.length,
