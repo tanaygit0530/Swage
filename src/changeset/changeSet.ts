@@ -358,6 +358,21 @@ export class ChangeSet {
     return { ok: true, value: { staged, kind: 'modify' } };
   }
 
+  /**
+   * The staged view of a file, for tools that read through the overlay. `undefined` when the
+   * file is not staged; `deleted` when the change set deletes it.
+   */
+  staged(path: string): { content: string; kind: FileKind; deleted: boolean } | undefined {
+    const file = this.files.get(normalizePath(path));
+    if (!file) return undefined;
+    return { content: file.staged, kind: file.kind, deleted: file.kind === 'delete' };
+  }
+
+  /** Paths with staged changes, in staging order. */
+  stagedPaths(): string[] {
+    return [...this.files.keys()];
+  }
+
   /** Files and blocks with their review state, in staging order. */
   review(): ReviewFile[] {
     return [...this.files.values()].map((f) => ({
