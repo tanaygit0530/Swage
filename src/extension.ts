@@ -22,12 +22,12 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
   );
 
-  // swage.reviewChanges is registered by the ReviewController.
+  // swage.reviewChanges and swage.undoLastChangeSet are registered by the ReviewController.
   const handlers: Partial<Record<(typeof COMMANDS)[number]['id'], () => unknown>> = {
     'swage.openAgent': () => controller?.focus(),
     'swage.stop': () => controller?.stop(),
   };
-  const ownedElsewhere = new Set<string>(['swage.reviewChanges']);
+  const ownedElsewhere = new Set<string>(['swage.reviewChanges', 'swage.undoLastChangeSet']);
   for (const spec of COMMANDS) {
     if (ownedElsewhere.has(spec.id)) continue;
     const handler =

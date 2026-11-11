@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
-import { Applier, type ApplyResult } from '../../changeset/apply';
+import { Applier, type ApplyResult, type UndoResult } from '../../changeset/apply';
+import { checkpointFile, loadCheckpoints, saveCheckpoints } from '../checkpoints';
 import type { ChangeSet } from '../../changeset/changeSet';
 import { ReviewSession } from '../session';
 import { ReviewCodeLens } from './codelens';
@@ -113,6 +114,9 @@ export class ReviewController implements vscode.Disposable {
         this.apply(opts),
       ),
       vscode.commands.registerCommand('swage.review.discard', () => this.discard()),
+      vscode.commands.registerCommand('swage.undoLastChangeSet', (opts?: { force?: boolean }) =>
+        this.undo(opts ?? {}),
+      ),
       vscode.commands.registerCommand('swage.review.acceptAll', () => this.decideAll('accept')),
       vscode.commands.registerCommand('swage.review.rejectAll', () => this.decideAll('reject')),
     );
@@ -213,8 +217,61 @@ export class ReviewController implements vscode.Disposable {
     return this.applierFor.applier;
   }
 
+  /** Where this workspace's undo history lives in global storage. */
+  checkpointPath(): string | undefined {
+    const root = this.root();
+    return root ? checkpointFile(this.context.globalStorageUri.fsPath, root.fsPath) : undefined;
+  }
+
   protected createApplier(root: vscode.Uri): Applier {
-    return new Applier(new VsCodeWorkspaceFs(root));
+    const file = checkpointFile(this.context.globalStorageUri.fsPath, root.fsPath);
+    return new Applier(new VsCodeWorkspaceFs(root), {
+      maxUndo: 2,
+      history: loadCheckpoints(file, root.fsPath),
+    });
+  }
+
+  private persist(): void {
+    const root = this.root();
+    const file = this.checkpointPath();
+    const applier = this.applierFor?.applier;
+    if (root && file && applier) saveCheckpoints(file, root.fsPath, applier.history);
+  }
+
+  /**
+   * Restores the last applied change set from its checkpoint (two levels). If a file changed
+   * after the apply, asks before overwriting it; `force` skips the question (tests).
+   */
+  async undo(options: { force?: boolean } = {}): Promise<UndoResult> {
+    const applier = this.applier();
+    if (!applier) {
+      const r: UndoResult = {
+        ok: false,
+        error: { code: 'nothing_to_undo', message: 'Open a folder first.' },
+      };
+      return r;
+    }
+    let r = await applier.undo({ force: options.force === true });
+    if (!r.ok && r.error.code === 'conflict' && options.force === undefined) {
+      const choice = await vscode.window.showWarningMessage(
+        r.error.message,
+        { modal: true },
+        'Undo anyway',
+      );
+      if (choice === 'Undo anyway') r = await applier.undo({ force: true });
+    }
+    if (r.ok) {
+      this.persist();
+      const n = r.checkpoint.entries.length;
+      void vscode.window.showInformationMessage(
+        `Restored ${n} file(s) from before the change set.${applier.canUndo ? ' Undo again to go one further back.' : ''}`,
+      );
+    } else if (r.error.code === 'nothing_to_undo') {
+      void vscode.window.showInformationMessage('Nothing to undo: no applied change set is left.');
+    } else if (r.error.code !== 'conflict') {
+      void vscode.window.showErrorMessage(r.error.message);
+    }
+    return r;
   }
 
   /**
@@ -300,9 +357,10 @@ export class ReviewController implements vscode.Disposable {
   /** Time the last apply took, for the performance report. */
   lastApplyMs: number | undefined;
 
-  /** Hook for checkpoint persistence (added with undo). */
+  /** Persists the undo history after an apply. */
   protected async afterApply(): Promise<void> {
-    // Overridden by the undo step.
+    this.persist();
+    return Promise.resolve();
   }
 
   /** Discards the change set without applying anything. */
