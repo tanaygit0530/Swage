@@ -1,0 +1,8 @@
+dist/
+out/
+coverage/
+node_modules/
+.vscode-test/
+package-lock.json
+docs/BLUEPRINT.md
+*.pdf
