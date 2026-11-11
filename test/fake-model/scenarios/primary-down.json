@@ -1,0 +1,5 @@
+{
+  "name": "primary-down",
+  "description": "Task C with the fake model: the primary answers every request with 401, as with a revoked key. Used by npm run break-primary -- --mode fake.",
+  "steps": [{ "error": 401 }]
+}

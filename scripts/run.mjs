@@ -22,6 +22,8 @@ await esbuild.build({
   target: 'node22',
   outfile,
   logLevel: 'warning',
+  // Prefer ESM builds: some packages' UMD builds use dynamic require() that cannot be bundled.
+  mainFields: ['module', 'main'],
   banner: {
     js: "import { createRequire as __cr } from 'node:module'; const require = __cr(import.meta.url);",
   },
