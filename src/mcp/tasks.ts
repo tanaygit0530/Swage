@@ -16,6 +16,8 @@ export interface Task {
   readonly readBudget: ReadBudget;
   readonly controller: AbortController;
   cancelled: boolean;
+  /** First submit_change_set result; a repeated call returns it unchanged. */
+  submission?: string;
 }
 
 export class TaskRegistry {
