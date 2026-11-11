@@ -226,6 +226,20 @@ describe('router and fallback plan', () => {
     expect(new ModelRouter(profiles, { retries: 0, timeoutRetries: 2 }).timeoutRetries).toBe(0);
   });
 
+  it('a long server-requested wait moves on to an untried profile instead of waiting', () => {
+    const router = new ModelRouter(profiles, { backoff: { baseMs: 1000, jitter: 0 } });
+    const quota: Failure = { ...transient, retryAfterMs: 23_756 };
+    const plan = router.begin();
+    expect(plan.decide(quota)).toMatchObject({ action: 'switch', to: { name: 'fallback-1' } });
+    expect(plan.decide({ ...transient, retryAfterMs: 5000 })).toMatchObject({
+      action: 'retry',
+      delayMs: 5000,
+    });
+    expect(plan.decide(quota)).toMatchObject({ action: 'switch', to: { name: 'fallback-2' } });
+    // Nothing untried is left: wait as asked, then give up.
+    expect(plan.decide(quota)).toMatchObject({ action: 'retry', delayMs: 23_756 });
+  });
+
   it('starts later tasks on the active profile and wraps to earlier ones', () => {
     const router = new ModelRouter(profiles);
     router.setActive('fallback-1');

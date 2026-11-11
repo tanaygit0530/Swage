@@ -55,6 +55,12 @@ describe('classify (blueprint section 8; messages as recorded in docs/SPIKES.md)
       ).retryAfterMs,
     ).toBe(1000);
     expect(classifyMessage('[Model Error] Rate limit, retry-after: 250ms').retryAfterMs).toBe(250);
+    // Gemini's free tier, as seen in the Task B rehearsal.
+    expect(
+      classifyMessage(
+        '[Model Error] Request failed (429): You exceeded your current quota.\n* Quota exceeded for metric: generate_content_free_tier_input_token_count, limit: 250000\nPlease retry in 23.755608938s.',
+      ).retryAfterMs,
+    ).toBe(23756);
     expect(
       kind('[Model Error] Request failed (503): This model is currently experiencing high demand.'),
     ).toEqual(['transient', 'returned 503']);

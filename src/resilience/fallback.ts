@@ -34,6 +34,11 @@ export interface RouterOptions {
    * whole wait, so one retry, then the next profile.
    */
   readonly timeoutRetries?: number;
+  /**
+   * A server that asks to wait longer than this (Retry-After, "retry in 24s") is not waited for
+   * while an untried profile is left: the task moves on at once. Default 10 s.
+   */
+  readonly maxRetryWaitMs?: number;
   readonly backoff?: BackoffOptions;
   readonly clock?: Clock;
 }
@@ -180,7 +185,13 @@ export class FallbackPlan {
     if (f.kind === 'fatal')
       return { action: 'fail', message: `${this.profile.label} ${f.reason}: ${f.detail}` };
     const limit = f.timeout ? this.router.timeoutRetries : this.router.retries;
-    if (f.kind === 'transient' && this.retriesUsed < limit) {
+    const longWait =
+      (f.retryAfterMs ?? 0) > (this.router.options.maxRetryWaitMs ?? 10_000) &&
+      this.router.next(
+        this.profile,
+        new Set([...this.tried.map(([p]) => p.name), this.profile.name]),
+      ) !== undefined;
+    if (f.kind === 'transient' && this.retriesUsed < limit && !longWait) {
       this.retriesUsed++;
       return {
         action: 'retry',

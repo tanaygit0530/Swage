@@ -37,9 +37,10 @@ function firstLine(text: string): string {
 }
 
 function retryAfter(text: string): number | undefined {
-  const m = /(?:try again in|retry[- ]after[:= ]*)\s*(\d+(?:\.\d+)?)\s*(ms|s|sec|seconds?)?/i.exec(
-    text,
-  );
+  const m =
+    /(?:try again in|retry in|retry[- ]after[:= ]*)\s*(\d+(?:\.\d+)?)\s*(ms|s|sec|seconds?)?/i.exec(
+      text,
+    );
   if (!m) return undefined;
   const n = Number(m[1]);
   return m[2]?.toLowerCase() === 'ms' ? Math.round(n) : Math.round(n * 1000);
