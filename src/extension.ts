@@ -3,11 +3,13 @@ import type { SdkLike } from './client/client';
 import { AGENT_VIEW_ID, AgentController } from './agent/controller';
 import { COMMANDS, RUNNING_CONTEXT_KEY, stubMessage } from './commands';
 import { InlineController } from './inline/vscode/controller';
+import { ModelsController } from './resilience/vscode/models';
 import { ReviewController } from './review/vscode/controller';
 
 let controller: AgentController | undefined;
 let review: ReviewController | undefined;
 let inline: InlineController | undefined;
+let models: ModelsController | undefined;
 
 /** Returned by activate() only when SWAGE_TEST_API=1 (set by the integration test config). */
 export interface SwageTestApi {
@@ -17,6 +19,7 @@ export interface SwageTestApi {
   resetRuntime(): Promise<void>;
   readonly review: ReviewController;
   readonly inline: InlineController;
+  readonly models: ModelsController;
 }
 
 export function activate(context: vscode.ExtensionContext): SwageTestApi | undefined {
@@ -24,11 +27,13 @@ export function activate(context: vscode.ExtensionContext): SwageTestApi | undef
   void vscode.commands.executeCommand('setContext', RUNNING_CONTEXT_KEY, false);
   const output = vscode.window.createOutputChannel('Swage');
   review = new ReviewController(context);
-  controller = new AgentController(context, output, review);
+  models = new ModelsController(context);
+  controller = new AgentController(context, output, review, models);
   inline = new InlineController(controller, review);
 
   context.subscriptions.push(
     output,
+    models,
     review,
     controller,
     inline,
@@ -38,7 +43,7 @@ export function activate(context: vscode.ExtensionContext): SwageTestApi | undef
   );
 
   // swage.reviewChanges and swage.undoLastChangeSet belong to the ReviewController,
-  // swage.inlineEdit to the InlineController.
+  // swage.inlineEdit to the InlineController, swage.switchModel to the ModelsController.
   const handlers: Partial<Record<(typeof COMMANDS)[number]['id'], () => unknown>> = {
     'swage.openAgent': () => controller?.focus(),
     // Escape stops whichever run is active: the inline edit first, then the agent run.
@@ -50,6 +55,7 @@ export function activate(context: vscode.ExtensionContext): SwageTestApi | undef
     'swage.reviewChanges',
     'swage.undoLastChangeSet',
     'swage.inlineEdit',
+    'swage.switchModel',
   ]);
   for (const spec of COMMANDS) {
     if (ownedElsewhere.has(spec.id)) continue;
@@ -63,6 +69,7 @@ export function activate(context: vscode.ExtensionContext): SwageTestApi | undef
   const agent = controller;
   const reviewer = review;
   const inliner = inline;
+  const modeller = models;
   return {
     setSdkFactory: (factory) => {
       agent.sdkFactory = factory;
@@ -72,6 +79,7 @@ export function activate(context: vscode.ExtensionContext): SwageTestApi | undef
     resetRuntime: () => agent.resetRuntime(),
     review: reviewer,
     inline: inliner,
+    models: modeller,
   };
 }
 

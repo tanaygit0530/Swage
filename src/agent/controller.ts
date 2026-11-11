@@ -6,7 +6,8 @@ import * as vscode from 'vscode';
 import { SwageClient, type SdkLike } from '../client/client';
 import { agentNameFor, type ModelProfile } from '../client/manifest';
 import { profilesFrom, type ResolvedProfile } from '../resilience/profiles';
-import { formatReport, loadManifests, runSetup } from '../client/setup';
+import { agentPreparer, formatReport, loadManifests, runSetup } from '../client/setup';
+import type { ModelsController } from '../resilience/vscode/models';
 import { Bm25Searcher } from '../context/bm25';
 import { resolveBudgets, type Budgets } from '../context/budget';
 import { WorkspaceIndex, type IndexCache } from '../context/indexer';
@@ -24,7 +25,7 @@ import {
 import type { ReviewController } from '../review/vscode/controller';
 import { parseWebviewMessage, type HostToWebview, type WebviewToHost } from '../ui/protocol';
 import { EventRelay } from './relay';
-import { AgentRun } from './run';
+import { AgentRun, type AgentRunOptions } from './run';
 
 /**
  * The VS Code side of agent mode: the panel's webview provider and the runtime it needs. The
@@ -48,6 +49,8 @@ export interface Runtime {
   readonly inlineAgentName: string;
   readonly profile: ModelProfile;
   readonly budgets: Budgets;
+  /** Upserts a profile's agent on first use (fallback profiles are prepared lazily). */
+  readonly prepareAgent: (profile: ModelProfile, agentName: string) => Promise<void>;
   readonly watcher: vscode.Disposable;
 }
 
@@ -68,6 +71,7 @@ export class AgentController implements vscode.WebviewViewProvider, vscode.Dispo
     private readonly context: vscode.ExtensionContext,
     private readonly output: vscode.OutputChannel,
     private readonly review?: ReviewController,
+    private readonly models?: ModelsController,
   ) {
     this.logger = redactingLogger({
       info: (m) => output.appendLine(m),
@@ -142,7 +146,9 @@ export class AgentController implements vscode.WebviewViewProvider, vscode.Dispo
         this.post({
           type: 'init',
           workspace: vscode.workspace.workspaceFolders?.[0]?.name ?? 'no folder',
-          model: s.profiles[0]?.trueforgeModel ?? 'no model configured',
+          model: this.models?.router
+            ? `${this.models.router.active.label} (${this.models.router.active.trueforgeModel})`
+            : (s.profiles[0]?.trueforgeModel ?? 'no model configured'),
         });
         return;
       }
@@ -250,6 +256,7 @@ export class AgentController implements vscode.WebviewViewProvider, vscode.Dispo
       view: { post: (m) => this.post(m) },
       budgets: rt.budgets,
       logger: this.logger,
+      ...this.resilience(rt, 'swage-main'),
       ...(this.review
         ? {
             review: (taskId: string, changeSet: Parameters<ReviewController['start']>[1]) =>
@@ -286,15 +293,34 @@ export class AgentController implements vscode.WebviewViewProvider, vscode.Dispo
     return this.ready;
   }
 
+  /**
+   * Fallback options for a run (blueprint section 8): the shared router, the agent base name and
+   * the lazy agent upsert. Empty without a models controller (tests that pin one agent).
+   */
+  resilience(
+    rt: Runtime,
+    agentBase: 'swage-main' | 'swage-inline',
+  ): Pick<AgentRunOptions, 'router' | 'agentBase' | 'prepareAgent' | 'onSwitch'> {
+    const router = this.models?.router;
+    if (!router) return {};
+    return {
+      router,
+      agentBase,
+      prepareAgent: rt.prepareAgent,
+      onSwitch: (d) => this.models?.notifySwitch(d),
+    };
+  }
+
   private async createRuntime(): Promise<Runtime> {
     const folder = vscode.workspace.workspaceFolders?.[0];
     if (!folder) throw new Error('Open a folder first: Swage works on a workspace folder.');
     const root = folder.uri.fsPath;
     const s = this.settings();
-    const profile = s.profiles[0];
+    const profile = this.models?.router?.active ?? s.profiles[0];
     if (!profile)
       throw new Error(
-        'No model profile: add one to the swage.models setting (see config/models.example.yaml).',
+        this.models?.problem ??
+          'No model profile: add one to the swage.models setting (see config/models.example.yaml).',
       );
 
     const t0 = Date.now();
@@ -369,10 +395,13 @@ export class AgentController implements vscode.WebviewViewProvider, vscode.Dispo
       baseUrl = s.baseUrl;
     }
     client ??= new SwageClient({ baseUrl });
+    const manifests = loadManifests(path.join(this.context.extensionPath, 'trueforge', 'agents'));
+    // With fallback, agents are upserted per profile on first use, so a primary model that
+    // TrueForge does not know falls back instead of blocking the start.
     const report = await runSetup({
       client,
-      profiles: [profile],
-      manifests: loadManifests(path.join(this.context.extensionPath, 'trueforge', 'agents')),
+      profiles: this.models?.router ? [] : [profile],
+      manifests,
       mcp: { url: server.url, bearerToken: server.token },
     });
     for (const line of formatReport(report)) this.logger.info(line);
@@ -384,6 +413,7 @@ export class AgentController implements vscode.WebviewViewProvider, vscode.Dispo
     this.logger.info(
       `runtime ready in ${Date.now() - t0} ms (TrueForge ${baseUrl}, MCP ${server.url})`,
     );
+    this.models?.attach(client);
     return {
       root,
       ctx,
@@ -397,6 +427,7 @@ export class AgentController implements vscode.WebviewViewProvider, vscode.Dispo
       inlineAgentName: agentNameFor('swage-inline', profile),
       profile,
       budgets: s.budgets,
+      prepareAgent: agentPreparer(client, manifests),
       watcher: vscode.Disposable.from(...subs),
     };
   }

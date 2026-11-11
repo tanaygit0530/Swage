@@ -1,4 +1,4 @@
-import { AgentRun } from '../agent/run';
+import { AgentRun, type AgentRunOptions } from '../agent/run';
 import type { EventRelay } from '../agent/relay';
 import type { SwageClient } from '../client/client';
 import type { ChangeSet } from '../changeset/changeSet';
@@ -37,6 +37,11 @@ export interface InlineEditOptions {
   /** Every panel-style event of the run (tool rows, text), for logs and rehearsals. */
   readonly onEvent?: (event: HostToWebview) => void;
   readonly drainTimeoutMs?: number;
+  /** Fallback across model profiles, exactly as in agent mode (Task C repeats Task A inline). */
+  readonly resilience?: Pick<
+    AgentRunOptions,
+    'router' | 'agentBase' | 'prepareAgent' | 'onSwitch' | 'clock'
+  >;
 }
 
 export type InlineOutcome =
@@ -82,6 +87,7 @@ export class InlineEdit {
       editableRange: this.range,
       ...(opts.logger === undefined ? {} : { logger: opts.logger }),
       ...(opts.drainTimeoutMs === undefined ? {} : { drainTimeoutMs: opts.drainTimeoutMs }),
+      ...(opts.resilience ?? {}),
     });
   }
 
@@ -114,6 +120,9 @@ export class InlineEdit {
         break;
       case 'tool_end':
         if (m.error) this.status('The edit did not apply; the model is retrying…');
+        break;
+      case 'notice':
+        this.status(m.message);
         break;
       default:
         break;

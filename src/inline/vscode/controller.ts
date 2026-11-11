@@ -144,6 +144,7 @@ export class InlineController implements vscode.Disposable {
           language: editor.document.languageId,
         },
         onStatus: (text) => this.show(text),
+        resilience: this.agent.resilience(rt, 'swage-inline'),
       });
       const outcome = await this.edit.start();
       if (outcome.kind === 'review') {

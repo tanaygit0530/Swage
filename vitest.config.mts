@@ -32,6 +32,7 @@ export default defineConfig({
         'src/agent/controller.ts',
         'src/review/vscode/**',
         'src/inline/vscode/**',
+        'src/resilience/vscode/**',
         'src/ui/webview/main.tsx',
       ],
       reporter: ['text', 'text-summary', 'json-summary'],
