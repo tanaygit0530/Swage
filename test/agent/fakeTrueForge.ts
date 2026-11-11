@@ -1,0 +1,345 @@
+import type { TrueForgeApi } from '@truefoundry/trueforge-sdk';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import type { SdkLike } from '../../src/client/client';
+import { FINAL_TEXT, type Scenario, type ScenarioStep } from '../fake-model/scenario';
+
+/**
+ * A scripted stand-in for TrueForge in the fast tests. It plays a fake-model scenario the way
+ * TrueForge runs a turn, using the event shapes verified in docs/SPIKES.md: `turn.created`, an
+ * empty `model.message` then `model.message.delta` events, tool calls executed against Swage's
+ * real MCP server over HTTP, `tool.response`, `tool.approval_required` and `turn.done`. Gated tools
+ * pause the turn; `user.tool_approval` resumes it. `sessions.cancel` ends the turn with
+ * `cancelled`/`client-cancelled` after any running MCP call returns (TrueForge waits for running
+ * MCP calls); a new turn in a session cancels the running one with `cancelled-for-next-turn`.
+ *
+ * Assumption (not documented by TrueForge): the text of the tool.response for a denied call.
+ */
+
+type Ev = TrueForgeApi.TurnStreamingEvent;
+
+interface Turn {
+  readonly id: string;
+  cancelled: boolean;
+  reason: 'client-cancelled' | 'cancelled-for-next-turn';
+  readonly waiters: Set<() => void>;
+}
+
+interface Session {
+  readonly id: string;
+  step: number;
+  readonly pending: Map<string, { name: string; args: Record<string, unknown> }>;
+  active: Turn | undefined;
+}
+
+export interface FakeTrueForgeOptions {
+  readonly scenario: Scenario;
+  readonly mcp: { url: string; token: string };
+  readonly gated?: readonly string[];
+  /** Emit a delta and a tool.response after the cancelled turn.done, to test late-event dropping. */
+  readonly staleEventAfterCancel?: boolean;
+}
+
+const at = (): string => new Date().toISOString();
+
+export class FakeTrueForge {
+  readonly log: string[] = [];
+  private readonly sessionsById = new Map<string, Session>();
+  private client: Client | undefined;
+  private counter = 0;
+  private readonly gated: readonly string[];
+
+  constructor(private readonly opts: FakeTrueForgeOptions) {
+    this.gated = opts.gated ?? ['submit_change_set', 'run_command'];
+  }
+
+  get sdk(): SdkLike {
+    return this as unknown as SdkLike;
+  }
+
+  private async mcp(): Promise<Client> {
+    if (!this.client) {
+      this.client = new Client({ name: 'fake-trueforge', version: '0' });
+      await this.client.connect(
+        new StreamableHTTPClientTransport(new URL(this.opts.mcp.url), {
+          requestInit: { headers: { Authorization: `Bearer ${this.opts.mcp.token}` } },
+        }),
+      );
+    }
+    return this.client;
+  }
+
+  async close(): Promise<void> {
+    await this.client?.close();
+  }
+
+  readonly sessions = {
+    create: (req: { agent: { name?: string } }): Promise<{ data: { id: string } }> => {
+      const id = `sess-${++this.counter}`;
+      this.sessionsById.set(id, { id, step: 0, pending: new Map(), active: undefined });
+      this.log.push(`session.create ${req.agent.name ?? 'inline'}`);
+      return Promise.resolve({ data: { id } });
+    },
+    cancel: (sessionId: string): Promise<{ data: object }> => {
+      this.log.push(`session.cancel ${sessionId}`);
+      const turn = this.sessionsById.get(sessionId)?.active;
+      if (turn && !turn.cancelled) {
+        turn.cancelled = true;
+        turn.reason = 'client-cancelled';
+        for (const wake of [...turn.waiters]) wake();
+      }
+      return Promise.resolve({ data: {} });
+    },
+    createTurnStream: (
+      sessionId: string,
+      req: { input?: TrueForgeApi.TurnInputItem[] },
+    ): Promise<AsyncGenerator<Ev>> => {
+      const session = this.sessionsById.get(sessionId);
+      if (!session) return Promise.reject(new Error(`no session ${sessionId}`));
+      this.log.push(`turn ${req.input?.[0]?.type ?? 'empty'}`);
+      return Promise.resolve(this.play(session, req.input ?? []));
+    },
+  };
+
+  private async callTool(name: string, args: Record<string, unknown>): Promise<string> {
+    const result = (await (await this.mcp()).callTool({ name, arguments: args })) as CallToolResult;
+    return result.content.map((c) => (c.type === 'text' ? c.text : '')).join('\n');
+  }
+
+  private async *play(session: Session, input: TrueForgeApi.TurnInputItem[]): AsyncGenerator<Ev> {
+    const previous = session.active;
+    if (previous && !previous.cancelled) {
+      previous.cancelled = true;
+      previous.reason = 'cancelled-for-next-turn';
+      for (const wake of [...previous.waiters]) wake();
+    }
+    const turn: Turn = {
+      id: `turn-${++this.counter}`,
+      cancelled: false,
+      reason: 'client-cancelled',
+      waiters: new Set(),
+    };
+    session.active = turn;
+    const sleep = (ms: number): Promise<void> =>
+      new Promise((resolve) => {
+        const done = (): void => {
+          clearTimeout(timer);
+          turn.waiters.delete(done);
+          resolve();
+        };
+        const timer = setTimeout(done, ms);
+        turn.waiters.add(done);
+      });
+    const cancelled = function* (this: FakeTrueForge): Generator<Ev> {
+      yield {
+        type: 'turn.done',
+        id: `done-${turn.id}`,
+        createdAt: at(),
+        threadId: null,
+        state: { status: 'cancelled', completedAt: at(), reason: turn.reason },
+      } as Ev;
+      if (this.opts.staleEventAfterCancel) {
+        yield {
+          type: 'model.message.delta',
+          id: 'stale-msg',
+          threadId: 'main',
+          content: 'STALE',
+        } as Ev;
+        yield {
+          type: 'tool.response',
+          id: 'stale-tool',
+          createdAt: at(),
+          threadId: 'main',
+          toolCallId: 'stale',
+          content: 'STALE',
+        } as Ev;
+      }
+    }.bind(this);
+
+    yield {
+      type: 'turn.created',
+      id: `created-${turn.id}`,
+      createdAt: at(),
+      threadId: null,
+      turnId: turn.id,
+      input,
+      state: { status: 'running' },
+    } as unknown as Ev;
+
+    // Resume after approvals: run allowed calls, report denied ones.
+    if (input[0]?.type === 'user.tool_approval') {
+      for (const item of input) {
+        if (item.type !== 'user.tool_approval') continue;
+        const call = session.pending.get(item.toolCallId);
+        if (!call) continue;
+        const content =
+          item.approval.status === 'allow'
+            ? await this.callTool(call.name, call.args)
+            : `Tool call denied by the user${item.approval.reason ? `: ${item.approval.reason}` : ''}.`;
+        yield {
+          type: 'tool.response',
+          id: `resp-${item.toolCallId}`,
+          createdAt: at(),
+          threadId: 'main',
+          toolCallId: item.toolCallId,
+          content,
+        } as Ev;
+      }
+      session.pending.clear();
+      if (turn.cancelled) {
+        yield* cancelled();
+        return;
+      }
+    }
+
+    for (;;) {
+      const stepIndex = session.step++;
+      const step: ScenarioStep = this.opts.scenario.steps[stepIndex] ?? { text: [FINAL_TEXT] };
+      const msgId = `msg-${turn.id}-${stepIndex}`;
+
+      if (step.error !== undefined && step.errorTimes === undefined) {
+        if (step.error === 'hang') {
+          await sleep(3_600_000);
+          if (turn.cancelled) {
+            yield* cancelled();
+            return;
+          }
+        }
+        const message =
+          step.error === 429
+            ? '[Model Error] Request failed (429): Rate limit reached for requests. Please try again in 1s.'
+            : step.error === 500
+              ? '[Model Error] Request failed (500): The server had an error while processing your request.'
+              : '[Model Error] Cannot connect to API: connect ECONNREFUSED 127.0.0.1:8787';
+        yield {
+          type: 'model.message',
+          id: msgId,
+          createdAt: at(),
+          threadId: 'main',
+          content: '',
+        } as Ev;
+        yield {
+          type: 'turn.done',
+          id: `done-${turn.id}`,
+          createdAt: at(),
+          threadId: null,
+          state: { status: 'error', completedAt: at(), message },
+        } as Ev;
+        return;
+      }
+
+      yield {
+        type: 'model.message',
+        id: msgId,
+        createdAt: at(),
+        threadId: 'main',
+        content: '',
+        toolCalls: [],
+      } as Ev;
+      if (step.firstTokenDelayMs) await sleep(step.firstTokenDelayMs);
+      let full = '';
+      for (const [i, piece] of (step.text ?? []).entries()) {
+        if (turn.cancelled) break;
+        full += piece;
+        yield { type: 'model.message.delta', id: msgId, threadId: 'main', content: piece } as Ev;
+        if (step.stallAfterChunks !== undefined && i + 1 === step.stallAfterChunks)
+          await sleep(step.stallMs ?? 60_000);
+        else if (step.chunkDelayMs) await sleep(step.chunkDelayMs);
+      }
+      if (turn.cancelled) {
+        yield* cancelled();
+        return;
+      }
+
+      const calls = (step.toolCalls ?? []).map((c, i) => ({
+        id: `call_${stepIndex}_${i}`,
+        name: c.name,
+        args: c.arguments,
+      }));
+      for (const [i, c] of calls.entries()) {
+        yield {
+          type: 'model.message.delta',
+          id: msgId,
+          threadId: 'main',
+          toolCalls: [
+            {
+              index: i,
+              id: c.id,
+              type: 'function',
+              function: { name: c.name, arguments: JSON.stringify(c.args) },
+              toolInfo: {
+                type: 'mcp',
+                name: c.name,
+                serverId: 'srv-editor-tools',
+                serverName: 'editor-tools',
+              },
+            },
+          ],
+        } as Ev;
+      }
+      yield {
+        type: 'model.message.delta',
+        id: msgId,
+        threadId: 'main',
+        finishReason: calls.length ? 'tool_calls' : 'stop',
+      } as Ev;
+
+      if (calls.length === 0) {
+        const output = {
+          type: 'model.message',
+          id: msgId,
+          createdAt: at(),
+          threadId: 'main',
+          content: full,
+        };
+        yield {
+          type: 'turn.done',
+          id: `done-${turn.id}`,
+          createdAt: at(),
+          threadId: null,
+          state: { status: 'done', completedAt: at(), output, requiredActions: [] },
+        } as Ev;
+        return;
+      }
+
+      const gatedCalls = calls.filter((c) => this.gated.includes(c.name));
+      for (const c of calls.filter((x) => !this.gated.includes(x.name))) {
+        // TrueForge waits for a running MCP call to finish, even after cancel.
+        const content = await this.callTool(c.name, c.args);
+        yield {
+          type: 'tool.response',
+          id: `resp-${c.id}`,
+          createdAt: at(),
+          threadId: 'main',
+          toolCallId: c.id,
+          content,
+        } as Ev;
+        if (turn.cancelled) break;
+      }
+      if (turn.cancelled) {
+        yield* cancelled();
+        return;
+      }
+      if (gatedCalls.length > 0) {
+        for (const c of gatedCalls) session.pending.set(c.id, { name: c.name, args: c.args });
+        const approval = {
+          type: 'tool.approval_required',
+          id: `approval-${turn.id}`,
+          createdAt: at(),
+          threadId: 'main',
+          toolCalls: gatedCalls.map((c) => ({ id: c.id, sourceEventId: msgId })),
+        };
+        yield approval as Ev;
+        yield {
+          type: 'turn.done',
+          id: `done-${turn.id}`,
+          createdAt: at(),
+          threadId: null,
+          state: { status: 'done', completedAt: at(), output: null, requiredActions: [approval] },
+        } as Ev;
+        return;
+      }
+    }
+  }
+}
