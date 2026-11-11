@@ -289,3 +289,76 @@ Blueprint section 8, built on the Phase 2 change-set engine.
 - The integration test applies with `confirmPending: false`; the modal pending-blocks confirmation and the conflict re-stage dialog are not covered by an automated test yet (the conflict and rebase logic itself is unit-tested).
 - The screenshots use a narrow sidebar, so the Review tree's labels are cut off.
 - Still open from Phase 5: reload safety for a running task (F11) and the session log export (F12).
+
+## Phase 7: Inline edit (11 November 2026)
+
+Blueprint section 3 (F1, F13 and F16), section 6 (inline agent) and section 10 (Task A). Apply and Undo reuse the Phase 6 review machinery.
+
+### Built
+
+- `swage.inlineEdit`, now on Cmd+Alt+K (Ctrl+Alt+K) as in blueprint section 3; it was Cmd+K Cmd+I before.
+  - The target is the selection, or the function around the cursor when nothing is selected (tree-sitter symbols from the index), otherwise the cursor line. A selection ending at column 0 leaves that line out.
+  - The target lines are highlighted while the instruction box is open and while the run streams.
+  - The instruction box is VS Code's input box (it opens at the top of the window, titled with the file and lines). A box drawn inside the editor would need a proposed API.
+- `src/inline/context.ts`: the first message carries the instruction, the editable range, the selection, the enclosing symbol (only when it is larger than the selection), the file's imports and up to 15 lines on each side, each budgeted. It ends with the declare-then-stage workflow and the retry rule.
+- The inline agent (`trueforge/agents/inline.agent.json`): `enable_tools` `declare_context` and `stage_edit` only, `iteration_limit` 8, and its own instructions (it previously reused the main agent's text).
+- `src/inline/run.ts`: `InlineEdit` runs through the same `AgentRun` as agent mode, with a first-message hook, so streaming and cancellation are exactly the agent-mode path.
+  - The status bar shows a spinner with the live status: "Assembling context…", "Running…", the tail of the streamed text, "Staging the edit…", and "The edit did not apply; the model is retrying…".
+  - Escape (`swage.stop`, active while `swage.running`) cancels the inline run first, otherwise the agent run.
+  - Inline edit refuses to start while an agent run is busy or a change set is under review: one TrueForge turn and one review at a time (blueprint section 8).
+- Range lock (F13): `stage_edit` warns the model when blocks fall outside the editable range or touch another file. Review flags those blocks with "⚠ outside selection" in their CodeLens.
+- Fenced-code fallback (section 3, G21): a reply with no tool call but a code block replaces the selection and goes through the same review.
+- Review in the editor: the native diff opens in the editor (not the Review panel) at the first block.
+  - Every block gets "Block i/n · +a -r", Accept, Reject and Split (when larger than one line). Inline mode always adds Accept all, Reject all, Apply and Discard, even for one block.
+  - Apply and Undo are the Phase 6 commands: an atomic WorkspaceEdit, checkpoints and two-level undo.
+
+### Tested
+
+- 437 unit tests pass, 2 skipped (the two Flask-only suites). Lint and build pass. Coverage is 96.9% statements and 90.0% branches; `src/inline` is 100% statements except `run.ts` at 90.9%.
+- Scripted inline runs (`test/agent/inline.test.ts`, real MCP server, scripted TrueForge stand-in, `app/flags.py` added to the demo workspace):
+  - a logic change plus a docstring change (two blocks, each rejected or accepted on its own, then reverted);
+  - a pure insertion (one block, no removed lines);
+  - a pure deletion (one block, no added lines);
+  - a rename (the def line only);
+  - an edit that fails the anchor check (`anchor_not_found` goes back to the model) and succeeds on the retry;
+  - a cancel mid-stream: the UI flips in under 50 ms, TrueForge cancel is sent, no tool runs, nothing is staged and the workspace is byte-identical.
+  - Also: the fenced fallback (only the selected lines change), the range lock flagging a block outside a two-line selection, and a reply with neither a tool call nor code ("No change proposed…").
+- Unit tests for the context builder, range lock, fence parser and range replacement (CRLF, a missing final newline, deletion), and the inline manifest (tools and iteration limit).
+- VS Code integration tests (`@vscode/test-cli`, 6 passing in total):
+  - Task A shape on the demo: the cursor in `get_debug_flag` with no selection, `swage.inlineEdit`, then the staged diff is the active editor, with "Block 1/2" and "Block 2/2" lenses and Accept all, Reject all, Apply and Discard. Reject the docstring block, accept the logic block, Apply: only the logic line changes. Undo restores the file.
+  - A one-block rename still shows the per-block lenses plus Accept all, Reject all and Apply; Discard leaves the file unchanged.
+  - Escape (`swage.stop`) mid-stream: "Cancelled. Workspace unchanged.", no review and the file unchanged.
+
+### Task A rehearsal on Flask 3.1.3 (what I saw)
+
+`npm run rehearse:task-a` (`test/rehearsal`, skipped unless `SWAGE_FLASK_DIR` is set) clones the local Flask checkout into a temp folder; the original is never touched.
+
+- **Setup:** no TrueForge and no real model ran. The scripted TrueForge stand-in played `test/rehearsal/task-a-flask.json`, the expected edit, against the real MCP server, `InlineEdit`, the review session and the Applier. The run on 11 November 2026 printed:
+  - Clone at tag 3.1.3 (commit 22d92470), `git status` clean. The venv's Python 3.13.9 imported `flask.helpers` from the clone.
+  - The index covered 229 files in about 235 ms.
+  - Cursor on line 32 (`val = os.environ.get("FLASK_DEBUG")`) with no selection: the target was `src/flask/helpers.py` lines 28-33, the whole `get_debug_flag`. The first message was 749 tokens: instruction 40, selection 74, symbol 0 (the selection is the whole function), imports 190, nearby lines 234.
+- **A0, the cancel demo:** Stop after the sixth streamed token. The state was "cancelled" about 1 ms later, with the outcome "Cancelled. Workspace unchanged.". No tool ran, the TrueForge cancel was sent, and `git status --porcelain` was empty.
+- **A, the edit:**
+  - The status bar went "Assembling context…", "Running…", then the streamed text.
+  - Tools ran in order: `declare_context`, then `stage_edit`, which answered "Staged modify of src/flask/helpers.py: 2 block(s), +4 -1 lines".
+  - Instruction to diff took 186 ms. That is the scripted model (30 ms between chunks), not a real model's latency.
+  - Block 1/2 (+3 -0, after line 30) is a blank line plus "The values `0`, `false`, `no`, `off` and `n` are treated as false, case-insensitively." in the docstring.
+  - Block 2/2 (+1 -1, line 33) changes the return to `not in {"0", "false", "no", "off", "n"}`.
+  - Rejecting block 1 removed the docstring text from the preview. Accepting it again restored the text. Block 2 was then accepted.
+  - Apply wrote one file; `git diff --stat` showed `src/flask/helpers.py | 5 ++++-`.
+- **Verification:**
+  - `FLASK_DEBUG=off python -c "from flask.helpers import get_debug_flag; print(get_debug_flag())"` printed `False`.
+  - OFF, n, N, no, False and 0 gave False; 1, on and yes gave True; unset gave False.
+  - `py_compile` passed.
+  - `pytest tests/test_helpers.py`: 1 failed and 34 passed both before and after the edit. The failure is `TestStreaming::test_async_view`, which needs Flask's `async` extra, missing from this venv; it is not caused by the edit.
+  - `-k debug_flag`: 5 passed.
+- **Undo:** Undo restored the file (`git status --porcelain` empty). A second Undo reported `nothing_to_undo`.
+
+### Open
+
+- **Not yet run on real TrueForge with a real model.** The 15-second Task A target in blueprint section 10 needs a real model. When TrueForge is on: F5, open Flask, cursor in `get_debug_flag`, press Cmd+Alt+K and type the exact instruction. Check the time from instruction to diff and that the model produces two blocks.
+- The Flask rehearsal exercises the engine and the review model, not the VS Code UI; the VS Code integration test covers the UI on the demo workspace.
+- The instruction box is a quick input at the top of the window, not a widget inside the editor.
+- Flask's own `get_debug_flag` tests do not cover "off" or "n"; Task A does not ask for a test, so none was added.
+- After agent mode or inline edit, the runtime stays shared. A new inline edit while an agent change set is under review is refused, not queued.
+- Lesson recorded: piping `verify.sh` through `tail` hides its exit code, and one commit went in red locally before being amended (never pushed). Verify is now run without a pipe before every commit.
