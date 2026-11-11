@@ -112,7 +112,8 @@ describe('truncateToTokens', () => {
       r.text.slice(r.text.indexOf(TRUNCATION_PREFIX)),
     ];
     expect(body.endsWith('\n')).toBe(true);
-    expect(body.length).toBeLessThanOrEqual(200);
+    expect(body.length).toBeGreaterThan(0);
+    expect(r.tokens).toBeLessThanOrEqual(50);
     expect(marker).toMatch(
       /^\[truncated: showing about \d+ of \d+ tokens \(lines 1-\d+ of 100\)\. To see more, request a line range/,
     );
@@ -121,11 +122,16 @@ describe('truncateToTokens', () => {
     );
   });
 
-  it('handles a single long line and a zero budget', () => {
+  it('stays within the budget, marker included, and handles a single long line', () => {
     const long = 'x'.repeat(1000);
-    const r = truncateToTokens(long, 10);
-    expect(r.text.startsWith('x'.repeat(40) + '\n' + TRUNCATION_PREFIX)).toBe(true);
-    expect(truncateToTokens(long, 0).text.startsWith(TRUNCATION_PREFIX)).toBe(true);
+    const r = truncateToTokens(long, 100);
+    expect(r.text.startsWith('xxxx')).toBe(true);
+    expect(r.text).toContain(`\n${TRUNCATION_PREFIX}`);
+    expect(r.tokens).toBeLessThanOrEqual(100);
+    // A budget smaller than the marker still returns the marker, with nothing shown.
+    expect(truncateToTokens(long, 10).text).toMatch(
+      /^\[truncated: showing about 0 of 250 tokens \(0 of 1 lines\)/,
+    );
   });
 });
 

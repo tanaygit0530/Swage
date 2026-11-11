@@ -60,14 +60,24 @@ export function truncateToTokens(
   if (originalTokens <= maxTokens) {
     return { text, truncated: false, tokens: originalTokens, originalTokens };
   }
-  const maxChars = Math.max(0, maxTokens * 4);
-  let cut = text.slice(0, maxChars);
-  const lastNewline = cut.lastIndexOf('\n');
-  if (lastNewline > maxChars / 2) cut = cut.slice(0, lastNewline + 1);
-  const shownLines = cut.split('\n').length - (cut.endsWith('\n') ? 1 : 0);
   const totalLines = text.split('\n').length - (text.endsWith('\n') ? 1 : 0);
-  const marker = `${TRUNCATION_PREFIX} showing about ${estimateTokens(cut)} of ${originalTokens} tokens (lines 1-${shownLines} of ${totalLines}). To see more, ${howToGetMore}.]`;
-  const out = `${cut}${cut.endsWith('\n') || cut === '' ? '' : '\n'}${marker}`;
+  const build = (maxChars: number): string => {
+    let cut = text.slice(0, Math.max(0, maxChars));
+    const lastNewline = cut.lastIndexOf('\n');
+    if (lastNewline > maxChars / 2) cut = cut.slice(0, lastNewline + 1);
+    const shownLines = cut === '' ? 0 : cut.split('\n').length - (cut.endsWith('\n') ? 1 : 0);
+    const range =
+      shownLines > 0 ? `lines 1-${shownLines} of ${totalLines}` : `0 of ${totalLines} lines`;
+    const marker = `${TRUNCATION_PREFIX} showing about ${estimateTokens(cut)} of ${originalTokens} tokens (${range}). To see more, ${howToGetMore}.]`;
+    return `${cut}${cut.endsWith('\n') || cut === '' ? '' : '\n'}${marker}`;
+  };
+  // Reserve room for the marker so the result stays within the budget.
+  let maxChars = maxTokens * 4 - build(0).length - 1;
+  let out = build(maxChars);
+  for (let i = 0; i < 3 && estimateTokens(out) > maxTokens && maxChars > 0; i++) {
+    maxChars -= (estimateTokens(out) - maxTokens) * 4 + 4;
+    out = build(maxChars);
+  }
   return { text: out, truncated: true, tokens: estimateTokens(out), originalTokens };
 }
 
