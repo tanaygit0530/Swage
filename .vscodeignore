@@ -1,5 +1,6 @@
 **
 !dist/extension.js
+!dist/wasm/*.wasm
 !package.json
 !README.md
 !LICENSE

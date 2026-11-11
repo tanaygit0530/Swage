@@ -1,5 +1,18 @@
 // Bundles the extension host code into dist/extension.js.
+import { copyFileSync, mkdirSync } from 'node:fs';
 import * as esbuild from 'esbuild';
+
+// tree-sitter runtime and grammars used by src/context (blueprint section 7).
+const WASM_SRC = 'node_modules/@vscode/tree-sitter-wasm/wasm';
+const WASM_FILES = [
+  'tree-sitter.wasm',
+  'tree-sitter-python.wasm',
+  'tree-sitter-typescript.wasm',
+  'tree-sitter-tsx.wasm',
+  'tree-sitter-javascript.wasm',
+];
+mkdirSync('dist/wasm', { recursive: true });
+for (const file of WASM_FILES) copyFileSync(`${WASM_SRC}/${file}`, `dist/wasm/${file}`);
 
 const production = process.argv.includes('--production');
 const watch = process.argv.includes('--watch');
