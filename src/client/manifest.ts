@@ -19,6 +19,8 @@ export interface ModelProfile {
   readonly name: string;
   /** TrueForge model FQN, for example `google-gemini/gemini-3-5-flash`. */
   readonly trueforgeModel: string;
+  /** Where the model runs; local models get longer timeouts (blueprint section 8). */
+  readonly kind?: 'hosted' | 'local';
   readonly params?: { readonly temperature?: number; readonly max_tokens?: number };
 }
 
@@ -82,7 +84,16 @@ export function withProfile(spec: AgentSpec, profile: ModelProfile): AgentSpec {
     ...spec,
     model: {
       name: profile.trueforgeModel,
-      params: { ...(spec.model.params ?? {}), ...(profile.params ?? {}) },
+      // Profiles use the wire names (max_tokens); the SDK spec uses camelCase (maxTokens).
+      params: {
+        ...(spec.model.params ?? {}),
+        ...(profile.params?.temperature === undefined
+          ? {}
+          : { temperature: profile.params.temperature }),
+        ...(profile.params?.max_tokens === undefined
+          ? {}
+          : { maxTokens: profile.params.max_tokens }),
+      },
     },
   };
 }

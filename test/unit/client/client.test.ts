@@ -569,5 +569,14 @@ describe('manifest helpers', () => {
       },
     });
     expect(() => withProfile(spec, { name: 'p', trueforgeModel: 'gemini' })).toThrow(/FQN/);
+    const sized = withProfile(spec, {
+      name: 'p',
+      trueforgeModel: 'a/b',
+      params: { max_tokens: 1024 },
+    });
+    expect(sized.model.params).toEqual({ temperature: 0, maxTokens: 1024 });
+    expect(toWireManifest(sized)).toMatchObject({
+      model: { params: { temperature: 0, max_tokens: 1024 } },
+    });
   });
 });
