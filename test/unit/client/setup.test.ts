@@ -75,17 +75,18 @@ describe('agent manifests (blueprint section 6)', () => {
 });
 
 describe('profiles', () => {
-  it('parses the example profiles', () => {
-    const profiles = parseProfiles(readFileSync('config/models.example.json', 'utf8'));
+  it('parses the example profiles (YAML)', () => {
+    const profiles = parseProfiles(readFileSync('config/models.example.yaml', 'utf8'));
     expect(profiles.map((p) => `${p.name}=${p.trueforgeModel}`)).toEqual([
-      'primary=google-gemini/gemini-3-5-flash',
+      'primary=google-gemini/gemini-3-5-flash-lite',
       'fallback-1=groq/gpt-oss-120b',
       'fallback-2=ollama/qwen-2-5-coder-7b',
+      'fallback-3=llamacpp/qwen-2-5-coder-3b',
     ]);
   });
 
   it('rejects bad profile files', () => {
-    expect(() => parseProfiles('{"profiles": []}')).toThrow(/non-empty/);
+    expect(() => parseProfiles('{"profiles": []}')).toThrow(/non-empty list/);
     expect(() => parseProfiles('{"profiles": [{"name": "p"}]}')).toThrow(/profile 0/);
   });
 });

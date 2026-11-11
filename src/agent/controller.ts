@@ -5,6 +5,7 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { SwageClient, type SdkLike } from '../client/client';
 import { agentNameFor, type ModelProfile } from '../client/manifest';
+import { profilesFrom, type ResolvedProfile } from '../resilience/profiles';
 import { formatReport, loadManifests, runSetup } from '../client/setup';
 import { Bm25Searcher } from '../context/bm25';
 import { resolveBudgets, type Budgets } from '../context/budget';
@@ -108,7 +109,7 @@ export class AgentController implements vscode.WebviewViewProvider, vscode.Dispo
   }
 
   private settings(): {
-    profiles: ModelProfile[];
+    profiles: ResolvedProfile[];
     budgets: Budgets;
     baseUrl: string;
     autoStart: boolean;
@@ -116,12 +117,22 @@ export class AgentController implements vscode.WebviewViewProvider, vscode.Dispo
   } {
     const c = vscode.workspace.getConfiguration('swage');
     return {
-      profiles: c.get<ModelProfile[]>('models', []),
+      profiles: this.profiles(c.get<unknown>('models', [])),
       budgets: resolveBudgets(c.get('budgets')),
       baseUrl: c.get<string>('truefoundry.baseUrl', 'http://localhost:8790'),
       autoStart: c.get<boolean>('autoStart', true),
       ignore: c.get<string[]>('ignore', []),
     };
+  }
+
+  /** Profiles from swage.models, else the profiles file of a development checkout; [] if invalid. */
+  private profiles(setting: unknown): ResolvedProfile[] {
+    try {
+      return profilesFrom(setting, this.context.extensionPath);
+    } catch (err) {
+      this.logger.warn((err as Error).message);
+      return [];
+    }
   }
 
   private async onMessage(msg: WebviewToHost): Promise<void> {
@@ -283,7 +294,7 @@ export class AgentController implements vscode.WebviewViewProvider, vscode.Dispo
     const profile = s.profiles[0];
     if (!profile)
       throw new Error(
-        'No model profile: add one to the swage.models setting (see config/models.example.json).',
+        'No model profile: add one to the swage.models setting (see config/models.example.yaml).',
       );
 
     const t0 = Date.now();

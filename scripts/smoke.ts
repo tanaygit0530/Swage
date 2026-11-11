@@ -6,9 +6,8 @@
  *   --profile <name>     default: the first profile (primary)
  *   --message <text>     default: "say hello"
  */
-import { existsSync, readFileSync } from 'node:fs';
 import { SwageClient } from '../src/client/client';
-import { parseProfiles } from '../src/client/setup';
+import { loadProfilesFile } from '../src/resilience/profiles';
 
 const args = process.argv.slice(2);
 const flag = (name: string): string | undefined => {
@@ -17,8 +16,7 @@ const flag = (name: string): string | undefined => {
 };
 
 const baseUrl = process.env['TRUEFORGE_BASE_URL'] ?? 'http://localhost:8790';
-const file = existsSync('config/models.json') ? 'config/models.json' : 'config/models.example.json';
-const profiles = parseProfiles(readFileSync(file, 'utf8'));
+const { file, profiles } = loadProfilesFile('.');
 const wanted = flag('--profile');
 const profile = wanted ? profiles.find((p) => p.name === wanted) : profiles[0];
 if (!profile) throw new Error(`No profile named ${wanted ?? '(first)'} in ${file}`);

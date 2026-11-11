@@ -1,0 +1,38 @@
+# Swage model profiles (blueprint sections 8 and 9). Copy to config/models.yaml (git-ignored)
+# or put the same list in the swage.models setting. The first profile is the primary; the
+# rest are fallbacks, tried in order. Any TrueForge model works: change the names freely.
+#
+# No keys and no provider URLs in this file; both live inside TrueForge (Settings, Models).
+# Custom providers: Groq (its OpenAI-compatible base URL), Ollama http://127.0.0.1:11434/v1
+# and llama.cpp server http://127.0.0.1:8080/v1. Start TrueForge with
+# OUTBOUND_URL_ALLOWED_HOSTS including 127.0.0.1 for the local ones.
+#
+# timeouts are per attempt and optional; missing values come from the kind:
+#   hosted: connect 10 s, first token 45 s, stall 30 s, total 10 min
+#   local:  connect 10 s, first token 120 s, stall 60 s, total 15 min
+# A slow local model is not a failed one: raise firstTokenMs if yours loads slowly.
+profiles:
+  - name: primary # Gemini Flash, hosted free tier
+    kind: hosted
+    label: Gemini
+    trueforgeModel: google-gemini/gemini-3-5-flash-lite
+    params: { temperature: 0, max_tokens: 4096 }
+    timeouts: { connectMs: 10000, firstTokenMs: 45000, stallMs: 30000, totalMs: 600000 }
+  - name: fallback-1 # Groq, hosted free tier
+    kind: hosted
+    label: Groq
+    trueforgeModel: groq/gpt-oss-120b
+    params: { temperature: 0, max_tokens: 4096 }
+    timeouts: { connectMs: 10000, firstTokenMs: 30000, stallMs: 30000, totalMs: 600000 }
+  - name: fallback-2 # local Ollama
+    kind: local
+    label: Ollama
+    trueforgeModel: ollama/qwen-2-5-coder-7b
+    params: { temperature: 0, max_tokens: 4096 }
+    timeouts: { connectMs: 10000, firstTokenMs: 120000, stallMs: 60000, totalMs: 900000 }
+  - name: fallback-3 # llama.cpp server, optional: delete this entry if you do not run it
+    kind: local
+    label: llama.cpp
+    trueforgeModel: llamacpp/qwen-2-5-coder-3b
+    params: { temperature: 0, max_tokens: 4096 }
+    timeouts: { connectMs: 10000, firstTokenMs: 120000, stallMs: 60000, totalMs: 900000 }

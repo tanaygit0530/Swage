@@ -1,3 +1,4 @@
+import { parseProfilesText, type ResolvedProfile } from '../resilience/profiles';
 import { readFileSync } from 'node:fs';
 import * as path from 'node:path';
 import { describeError, type SwageClient } from './client';
@@ -70,18 +71,9 @@ export function loadManifests(dir: string): Manifests {
   return { 'swage-main': read('main.agent.json'), 'swage-inline': read('inline.agent.json') };
 }
 
-/** Reads `{ "profiles": [...] }`, checking that every profile has a name and a TrueForge model. */
-export function parseProfiles(json: string): ModelProfile[] {
-  const data = JSON.parse(json) as { profiles?: unknown };
-  if (!Array.isArray(data.profiles) || data.profiles.length === 0)
-    throw new Error('profiles must be a non-empty array');
-  return data.profiles.map((p: unknown, i: number) => {
-    const profile = p as Partial<ModelProfile>;
-    if (typeof profile.name !== 'string' || typeof profile.trueforgeModel !== 'string') {
-      throw new Error(`profile ${i}: name and trueforgeModel are required`);
-    }
-    return profile as ModelProfile;
-  });
+/** Parses a profiles file (YAML or JSON): validated, with timeouts filled from the kind. */
+export function parseProfiles(text: string, source = 'profiles'): ResolvedProfile[] {
+  return parseProfilesText(text, source);
 }
 
 export async function runSetup(options: SetupOptions): Promise<SetupReport> {

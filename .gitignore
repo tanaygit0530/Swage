@@ -44,4 +44,6 @@ __pycache__/
 
 # Local model profiles (no secrets, but personal)
 config/models.json
+config/models.yaml
+config/models.yml
 models.local.*

@@ -22,6 +22,22 @@ export interface ModelProfile {
   /** Where the model runs; local models get longer timeouts (blueprint section 8). */
   readonly kind?: 'hosted' | 'local';
   readonly params?: { readonly temperature?: number; readonly max_tokens?: number };
+  /** Layered timers for one attempt; missing values come from the kind's defaults. */
+  readonly timeouts?: Partial<ProfileTimeouts>;
+  /** Name shown in banners and the status bar; defaults to the provider, for example "Gemini". */
+  readonly label?: string;
+}
+
+/** Per-attempt timers (blueprint section 8, resilience). */
+export interface ProfileTimeouts {
+  /** Until TrueForge accepts the turn (session created, turn started). */
+  readonly connectMs: number;
+  /** From the turn start until the model's first event. */
+  readonly firstTokenMs: number;
+  /** Silence after output began (tool executions excluded). */
+  readonly stallMs: number;
+  /** Hard ceiling for one attempt. */
+  readonly totalMs: number;
 }
 
 export function assertAgentName(name: string): void {

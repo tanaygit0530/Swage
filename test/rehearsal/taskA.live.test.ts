@@ -1,13 +1,12 @@
-import { existsSync, readFileSync } from 'node:fs';
 import * as path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { parseProfiles } from '../../src/client/setup';
+import { loadProfilesFile } from '../../src/resilience/profiles';
 import { rehearseTaskA } from './taskA';
 
 /**
  * Task A on a real TrueForge with a real model (blueprint section 10). Needs SWAGE_LIVE=1,
  * SWAGE_FLASK_DIR and a running TrueForge (trueforge/start.sh); skipped otherwise.
- * SWAGE_PROFILE picks the profile from config/models.json (default: the first); SWAGE_MODEL
+ * SWAGE_PROFILE picks the profile from config/models.yaml or the example (default: the first); SWAGE_MODEL
  * instead uses any TrueForge model FQN, as a profile named "rehearsal".
  * `npm run rehearse:task-a:live` runs it and prints the transcript.
  */
@@ -16,10 +15,7 @@ const LIVE = process.env.SWAGE_LIVE === '1';
 
 describe.skipIf(!FLASK || !LIVE)('Task A on real TrueForge', () => {
   it('real model: cancel demo, inline edit, review, apply, verification, undo', async () => {
-    const file = existsSync('config/models.json')
-      ? 'config/models.json'
-      : 'config/models.example.json';
-    const profiles = parseProfiles(readFileSync(file, 'utf8'));
+    const { file, profiles } = loadProfilesFile('.');
     const wanted = process.env.SWAGE_PROFILE;
     const model = process.env.SWAGE_MODEL;
     const profile = model
