@@ -241,6 +241,7 @@
     "vitest": "^5.1.0"
   },
   "dependencies": {
+    "@truefoundry/trueforge-sdk": "0.184.1",
     "@vscode/tree-sitter-wasm": "^0.3.1",
     "diff": "^9.0.0",
     "ignore": "^7.0.14",
