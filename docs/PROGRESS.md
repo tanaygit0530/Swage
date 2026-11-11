@@ -127,3 +127,69 @@ Flask's `git status` stayed clean after the measurements.
 - The cache lives in `.swage/index` inside the workspace, as requested, and is hidden from git by `.swage/.gitignore`. Blueprint section 8 prefers globalStorage; `IndexCache` can be swapped with no other change.
 - The blueprint also suggests boosting files with diagnostics; that is not done, because it needs VS Code. The active-file boost is supported.
 - The Flask evaluation runs locally only, because CI has no Flask checkout. Add a CI step that clones the pinned commit if the evidence should be automatic.
+
+## Phase 3: TrueForge integration (11 November 2026)
+
+Real TrueForge 0.184.2 and SDK 0.184.1. Every API shape was verified against the repository, the OpenAPI spec, the SDK types or a live server; details and surprises are in `docs/SPIKES.md`.
+
+### Built
+
+- `trueforge/start.sh` and `start.ps1`: the pinned `npx @truefoundry/trueforge@0.184.2 --port`, `SQLITE_PATH` outside the repository (default `~/trueforge-data/trueforge.sqlite`, the user's existing database, so the configured models carry over), `OUTBOUND_URL_ALLOWED_HOSTS='["127.0.0.1","localhost"]'` and `HOST=127.0.0.1`. The script refuses a database inside the repository.
+- `src/supervisor`: starts TrueForge on a free 127.0.0.1 port, waits for `GET /healthz`, restarts on the same port after a crash (1, 2, 4, 8, 16 s), stops with SIGTERM then SIGKILL on the process group, can reuse an already-running server, and redacts every log line. `shutdownInOrder` stops TrueForge before the MCP server (upstream issue 878).
+- `src/client`: an SDK wrapper. Agents are upserted by exact name (refusing `tfg` and `trueforge`); MCP registration uses bearer header auth; sessions can be named or inline; turns are streamed with `createTurnStream` and the SDK's `mergeEventDelta`; approvals resume with `user.tool_approval`; cancel is supported. A typed UI event stream offers `turn_started`, `text`, `tool_start`, `tool_result`, `approval_required`, `done`, `cancelled` and `error`. Manifests are validated by the SDK's own `AgentSpec` schema, which rejects unknown keys.
+- `trueforge/agents/main.agent.json` and `inline.agent.json`, exactly as in blueprint section 6, with the model filled from the active profile at runtime. `config/models.example.json` holds the profiles (Gemini, Groq, Ollama); `config/models.json` is the local, git-ignored copy that also adds llama.cpp.
+- `npm run setup` (idempotent MCP registration and agent upsert), `npm run smoke`, and `npm run spike -- <script>` (esbuild-bundled TypeScript scripts).
+- Spike scripts for S7, S9, S10 and the issue 878 retest, with a local fake OpenAI endpoint and a stub MCP server, so no spike sends anything to a real provider except S9's deliberate model calls.
+
+### Measured (details in `docs/SPIKES.md`)
+
+- Smoke: "say hello" through TrueForge to Gemini Flash, 2.3 s.
+- S7: refused connection 22 ms and HTTP 401 21 ms, each as `turn.done` error; a hanging endpoint takes 64.7 s (20 s header timeout, 2 retries); unknown or private hosts are refused when the provider is saved.
+- S10: pytest in a shadow copy imports the installed package unless `PYTHONPATH=<shadow>/src`; with it, Flask's `tests/test_cli.py` passes (58 tests, 0.13 s).
+- Issue 878 retest: TrueForge 0.184.2 stayed up when a registered MCP server stopped, in both stateless and stateful modes.
+- S9 first run: Gemini Flash 7 of 10 (2 quota 429s, 1 probe token cap); Groq 0 of 10 (404: the configured model is not available to the key); local models not measured because the user's TrueForge stopped during the first Ollama trial.
+
+### Open
+
+- **User action: Flask venv.** It has pytest 9.2.0, which cannot run Flask 3.1.3's tests (`monkeypatch.notset`); run `~/Desktop/Hackthons/flask/.venv/bin/pip install pytest==9.0.2`.
+- **User action: Groq model.** Pick a Groq model this key can use in TrueForge Settings, Models, then update `config/models.json`.
+- **Re-run S9** for Ollama and llama.cpp with TrueForge started from `trueforge/start.sh` in a visible terminal, one local model loaded at a time; find out why TrueForge stopped during the Ollama trial.
+- Unit coverage of `supervisor.ts` is 85% (the real clock and process kill paths are exercised only by the spikes).
+
+## Phase 4: Local MCP server and editor tools (11 November 2026)
+
+`src/mcp`: Swage's MCP server with the nine tools of blueprint section 6. Pure Node with no `vscode` import.
+
+### Built
+
+- `server.ts`: official MCP SDK, Streamable HTTP in stateless mode (the mode the issue 878 retest validated), bound to 127.0.0.1 on a random port, with a random 32-byte bearer token compared in constant time. It returns 401 without the exact token and 403 for a Host header other than 127.0.0.1 or localhost (DNS rebinding); it serves only POST `/mcp`, with a 4 MB body limit.
+- `tasks.ts` and `context.ts`: tasks keyed by Swage's task id hold the change set, the per-run read budget, an abort controller and the current TrueForge turn id. Starting a task cancels the previous one. `runTool` wraps every tool: it requires an active task, combines the task and request abort signals, times and logs each call (`tool <name> <ms> <outcome>`), turns errors into structured `{ error: { code, message, … } }` results, redacts every result, and discards a result whose task was cancelled or whose turn changed while it ran.
+- Tools:
+  1. `find_relevant_code`: BM25 hits with reasons and exact snippets.
+  2. `repo_map`: ranked outline within the repo-map budget.
+  3. `read_files`: up to 10 files, line ranges, path guard, staged overlay view, sha256 prefix, binary and size checks, did-you-mean suggestions, per-result and per-run budgets.
+  4. `get_symbol`: definition, uses, paired tests, other definitions.
+  5. `declare_context`: plan and files with reasons, path-guarded, UI event.
+  6. `stage_edit`: edit, write or delete in the overlay only, with change-set error codes passed through and deleted-symbol warnings that include unchanged files importing a staged file.
+  7. `run_tests`: allowlisted tests in a shadow copy.
+  8. `run_command`: the command policy; denied commands never run, other commands need a one-time approval, and everything runs in a shadow copy.
+  9. `submit_change_set`: marks the change set for review, applies nothing, idempotent.
+- `shadow.ts`: temp copy of the workspace without ignored paths and symlinks, with the staged overlay applied; content-hash snapshots before and after report the files a command created, modified or deleted (discarded, never assumed reversible). The environment is scrubbed to an allowlist; `.venv` interpreters resolve against the real workspace; the shadow `src` comes first on `PYTHONPATH`; pytest runs with `-p no:cacheprovider`. There is no shell, output is capped and redacted, and the process tree is killed on timeout or cancel.
+- File text is wrapped in `<<<FILE …>>>` markers labelled as repository data (rule 6).
+- `trueforge/mcp/editor-tools.json`: the registration template (port and token filled at runtime) and the tool policy. Five hot tools are preloaded; `repo_map`, `get_symbol`, `run_tests` and `run_command` are deferred; `submit_change_set` and `run_command` require approval by name. A test keeps it in sync with the server and the agent manifests.
+
+### Tested
+
+- 370 tests pass (1 skipped: the Flask evaluation without `SWAGE_FLASK_DIR`); lint and build pass.
+- `test/mcp`: the server, each tool, the shadow runner and an end-to-end test that drives all nine tools through the official MCP client over HTTP in one agent workflow. The workspace hash is unchanged afterwards, a planted secret never appears in any result, every tool logs its timing, and requests without the token (401) or with a foreign Host (403) are refused.
+- Cancellation: a cancelled task aborts a running test command, its process tree is killed, and the late result is discarded; a result from a superseded turn is discarded.
+- Coverage: all files 97.4% statements, 91.3% branches; `src/mcp` 95.7% and `src/mcp/tools` 98.8% statements.
+
+Hot-path timings on the fixture (40 files): `find_relevant_code` 8 ms, `repo_map` under 1 ms, `read_files` 1 ms, `get_symbol` 13 ms, `declare_context` under 1 ms, `stage_edit` 2 ms, `submit_change_set` under 1 ms. `run_tests` adds the shadow copy and the command itself; both are logged on every call.
+
+### Open
+
+- Nothing is wired into the extension yet: `extension.ts` must start the supervisor and the MCP server, register `editor-tools` with the generated port and token (`npm run setup` logic), start a task for every run, record `run_command` approvals, and apply after review.
+- One task at a time: inline edit and agent mode share the MCP server, so the UI must not run both at once (blueprint section 8 already requires that).
+- JavaScript projects: `node_modules` is not copied into shadows, so JS test runners that need dependencies will fail there; consider a read-only symlink or `NODE_PATH`.
+- Approved commands run in the shadow copy, not the real workspace, so a command such as `pip install` does not change the user's environment; the result says so.
