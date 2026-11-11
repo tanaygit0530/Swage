@@ -238,7 +238,7 @@ Blueprint sections 3 (F2, F3, F5, F14, F15), 4, 8 and 10.
 
 ### Open
 
-- **Not yet run against the real TrueForge.** The F5 demo needs TrueForge running (`trueforge/start.sh`) plus `npm run fake-model`; the fast tests use a scripted stand-in built from the verified event shapes. Two assumptions to confirm on the first real run: the `tool.response` text for a denied call, and how `call_tool` deltas appear in a live stream.
+- **Real TrueForge run (11 November 2026):** the user ran the F5 demo (`trueforge/start.sh`, `npm run fake-model`, "Run Swage on the demo workspace") against TrueForge 0.184.2 and reported that it works: the scripted run streams in the panel, approval works and Stop works. Not yet checked in detail: the exact `tool.response` text TrueForge sends for a denied call, and how `call_tool` deltas look in a live stream.
 - The Approve card on `submit_change_set` currently approves the submission; the Review view (per-block accept and reject, apply, undo) is the next phase and will drive this decision.
 - The panel's Retry starts a fresh run with the same request (a new session); resuming a stopped session is not offered.
 - Reload safety (F11) and the session log export (F12) are not built.
