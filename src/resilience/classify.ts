@@ -24,6 +24,8 @@ export interface Failure {
   readonly status?: number;
   /** Server-suggested wait (Retry-After or "try again in Ns"). */
   readonly retryAfterMs?: number;
+  /** A timeout (Swage's timers, or TrueForge's own header timeout): it already cost the wait. */
+  readonly timeout?: boolean;
 }
 
 export type TimeoutKind = 'connect' | 'firstToken' | 'stall' | 'total';
@@ -47,7 +49,11 @@ function failure(
   kind: FailureKind,
   reason: string,
   detail: string,
-  extra: { status?: number | undefined; retryAfterMs?: number | undefined } = {},
+  extra: {
+    status?: number | undefined;
+    retryAfterMs?: number | undefined;
+    timeout?: boolean;
+  } = {},
 ): Failure {
   return {
     kind,
@@ -55,6 +61,7 @@ function failure(
     detail: firstLine(detail),
     ...(extra.status === undefined ? {} : { status: extra.status }),
     ...(extra.retryAfterMs === undefined ? {} : { retryAfterMs: extra.retryAfterMs }),
+    ...(extra.timeout ? { timeout: true } : {}),
   };
 }
 
@@ -111,7 +118,8 @@ export function classifyMessage(message: string): Failure {
         status,
         retryAfterMs: retryAfter(text),
       });
-    if (/timeout|timed out/i.test(text)) return failure('transient', 'timed out', text);
+    if (/timeout|timed out/i.test(text))
+      return failure('transient', 'timed out', text, { timeout: true });
     if (/ECONNRESET|socket hang up|terminated|other side closed|network/i.test(text))
       return failure('transient', 'dropped the connection', text);
     if (status !== undefined && status >= 400)
@@ -144,7 +152,7 @@ export function timeoutFailure(which: TimeoutKind, ms: number): Failure {
         : which === 'stall'
           ? `stalled for ${t}`
           : `ran past its ${t} limit`;
-  return failure('transient', reason, `Swage ${which} timer: ${reason}`);
+  return failure('transient', reason, `Swage ${which} timer: ${reason}`, { timeout: true });
 }
 
 export interface BackoffOptions {

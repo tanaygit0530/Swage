@@ -467,12 +467,12 @@ From `SWAGE_PRINT_SWITCH=1 npx vitest run test/agent/resilience.test.ts`. The te
 | connection refused                          | 1 ms            | 0 ms                                  |
 | 500 mid-task (after 2 tool steps, 1 retry)  | 161 ms          | 0 ms                                  |
 
-What this means with the production timers (3 retries, backoff 1, 2 and 4 s; S7 measured TrueForge reporting 401 and a refused connection in about 21 ms):
+What this means with the production timers (S7 measured TrueForge reporting 401 and a refused connection in about 21 ms). 429 and 5xx get 3 retries with backoff of 1, 2 and 4 s; timeouts get one retry (see below):
 
 - **401 and refused connection:** about 0.1 s to switch, which is what Task C uses with `break-primary`.
 - **429 and 5xx:** about 7 s of backoff, or longer if Retry-After asks for more.
-- **Stall:** up to 4 × 30 s plus backoff.
-- **Hosted hang:** up to 4 × 45 s plus backoff.
+- **Stall:** up to 2 × 30 s plus about 1 s.
+- **Hosted hang:** up to 2 × 45 s plus about 1 s.
 
 ### Open
 
@@ -482,7 +482,7 @@ What this means with the production timers (3 retries, backoff 1, 2 and 4 s; S7 
   - Doctor's live checks and model probes;
   - the recovery offer after a real outage;
   - the status bar and toasts on screen.
-- Timer failures retry up to three times before switching, so a hosted model that hangs costs minutes before the fallback. Consider fewer retries for timer failures; the Task C demo avoids this by using a refused connection.
+- **Decision (same day): timeouts retry once, then switch.** This covers Swage's stall, first-token, connect and total timers, and TrueForge's own header timeout, because each already cost the whole wait. 429 and 5xx keep 3 retries. Before this, a hosted model that hung cost up to about 3 minutes; now it is about 91 s at most. `timeoutRetries` is a router option (default 1, never more than `retries`).
 - Recovery probes cost one tiny request every 2 minutes per failed profile while on a fallback (at most 30 per profile).
 - `restore-primary` gives back the same values, but jsonc-parser rewrites the primary entry as a multi-line object.
 - Still open from earlier phases: reload safety (F11), session log export (F12), Open TrueForge session (F17) and the performance report (F18).

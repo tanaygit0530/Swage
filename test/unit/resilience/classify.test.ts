@@ -114,6 +114,11 @@ describe('classify (blueprint section 8; messages as recorded in docs/SPIKES.md)
       reason: 'sent nothing in 45 s',
     });
     expect(timeoutFailure('stall', 30_000).reason).toBe('stalled for 30 s');
+    expect(timeoutFailure('stall', 30_000).timeout).toBe(true);
+    expect(
+      classifyMessage('[Model Error] Cannot connect to API: Headers Timeout Error').timeout,
+    ).toBe(true);
+    expect(classifyMessage('[Model Error] Request failed (429): x').timeout).toBeUndefined();
     expect(timeoutFailure('connect', 10_000).reason).toBe('did not connect in 10 s');
     expect(timeoutFailure('total', 600_000).reason).toBe('ran past its 600 s limit');
   });

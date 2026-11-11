@@ -205,6 +205,27 @@ describe('router and fallback plan', () => {
     expect(plan.failures).toHaveLength(3);
   });
 
+  it('timeouts retry once by default, other transient failures three times', () => {
+    const router = new ModelRouter(profiles, { backoff: { baseMs: 1000, jitter: 0 } });
+    const stall: Failure = {
+      kind: 'transient',
+      reason: 'stalled for 30 s',
+      detail: 'x',
+      timeout: true,
+    };
+    const plan = router.begin();
+    expect(plan.decide(stall)).toEqual({ action: 'retry', delayMs: 1000, retry: 1, of: 1 });
+    expect(plan.decide(stall)).toMatchObject({
+      action: 'switch',
+      message: 'Switched to Groq because Gemini stalled for 30 s.',
+    });
+    expect(plan.decide(transient)).toMatchObject({ action: 'retry', retry: 1, of: 3 });
+    expect(plan.decide(transient)).toMatchObject({ action: 'retry', retry: 2, of: 3 });
+    expect(plan.decide(transient)).toMatchObject({ action: 'retry', retry: 3, of: 3 });
+    expect(plan.decide(transient)).toMatchObject({ action: 'switch', to: { name: 'fallback-2' } });
+    expect(new ModelRouter(profiles, { retries: 0, timeoutRetries: 2 }).timeoutRetries).toBe(0);
+  });
+
   it('starts later tasks on the active profile and wraps to earlier ones', () => {
     const router = new ModelRouter(profiles);
     router.setActive('fallback-1');

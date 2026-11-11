@@ -29,6 +29,11 @@ export type Decision =
 export interface RouterOptions {
   /** Retries on the same profile for transient failures (blueprint: 1 s, 2 s, 4 s). */
   readonly retries?: number;
+  /**
+   * Retries for timeouts (a stall, no first token, a header timeout): each already cost the
+   * whole wait, so one retry, then the next profile.
+   */
+  readonly timeoutRetries?: number;
   readonly backoff?: BackoffOptions;
   readonly clock?: Clock;
 }
@@ -55,6 +60,7 @@ export class ModelRouter {
   private readonly listeners = new Set<() => void>();
   private readonly failed = new Map<string, FailureRecord>();
   readonly retries: number;
+  readonly timeoutRetries: number;
   readonly clock: Clock;
 
   constructor(
@@ -65,6 +71,7 @@ export class ModelRouter {
     this.list = [...profiles];
     this.activeName = this.list[0]?.name ?? '';
     this.retries = options.retries ?? 3;
+    this.timeoutRetries = Math.min(options.timeoutRetries ?? 1, this.retries);
     this.clock = options.clock ?? realClock;
   }
 
@@ -172,13 +179,14 @@ export class FallbackPlan {
   decide(f: Failure): Decision {
     if (f.kind === 'fatal')
       return { action: 'fail', message: `${this.profile.label} ${f.reason}: ${f.detail}` };
-    if (f.kind === 'transient' && this.retriesUsed < this.router.retries) {
+    const limit = f.timeout ? this.router.timeoutRetries : this.router.retries;
+    if (f.kind === 'transient' && this.retriesUsed < limit) {
       this.retriesUsed++;
       return {
         action: 'retry',
         delayMs: backoffDelay(this.retriesUsed, f, this.router.options.backoff),
         retry: this.retriesUsed,
-        of: this.router.retries,
+        of: limit,
       };
     }
     const from = this.profile;
