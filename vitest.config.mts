@@ -24,6 +24,7 @@ export default defineConfig({
         'src/ui/**/*.ts',
         'src/review/**/*.ts',
         'src/inline/**/*.ts',
+        'src/resilience/**/*.ts',
       ],
       // controller.ts and the vscode folders need VS Code, main.tsx a browser; the integration test and F5 cover them.
       exclude: [
