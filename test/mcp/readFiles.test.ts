@@ -56,6 +56,37 @@ describe('read_files', () => {
     expect(text).toContain('line_9 = 9\nline_10 = 10\nline_11 = 11\n<<<END FILE>>>');
   });
 
+  it('accepts a list nested one level too deep, keeping the inner range', async () => {
+    h.ctx.tasks.start('t2b');
+    // As Gemini Flash Lite sent it in the Task B rehearsal.
+    const text = h.text(
+      await h.call('read_files', {
+        files: [
+          {
+            files: [{ path: 'big.py', start_line: 10, end_line: 12 }],
+            path: 'big.py',
+            end_line: 600,
+          },
+        ],
+      }),
+    );
+    expect(text).toContain('<<<FILE big.py lines 10-12 of 4000');
+    expect(text).not.toContain('lines 1-600');
+  });
+
+  it('still advertises a plain list of { path, start_line, end_line } to TrueForge', async () => {
+    const { tools } = await h.client.listTools();
+    const schema = tools.find((t) => t.name === 'read_files')?.inputSchema as unknown as {
+      properties: { files: { type: string; items: { properties: Record<string, unknown> } } };
+    };
+    expect(schema.properties.files.type).toBe('array');
+    expect(Object.keys(schema.properties.files.items.properties).sort()).toEqual([
+      'end_line',
+      'path',
+      'start_line',
+    ]);
+  });
+
   it('redacts secrets in file content', async () => {
     h.ctx.tasks.start('t3');
     const text = h.text(await h.call('read_files', { files: [{ path: 'src/app/config.py' }] }));

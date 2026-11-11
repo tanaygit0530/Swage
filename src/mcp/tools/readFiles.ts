@@ -23,6 +23,19 @@ const FileRequest = z.object({
 
 type FileArgs = z.infer<typeof FileRequest>;
 
+/**
+ * Some models nest the list one level too deep: `{ files: [{ files: [{ path, start_line, end_line }],
+ * path }] }` (seen with Gemini Flash Lite in the Task B rehearsal). Read as is, the inner range is
+ * dropped and the whole file is read again. The inner entries are the real requests.
+ */
+export function flattenNested(value: unknown): unknown {
+  if (!Array.isArray(value)) return value;
+  return value.flatMap((entry: unknown) => {
+    const inner = (entry as { files?: unknown } | null)?.files;
+    return Array.isArray(inner) && inner.length > 0 ? inner : [entry];
+  });
+}
+
 function suggest(ctx: ToolContext, wanted: string): string[] {
   const base = wanted.split('/').pop() ?? wanted;
   return ctx.index
@@ -105,7 +118,9 @@ export const readFiles: ToolRegistration = (server, ctx: ToolContext) => {
       title: 'Read files',
       description:
         'Read up to 10 workspace files in one call, optionally a line range of each. Shows staged edits when a file is staged. Full reads count against a per-run budget; prefer ranges for large files.',
-      inputSchema: { files: z.array(FileRequest).min(1).max(10) },
+      inputSchema: {
+        files: z.preprocess(flattenNested, z.array(FileRequest).min(1).max(10)),
+      },
       annotations: { readOnlyHint: true, openWorldHint: false },
     },
     runTool(ctx, 'read_files', async (args: { files: FileArgs[] }, call) => {
