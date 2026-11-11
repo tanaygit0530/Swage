@@ -284,6 +284,7 @@ Blueprint section 8, built on the Phase 2 change-set engine.
 
 ### Open
 
+- **Real TrueForge run (11 November 2026):** the user ran the F5 demo against TrueForge 0.184.2 with the request to add a config command. The agent staged the edits, the user accepted a block with the tick in the review, approved, and the changes were applied to the workspace. Undo, Split and the conflict dialog were not part of this run.
 - Reload survival is tested at the storage layer (save, load in a fresh applier, undo twice), not by reloading a real window.
 - The integration test applies with `confirmPending: false`; the modal pending-blocks confirmation and the conflict re-stage dialog are not covered by an automated test yet (the conflict and rebase logic itself is unit-tested).
 - The screenshots use a narrow sidebar, so the Review tree's labels are cut off.
