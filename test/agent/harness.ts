@@ -11,7 +11,7 @@ import { ApprovalList, createToolContext, type ToolContext } from '../../src/mcp
 import { startEditorToolsServer, type EditorToolsServer } from '../../src/mcp/server';
 import { EDITOR_TOOLS } from '../../src/mcp/tools/index';
 import type { HostToWebview } from '../../src/ui/protocol';
-import { loadScenarios } from '../fake-model/scenario';
+import { loadScenarios, type Scenario } from '../fake-model/scenario';
 import { FakeTrueForge, type FakeTrueForgeOptions } from './fakeTrueForge';
 
 export const DEMO = path.join(__dirname, '..', 'fake-model', 'demo');
@@ -30,11 +30,11 @@ export interface AgentHarness {
 
 /** Copies the demo workspace, starts the real MCP server, and wires an AgentRun to a scripted TrueForge. */
 export async function startAgent(
-  scenario: string,
+  scenario: string | Scenario,
   options: Partial<Omit<FakeTrueForgeOptions, 'scenario' | 'mcp'>> = {},
 ): Promise<AgentHarness> {
-  const script = scenarios.get(scenario);
-  if (!script) throw new Error(`unknown scenario ${scenario}`);
+  const script = typeof scenario === 'string' ? scenarios.get(scenario) : scenario;
+  if (!script) throw new Error(`unknown scenario ${String(scenario)}`);
   const root = realpathSync(mkdtempSync(path.join(tmpdir(), 'swage-agent-')));
   cpSync(DEMO, root, { recursive: true });
   const index = new WorkspaceIndex({ root, parser: await createParser(), cache: null });

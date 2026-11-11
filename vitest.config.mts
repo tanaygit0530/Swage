@@ -19,8 +19,11 @@ export default defineConfig({
         'src/supervisor/**/*.ts',
         'src/client/**/*.ts',
         'src/mcp/**/*.ts',
+        'src/agent/**/*.ts',
+        'src/ui/**/*.ts',
       ],
-      exclude: ['src/**/index.ts'],
+      // controller.ts needs VS Code and main.tsx a browser; both are covered by the integration test and F5.
+      exclude: ['src/**/index.ts', 'src/agent/controller.ts', 'src/ui/webview/main.tsx'],
       reporter: ['text', 'text-summary', 'json-summary'],
       thresholds: { lines: 90, statements: 90, functions: 90, branches: 90 },
     },
