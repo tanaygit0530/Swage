@@ -2,6 +2,7 @@
  * A minimal MCP server for the spikes: streamable HTTP, stateless, bearer-token auth,
  * using the official @modelcontextprotocol/sdk. It exposes two harmless read-only tools.
  */
+import { randomUUID } from 'node:crypto';
 import { createServer, type IncomingMessage } from 'node:http';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
@@ -20,7 +21,16 @@ async function readBody(req: IncomingMessage): Promise<unknown> {
   return body === '' ? undefined : JSON.parse(body);
 }
 
-export async function startStubMcp(options: { token: string; port?: number }): Promise<StubMcp> {
+/**
+ * `stateful: true` keeps one transport per MCP session (session ids and a GET SSE stream),
+ * like FastMCP's default, which is the reconnection path upstream issue 878 crashed in.
+ */
+export async function startStubMcp(options: {
+  token: string;
+  port?: number;
+  stateful?: boolean;
+}): Promise<StubMcp> {
+  const sessions = new Map<string, StreamableHTTPServerTransport>();
   const calls: { tool: string; args: unknown }[] = [];
   const build = (): McpServer => {
     const server = new McpServer({ name: 'swage-spike-tools', version: '0.0.1' });
@@ -65,6 +75,31 @@ export async function startStubMcp(options: { token: string; port?: number }): P
       }
       if (!req.url?.startsWith('/mcp')) {
         res.writeHead(404).end();
+        return;
+      }
+      if (options.stateful === true) {
+        const sid = req.headers['mcp-session-id'];
+        const existing = typeof sid === 'string' ? sessions.get(sid) : undefined;
+        if (existing) {
+          await existing.handleRequest(
+            req,
+            res,
+            req.method === 'POST' ? await readBody(req) : undefined,
+          );
+          return;
+        }
+        const transport = new StreamableHTTPServerTransport({
+          sessionIdGenerator: () => randomUUID(),
+          onsessioninitialized: (id) => {
+            sessions.set(id, transport);
+          },
+        });
+        await build().connect(transport);
+        await transport.handleRequest(
+          req,
+          res,
+          req.method === 'POST' ? await readBody(req) : undefined,
+        );
         return;
       }
       const server = build();

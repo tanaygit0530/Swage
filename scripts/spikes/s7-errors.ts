@@ -5,6 +5,7 @@
  * Usage: npm run spike -- scripts/spikes/s7-errors.ts   (TRUEFORGE_BASE_URL, default :8790)
  */
 import { describeError } from '../../src/client/client';
+import { findFreePort } from '../../src/supervisor/supervisor';
 import { QUIET_CONFIG, recordTurn, sdkFor, summarize, userMessage } from './common';
 import { startFakeOpenAi } from './fakeOpenAi';
 
@@ -13,11 +14,16 @@ const sdk = sdkFor(baseUrl);
 const unauthorized = await startFakeOpenAi('unauthorized');
 const hang = await startFakeOpenAi('hang');
 
+const closedPort = await findFreePort();
+const only = process.argv.includes('--only')
+  ? process.argv[process.argv.indexOf('--only') + 1]
+  : undefined;
 const cases = [
   {
     name: 'swage-spike-refused',
-    why: 'connection refused (127.0.0.1:9)',
-    baseUrl: 'http://127.0.0.1:9/v1',
+    // A free port with nothing listening. (Port 9 is on fetch's blocked-port list: "bad port".)
+    why: `connection refused (127.0.0.1:${closedPort})`,
+    baseUrl: `http://127.0.0.1:${closedPort}/v1`,
   },
   {
     name: 'swage-spike-badkey',
@@ -42,7 +48,7 @@ const cases = [
   },
 ];
 
-for (const c of cases) {
+for (const c of cases.filter((x) => !only || x.name === only)) {
   console.log(`\n=== ${c.name}: ${c.why}`);
   try {
     await sdk.settings.modelProviders.createOrUpdate({

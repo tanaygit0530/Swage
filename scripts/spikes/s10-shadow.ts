@@ -13,7 +13,8 @@ import * as path from 'node:path';
 const flask = process.env['SWAGE_FLASK_DIR'];
 if (!flask || !existsSync(path.join(flask, 'src', 'flask', 'cli.py')))
   throw new Error('Set SWAGE_FLASK_DIR to the Flask checkout');
-const python = path.join(flask, '.venv', 'bin', 'python');
+// SWAGE_SPIKE_PYTHON overrides the interpreter, for example a venv with Flask's locked pytest.
+const python = process.env['SWAGE_SPIKE_PYTHON'] ?? path.join(flask, '.venv', 'bin', 'python');
 if (!existsSync(python))
   throw new Error(
     `No virtualenv at ${python}; create it with python3 -m venv .venv && .venv/bin/pip install -e . pytest`,

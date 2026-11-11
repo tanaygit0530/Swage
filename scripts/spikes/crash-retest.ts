@@ -17,7 +17,11 @@ import { startStubMcp } from './stubMcp';
 
 const dataDir = mkdtempSync(path.join(tmpdir(), 'swage-crash-'));
 const token = randomBytes(24).toString('hex');
-const stub = await startStubMcp({ token });
+const stateful = process.argv.includes('--stateful');
+const stub = await startStubMcp({ token, stateful });
+console.log(
+  `stub MCP server mode: ${stateful ? 'stateful (session ids, GET SSE stream)' : 'stateless'}`,
+);
 const model = await startFakeOpenAi('tool-then-text');
 const states: string[] = [];
 const sup = new TrueForgeSupervisor({
