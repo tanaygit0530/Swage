@@ -193,3 +193,53 @@ Hot-path timings on the fixture (40 files): `find_relevant_code` 8 ms, `repo_map
 - One task at a time: inline edit and agent mode share the MCP server, so the UI must not run both at once (blueprint section 8 already requires that).
 - JavaScript projects: `node_modules` is not copied into shadows, so JS test runners that need dependencies will fail there; consider a read-only symlink or `NODE_PATH`.
 - Approved commands run in the shadow copy, not the real workspace, so a command such as `pip install` does not change the user's environment; the result says so.
+
+## Phase 5: Agent panel and the end-to-end agent run (11 November 2026)
+
+Blueprint sections 3 (F2, F3, F5, F14, F15), 4, 8 and 10.
+
+### Built
+
+- `test/fake-model`: an OpenAI-compatible chat-completions server on 127.0.0.1 that plays JSON scenarios (one per model id): SSE streaming, tool calls, first-token and chunk delays, a stall, HTTP 429 and 500, a dropped connection, a hang, and `errorTimes` for flaky steps. The step is chosen by the number of assistant messages in the request, so TrueForge's retries replay it. There are ten scenarios (three-file-edit, streaming-cancel, long-tests, approval, rate-limit, server-error, refused, hang, stall, flaky) and a demo workspace they edit. `npm run fake-model` serves it on port 8787 and registers it in TrueForge as the custom provider `swage-fake`; `config/models.test.json` and the demo workspace's settings use `swage-fake/three-file-edit`.
+- `src/ui/protocol.ts`: a typed webview protocol, validated with zod in both directions; malformed messages are dropped.
+- `src/ui/webview`: a Preact panel bundled by esbuild into `dist/webview.js` and `webview-style.css` (no CDN, strict CSP with a nonce, VS Code theme colours). It has a prompt box with `@file` and `@symbol` completion, streamed assistant text, live tool rows (name, argument summary, duration, result size), the declared plan with reasons, a context budget meter, approval cards with Approve and Deny, Stop (also Escape) and Retry. The UI state is a pure reducer with unit tests.
+- `src/agent/context.ts`: the first message holds the request, @-mention content, a repo map ranked by this request's search hits, and a hints block, each within its budget; the cost of each part feeds the meter.
+- `src/agent/run.ts`: starts a task, opens a TrueForge session on the agent, streams events into the panel, pauses on `tool.approval_required` with cards, records `run_command` approvals, and resumes with `user.tool_approval`. A run that ends with staged but unsubmitted edits says so.
+- Cancellation (blueprint section 8):
+  - The UI flips to "Cancelled. Workspace unchanged." at once.
+  - `sessions.cancel` and our own tool abort run in parallel; the `run_tests` process tree is killed.
+  - The stream is drained to `turn.done` instead of breaking out; a 15 s safety net covers a missing `turn.done`.
+  - Late events are dropped by turn id, and the overlay is discarded.
+  - A new turn in the same session that cancels ours (`cancelled-for-next-turn`) is reported.
+- `src/agent/controller.ts` and `extension.ts`: the Swage activity-bar container and Agent view.
+  - The runtime starts on the first request, so activation stays fast: the index (cache in global storage, never the workspace) with a file watcher, the MCP server, TrueForge through the supervisor or an existing server, and setup (MCP registration with a fresh token, the agent for the first profile).
+  - `swage.openAgent` focuses the panel, `swage.stop` cancels, and `swage.running` drives Escape; `deactivate` stops TrueForge before the MCP server.
+  - A "Run Swage on the demo workspace" launch configuration opens the demo.
+- Verified in TrueForge's source: deferred tools are called through `call_tool { mcp_server, tool_name, input }` (see `docs/SPIKES.md`). Summaries and approvals unwrap `input`, and the scenarios call `run_tests` that way.
+
+### Tested
+
+- 404 tests pass (1 skipped: the Flask evaluation without `SWAGE_FLASK_DIR`); lint, build and the VS Code integration test (2 tests: commands registered, agent view contributed) pass.
+- The fake model server is tested over HTTP: chunk format, tool calls, step choice, delays, stall, 429 with Retry-After, 500, dropped connection, hang, unknown model, flaky retry. Every scenario parses, and every `stage_edit` anchor matches its demo file exactly once.
+- Scripted agent runs use a TrueForge stand-in that executes tool calls against the real MCP server over HTTP, with event shapes from `docs/SPIKES.md`:
+  - a normal three-file edit (plan, eight tool rows, tests passing, approval, done);
+  - approval allow and approval deny;
+  - a model error shown as one line;
+  - a `run_command` approval;
+  - a session-creation failure;
+  - Stop during context assembly.
+- Cancellation tests:
+  - during streaming (UI flips in under 50 ms, the stream drains, no text after Stop);
+  - during a two-minute `run_tests` (drained in under 10 s, process tree killed, overlay discarded);
+  - a stale event after cancel (dropped);
+  - a new turn replacing ours.
+  - **Every cancel test asserts the workspace is byte-identical.**
+- Coverage: all files 97.0% statements, 90.5% branches; `src/agent` 91.0%, `src/ui` 100% statements.
+
+### Open
+
+- **Not yet run against the real TrueForge.** The F5 demo needs TrueForge running (`trueforge/start.sh`) plus `npm run fake-model`; the fast tests use a scripted stand-in built from the verified event shapes. Two assumptions to confirm on the first real run: the `tool.response` text for a denied call, and how `call_tool` deltas appear in a live stream.
+- The Approve card on `submit_change_set` currently approves the submission; the Review view (per-block accept and reject, apply, undo) is the next phase and will drive this decision.
+- The panel's Retry starts a fresh run with the same request (a new session); resuming a stopped session is not offered.
+- Reload safety (F11) and the session log export (F12) are not built.
+- The webview bundle is 834 KB unminified (zod validates messages inside the webview too); the production build is minified.
