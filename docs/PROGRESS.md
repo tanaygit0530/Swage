@@ -285,6 +285,6 @@ Blueprint section 8, built on the Phase 2 change-set engine.
 ### Open
 
 - Reload survival is tested at the storage layer (save, load in a fresh applier, undo twice), not by reloading a real window.
-- The integration test applies with `confirmPending: false`; the modal confirmation and the conflict re-stage dialog were checked by hand, not automated.
+- The integration test applies with `confirmPending: false`; the modal pending-blocks confirmation and the conflict re-stage dialog are not covered by an automated test yet (the conflict and rebase logic itself is unit-tested).
 - The screenshots use a narrow sidebar, so the Review tree's labels are cut off.
 - Still open from Phase 5: reload safety for a running task (F11) and the session log export (F12).
