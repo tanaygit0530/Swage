@@ -5,3 +5,5 @@
 export * from './context';
 export * from './server';
 export * from './tasks';
+export * from './shadow';
+export * from './tools/index';
