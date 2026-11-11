@@ -284,8 +284,8 @@
     "keybindings": [
       {
         "command": "swage.inlineEdit",
-        "key": "ctrl+k ctrl+i",
-        "mac": "cmd+k cmd+i",
+        "key": "ctrl+alt+k",
+        "mac": "cmd+alt+k",
         "when": "editorTextFocus && !editorReadonly"
       },
       {

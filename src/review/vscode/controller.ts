@@ -24,6 +24,13 @@ export interface ReviewOutcome {
   readonly message: string;
 }
 
+/** How a review was started: agent mode uses the Review view, inline mode stays in the editor. */
+export interface ReviewMode {
+  readonly mode: 'agent' | 'inline';
+  /** Inline only: block ids per file that change lines outside the selection (range lock). */
+  readonly outside?: ReadonlyMap<string, readonly string[]>;
+}
+
 export interface ApplyOptions {
   /** Ask before applying when blocks are still pending (default true). Tests pass false. */
   readonly confirmPending?: boolean;
@@ -73,11 +80,15 @@ export class ReviewController implements vscode.Disposable {
   private readonly disposables: vscode.Disposable[] = [];
   private readonly view: vscode.TreeView<ReviewNode>;
   private applierFor: { root: string; applier: Applier } | undefined;
+  private modeValue: ReviewMode = { mode: 'agent' };
 
   constructor(readonly context: vscode.ExtensionContext) {
     this.documents = new ReviewDocuments(() => this.session);
     this.tree = new ReviewTree(() => this.session);
-    this.lenses = new ReviewCodeLens(() => this.session);
+    this.lenses = new ReviewCodeLens(
+      () => this.session,
+      () => this.modeValue,
+    );
     this.decorations = new ReviewDecorations(() => this.session);
     this.view = vscode.window.createTreeView(REVIEW_VIEW_ID, {
       treeDataProvider: this.tree,
@@ -126,19 +137,35 @@ export class ReviewController implements vscode.Disposable {
     return this.session;
   }
 
-  /** Starts reviewing a change set; `onFinish` is called once, after apply or discard. */
+  /** The mode of the current review. */
+  get mode(): ReviewMode {
+    return this.modeValue;
+  }
+
+  /**
+   * Starts reviewing a change set; `onFinish` is called once, after apply or discard. Agent mode
+   * focuses the Review view; inline mode opens the diff in the editor with the block lenses only.
+   */
   async start(
     taskId: string,
     changeSet: ChangeSet,
     onFinish?: (outcome: ReviewOutcome) => void,
+    mode: ReviewMode = { mode: 'agent' },
   ): Promise<void> {
     this.sessionSub?.dispose();
     this.session = new ReviewSession(taskId, changeSet);
     this.onFinish = onFinish;
+    this.modeValue = mode;
     this.sessionSub = this.session.onDidChange((paths) => this.changed(paths));
     await vscode.commands.executeCommand('setContext', 'swage.reviewActive', true);
     this.refresh();
-    await this.show();
+    if (mode.mode === 'inline') {
+      const first = this.session.files()[0];
+      const block = first ? this.session.preview(first.path).blocks[0] : undefined;
+      if (first) await this.openFile({ path: first.path, ...(block ? { blockId: block.id } : {}) });
+    } else {
+      await this.show();
+    }
   }
 
   protected changed(paths: readonly string[]): void {
@@ -165,6 +192,7 @@ export class ReviewController implements vscode.Disposable {
     this.onFinish = undefined;
     this.sessionSub?.dispose();
     this.session = undefined;
+    this.modeValue = { mode: 'agent' };
     await vscode.commands.executeCommand('setContext', 'swage.reviewActive', false);
     this.refresh();
     cb?.(outcome);

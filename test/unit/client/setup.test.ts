@@ -18,6 +18,18 @@ describe('agent manifests (blueprint section 6)', () => {
     expect(manifests['swage-inline'].model.name).toBe(MODEL_PLACEHOLDER);
   });
 
+  it('inline agent: only declare_context and stage_edit, iteration limit 8, nothing gated in use', () => {
+    const wire = toWireManifest(manifests['swage-inline']) as {
+      instructions: string;
+      mcp_servers: { enable_tools: string[]; preload_tools: string[] }[];
+      config: { iteration_limit: number };
+    };
+    expect(wire.mcp_servers[0]?.enable_tools).toEqual(['declare_context', 'stage_edit']);
+    expect(wire.mcp_servers[0]?.preload_tools).toEqual(['declare_context', 'stage_edit']);
+    expect(wire.config.iteration_limit).toBe(8);
+    expect(wire.instructions).toMatch(/^Inline edit: change only the editable range/);
+  });
+
   it('main agent: hot tools preloaded, submit and run_command gated, harness defaults overridden', () => {
     expect(toWireManifest(manifests['swage-main'])).toEqual({
       model: { name: '<provider>/<model>', params: { temperature: 0, max_tokens: 4096 } },

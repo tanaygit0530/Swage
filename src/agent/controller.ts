@@ -33,7 +33,7 @@ import { AgentRun } from './run';
 
 export const AGENT_VIEW_ID = 'swage.agentView';
 
-interface Runtime {
+export interface Runtime {
   readonly root: string;
   readonly ctx: ToolContext;
   readonly relay: EventRelay;
@@ -43,6 +43,8 @@ interface Runtime {
   readonly supervisor: TrueForgeSupervisor;
   readonly client: SwageClient;
   readonly agentName: string;
+  /** The inline-edit agent for the same profile (declare_context and stage_edit only). */
+  readonly inlineAgentName: string;
   readonly profile: ModelProfile;
   readonly budgets: Budgets;
   readonly watcher: vscode.Disposable;
@@ -55,6 +57,7 @@ function nonce(): string {
 export class AgentController implements vscode.WebviewViewProvider, vscode.Disposable {
   private view: vscode.WebviewView | undefined;
   private runtime: Promise<Runtime> | undefined;
+  private ready: Runtime | undefined;
   private run: AgentRun | undefined;
   private readonly logger: Logger;
   /** Test hook: replaces TrueForge with a scripted SDK (set only by the integration tests). */
@@ -171,6 +174,24 @@ export class AgentController implements vscode.WebviewViewProvider, vscode.Dispo
     }
   }
 
+  /** True while an agent run is starting or streaming. */
+  get busy(): boolean {
+    return this.isBusy();
+  }
+
+  /** The shared runtime (index, MCP server, TrueForge, agents); the inline edit uses it too. */
+  runtimeReady(): Promise<Runtime> {
+    return this.ensureRuntime().catch((err: unknown) => {
+      this.runtime = undefined;
+      throw err;
+    });
+  }
+
+  /** The Swage output channel's logger (redacting). */
+  get log(): Logger {
+    return this.logger;
+  }
+
   private isBusy(): boolean {
     const s = this.run?.state;
     return s === 'starting' || s === 'running';
@@ -245,8 +266,13 @@ export class AgentController implements vscode.WebviewViewProvider, vscode.Dispo
   }
 
   private ensureRuntime(): Promise<Runtime> {
-    this.runtime ??= this.createRuntime();
+    this.runtime ??= this.createRuntime().then((rt) => (this.ready = rt));
     return this.runtime;
+  }
+
+  /** The runtime if it has finished starting, without waiting. */
+  get readyRuntime(): Runtime | undefined {
+    return this.ready;
   }
 
   private async createRuntime(): Promise<Runtime> {
@@ -357,6 +383,7 @@ export class AgentController implements vscode.WebviewViewProvider, vscode.Dispo
       supervisor,
       client,
       agentName: agentNameFor('swage-main', profile),
+      inlineAgentName: agentNameFor('swage-inline', profile),
       profile,
       budgets: s.budgets,
       watcher: vscode.Disposable.from(...subs),
@@ -371,6 +398,14 @@ export class AgentController implements vscode.WebviewViewProvider, vscode.Dispo
     rt.watcher.dispose();
     await rt.index.save().catch(() => undefined);
     await shutdownInOrder(rt.supervisor, rt.server);
+  }
+
+  /** Test hook: stops the runtime so the next request builds a new one (a new scripted SDK). */
+  async resetRuntime(): Promise<void> {
+    await this.shutdown();
+    this.runtime = undefined;
+    this.ready = undefined;
+    this.run = undefined;
   }
 
   dispose(): void {

@@ -39,6 +39,7 @@ suite('Swage review flow', () => {
       path.join(ext.extensionPath, 'test', 'fake-model', 'scenarios'),
     ).find((s) => s.name === 'three-file-edit');
     assert.ok(scenario);
+    await api.resetRuntime();
     api.setSdkFactory((mcp) => new FakeTrueForge({ scenario, mcp }).sdk);
     void api.startRun(
       'Add a config command that prints the configuration with secrets masked; test and document it.',

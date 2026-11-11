@@ -1,6 +1,6 @@
 {
   "model": { "name": "<provider>/<model>", "params": { "temperature": 0, "max_tokens": 4096 } },
-  "instructions": "Short workflow: plan, retrieve, declare, stage, test, submit. Done means code, test and docs are updated.",
+  "instructions": "Inline edit: change only the editable range given in the first message. Call declare_context once, then stage_edit with find text copied exactly from the selection. On an anchor error, copy the text again and retry. Do not explain at length; reply with one short sentence.",
   "mcp_servers": [
     {
       "name": "editor-tools",

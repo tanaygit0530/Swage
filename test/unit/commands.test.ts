@@ -37,7 +37,7 @@ describe('command manifest', () => {
   it('binds Cmd+K Cmd+I to inline edit and Escape to stop only while running', () => {
     const { keybindings } = manifest.contributes;
     expect(keybindings).toContainEqual(
-      expect.objectContaining({ command: 'swage.inlineEdit', mac: 'cmd+k cmd+i' }),
+      expect.objectContaining({ command: 'swage.inlineEdit', key: 'ctrl+alt+k', mac: 'cmd+alt+k' }),
     );
     expect(keybindings).toContainEqual(
       expect.objectContaining({ command: 'swage.stop', key: 'escape', when: RUNNING_CONTEXT_KEY }),

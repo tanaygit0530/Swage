@@ -2,17 +2,21 @@ import * as vscode from 'vscode';
 import type { SdkLike } from './client/client';
 import { AGENT_VIEW_ID, AgentController } from './agent/controller';
 import { COMMANDS, RUNNING_CONTEXT_KEY, stubMessage } from './commands';
+import { InlineController } from './inline/vscode/controller';
 import { ReviewController } from './review/vscode/controller';
 
 let controller: AgentController | undefined;
 let review: ReviewController | undefined;
+let inline: InlineController | undefined;
 
 /** Returned by activate() only when SWAGE_TEST_API=1 (set by the integration test config). */
 export interface SwageTestApi {
   setSdkFactory(factory: (mcp: { url: string; token: string }) => SdkLike): void;
   startRun(prompt: string): Promise<void>;
   runState(): string | undefined;
+  resetRuntime(): Promise<void>;
   readonly review: ReviewController;
+  readonly inline: InlineController;
 }
 
 export function activate(context: vscode.ExtensionContext): SwageTestApi | undefined {
@@ -21,22 +25,32 @@ export function activate(context: vscode.ExtensionContext): SwageTestApi | undef
   const output = vscode.window.createOutputChannel('Swage');
   review = new ReviewController(context);
   controller = new AgentController(context, output, review);
+  inline = new InlineController(controller, review);
 
   context.subscriptions.push(
     output,
     review,
     controller,
+    inline,
     vscode.window.registerWebviewViewProvider(AGENT_VIEW_ID, controller, {
       webviewOptions: { retainContextWhenHidden: true },
     }),
   );
 
-  // swage.reviewChanges and swage.undoLastChangeSet are registered by the ReviewController.
+  // swage.reviewChanges and swage.undoLastChangeSet belong to the ReviewController,
+  // swage.inlineEdit to the InlineController.
   const handlers: Partial<Record<(typeof COMMANDS)[number]['id'], () => unknown>> = {
     'swage.openAgent': () => controller?.focus(),
-    'swage.stop': () => controller?.stop(),
+    // Escape stops whichever run is active: the inline edit first, then the agent run.
+    'swage.stop': async () => {
+      if (!(await inline?.stop())) await controller?.stop();
+    },
   };
-  const ownedElsewhere = new Set<string>(['swage.reviewChanges', 'swage.undoLastChangeSet']);
+  const ownedElsewhere = new Set<string>([
+    'swage.reviewChanges',
+    'swage.undoLastChangeSet',
+    'swage.inlineEdit',
+  ]);
   for (const spec of COMMANDS) {
     if (ownedElsewhere.has(spec.id)) continue;
     const handler =
@@ -48,13 +62,16 @@ export function activate(context: vscode.ExtensionContext): SwageTestApi | undef
   if (process.env['SWAGE_TEST_API'] !== '1') return undefined;
   const agent = controller;
   const reviewer = review;
+  const inliner = inline;
   return {
     setSdkFactory: (factory) => {
       agent.sdkFactory = factory;
     },
     startRun: (prompt) => agent.start(prompt),
     runState: () => agent.runState,
+    resetRuntime: () => agent.resetRuntime(),
     review: reviewer,
+    inline: inliner,
   };
 }
 

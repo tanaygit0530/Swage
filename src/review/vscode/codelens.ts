@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import type { ReviewSession } from '../session';
+import type { ReviewMode } from './controller';
 import { pathOf, STAGED_SCHEME } from './documents';
 
 /**
@@ -11,7 +12,10 @@ export class ReviewCodeLens implements vscode.CodeLensProvider {
   private readonly emitter = new vscode.EventEmitter<void>();
   readonly onDidChangeCodeLenses = this.emitter.event;
 
-  constructor(private readonly current: () => ReviewSession | undefined) {}
+  constructor(
+    private readonly current: () => ReviewSession | undefined,
+    private readonly mode: () => ReviewMode = () => ({ mode: 'agent' }),
+  ) {}
 
   refresh(): void {
     this.emitter.fire();
@@ -24,6 +28,9 @@ export class ReviewCodeLens implements vscode.CodeLensProvider {
     const blocks = session.preview(path).blocks;
     const lenses: vscode.CodeLens[] = [];
     const lastLine = Math.max(0, doc.lineCount - 1);
+    const mode = this.mode();
+    const inline = mode.mode === 'inline';
+    const outside = new Set(mode.outside?.get(path) ?? []);
     blocks.forEach((b, i) => {
       const range = new vscode.Range(
         Math.min(b.start, lastLine),
@@ -32,7 +39,8 @@ export class ReviewCodeLens implements vscode.CodeLensProvider {
         0,
       );
       const ref = { path, blockId: b.id };
-      const label = `Block ${i + 1}/${blocks.length} · +${b.added} -${b.removed}`;
+      const flag = outside.has(b.id) ? ' · ⚠ outside selection' : '';
+      const label = `Block ${i + 1}/${blocks.length} · +${b.added} -${b.removed}${flag}`;
       const cmd = (title: string, command: string, tooltip: string): vscode.CodeLens =>
         new vscode.CodeLens(range, { title, command, arguments: [ref], tooltip });
       if (b.state === 'pending') {
@@ -50,19 +58,37 @@ export class ReviewCodeLens implements vscode.CodeLensProvider {
           cmd('⇅ Split', 'swage.review.splitBlock', 'Split this block into line-sized blocks'),
         );
       }
-      if (i === 0 && blocks.length > 1) {
+      // Inline edits always get the bulk actions and Apply, even for one block (blueprint F1, F16).
+      if (i === 0 && (blocks.length > 1 || inline)) {
         lenses.push(
           new vscode.CodeLens(range, {
-            title: 'Accept file',
+            title: inline ? 'Accept all' : 'Accept file',
             command: 'swage.review.acceptFile',
             arguments: [{ path }],
           }),
         );
         lenses.push(
           new vscode.CodeLens(range, {
-            title: 'Reject file',
+            title: inline ? 'Reject all' : 'Reject file',
             command: 'swage.review.rejectFile',
             arguments: [{ path }],
+          }),
+        );
+      }
+      if (i === 0 && inline) {
+        lenses.push(
+          new vscode.CodeLens(range, {
+            title: '$(check-all) Apply',
+            command: 'swage.review.apply',
+            tooltip:
+              'Write the accepted blocks to the file (undo with Swage: Undo Last Change Set)',
+          }),
+        );
+        lenses.push(
+          new vscode.CodeLens(range, {
+            title: 'Discard',
+            command: 'swage.review.discard',
+            tooltip: 'Close the proposal without changing the file',
           }),
         );
       }
