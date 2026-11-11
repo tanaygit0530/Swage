@@ -385,7 +385,7 @@ Blueprint section 3 (F1, F13 and F16), section 6 (inline agent) and section 10 (
   - The rehearsal ended with "[Model Error] Cannot connect to API: Headers Timeout Error", once in the cancel demo and once in the edit, about 65 s each. The workspace stayed clean.
   - A plain "say hello" through TrueForge returned 503 from Google: the model is under "high demand" and asks to "try again later". Two more tries timed out after about 46 s each.
   - This is Google-side load, not Swage. Rerun `SWAGE_MODEL=google-gemini/gemini-3-8-flash npm run rehearse:task-a:live` later.
-  - `config/models.json` and the Flask folder's `.vscode/settings.json` (ignored by Flask's `.gitignore`, so `git status` stays clean) now list Gemini 3.8 Flash as primary. The Flask settings list Gemini 3.5 Flash Lite as fallback-1; automatic fallback is not built yet (F6).
+  - **Decision (same day): Gemini 3.5 Flash Lite is the primary** in `config/models.json` and in the Flask folder's `.vscode/settings.json` (ignored by Flask's `.gitignore`, so `git status` stays clean). It passed Task A above in 12.8 s, and `npm run smoke` on the new primary answered in about 2 s. Gemini 3.8 Flash is fallback-1 in the Flask settings; automatic fallback is not built yet (F6).
 
 ### Open
 
