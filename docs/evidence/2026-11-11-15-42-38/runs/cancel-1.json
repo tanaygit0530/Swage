@@ -1,0 +1,31 @@
+{
+  "id": "cancel-1",
+  "at": "2026-11-11T15:42:50.300Z",
+  "task": "cancel",
+  "ok": true,
+  "summary": "cancelled: Cancelled. Workspace unchanged.; Stop to UI 23 ms; git status clean",
+  "outcome": "cancelled",
+  "message": "Cancelled. Workspace unchanged.",
+  "stopToUiMs": 23,
+  "stoppedAfter": {
+    "text": 0,
+    "tools": 1
+  },
+  "gitStatusAfter": "",
+  "tools": [
+    {
+      "name": "list_tools",
+      "ms": 13,
+      "error": false,
+      "args": "{\"mcp_server\":\"editor-tools\"}"
+    }
+  ],
+  "toolSequence": [
+    "list_tools"
+  ],
+  "tokens": 0,
+  "turns": 0,
+  "switches": [],
+  "modelErrors": [],
+  "firstEventMs": 2280
+}

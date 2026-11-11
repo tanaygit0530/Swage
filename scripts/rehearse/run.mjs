@@ -7,18 +7,19 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 
 import * as path from 'node:path';
 import * as esbuild from 'esbuild';
 
+// Chosen on measured latency and quota (docs/evidence/notes.md): two separate free-tier buckets.
 const DEFAULT_PROFILES = [
   {
     name: 'primary',
-    label: 'Gemini Flash Lite',
+    label: 'Gemini Flash Lite (latest)',
     kind: 'hosted',
-    trueforgeModel: 'google-gemini/gemini-3-5-flash-lite',
+    trueforgeModel: 'google-gemini/gemini-flash-lite-latest',
   },
   {
     name: 'fallback-1',
-    label: 'Gemini 3.8 Flash',
+    label: 'Gemini 3.5 Flash Lite',
     kind: 'hosted',
-    trueforgeModel: 'google-gemini/gemini-3-8-flash',
+    trueforgeModel: 'google-gemini/gemini-3-5-flash-lite',
   },
 ];
 
