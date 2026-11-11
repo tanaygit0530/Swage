@@ -396,3 +396,93 @@ Blueprint section 3 (F1, F13 and F16), section 6 (inline agent) and section 10 (
 - Flask's own `get_debug_flag` tests do not cover "off" or "n"; Task A does not ask for a test, so none was added.
 - After agent mode or inline edit, the runtime stays shared. A new inline edit while an agent change set is under review is refused, not queued.
 - Lesson recorded: piping `verify.sh` through `tail` hides its exit code, and one commit went in red locally before being amended (never pushed). Verify is now run without a pipe before every commit.
+
+## Phase 8: Resilience and model profiles (11 November 2026)
+
+Blueprint section 8 (resilience), section 9 (model configuration) and F6, F8 and F9 from section 3.
+
+### Built
+
+- **Profiles** (`src/resilience/profiles.ts`): an ordered list, primary first, from the `swage.models` setting, or a development checkout's `config/models.yaml` (see the new `config/models.example.yaml`, which replaces the JSON example; `config/models.yaml`, `.yml` and `.json` are git-ignored).
+  - Each profile has a TrueForge model, an optional `label`, `params` and layered `timeouts` (`connectMs`, `firstTokenMs`, `stallMs`, `totalMs`).
+  - Missing timers come from `kind`: hosted 10 s / 45 s / 30 s / 10 min, local 10 s / 120 s / 60 s / 15 min, so a slow local model is not treated as dead. Every timer is configurable per profile.
+  - No model name is hard-coded: banners use the label, or the provider part of the model name (`google-gemini/...` gives "Gemini"). The setting is re-read when it changes.
+- **Classifier** (`classify.ts`), based on the error shapes recorded in `docs/SPIKES.md`:
+  - hard (401, 403, refused connection, unknown model or agent): switch at once;
+  - transient (429 with Retry-After, 5xx, header timeouts, dropped streams, Swage's own timers): retry with backoff of 1, 2 and 4 s with 20% jitter, then switch;
+  - fatal (our MCP server, TrueForge unreachable, context or output limits): one line, no switch.
+- **Fallback** (`fallback.ts`, `watchdog.ts`, `carryOver.ts`, wired into `AgentRun`, so agent mode and inline edit share it):
+  - Per-attempt timers. Tool executions pause the stall timer. After 3 s without a first token the status shows "Waiting for Gemini (14 s)…".
+  - A switch opens a session on the next profile's agent (created on first use) and sends the task, the declared plan and a summary of the staged edits. The change set stays the same.
+  - The panel shows "Switched to Groq because Gemini returned 429." and a toast offers "Switch model". No user action is needed.
+  - When every profile fails, one line names each failure and ends "Nothing was applied; the workspace is unchanged."
+  - While on a fallback, a recovery monitor probes the failed profiles every 2 minutes and offers "Switch back" (never automatic).
+- **Swage: Switch Model** (`swage.switchModel`) and a status bar item:
+  - The status bar shows the active profile, in warning colour on a fallback; its tooltip lists timers and recent failures.
+  - The quick pick chooses the profile for the next request, writes a new primary from TrueForge's model list into `swage.models` (for the organisers' live call), or opens the setting.
+- **`npm run break-primary` / `npm run restore-primary`** for Task C:
+  - `--mode url` (default) registers the TrueForge provider `swage-broken` on a closed local port, a real bad base URL that S7 measured failing in about 20 ms.
+  - `--mode fake` points the primary at the fake model's new `primary-down` scenario (401).
+  - Both edit `--workspace <dir>/.vscode/settings.json` (as JSONC) and the local profiles file (as a YAML document), so comments survive.
+  - The primary keeps its label for the banner and gets short demo timers; the state lives in `~/.swage/break-primary.json`.
+  - Restore puts the primary back unless it was changed since, and removes the provider.
+- **Swage: Doctor** (`swage.doctor`, `src/doctor`) checks:
+  - Node 22.14 or newer on PATH, and TrueForge reachable (version compared with the pin);
+  - Swage's MCP server answers with the token, gets 401 without it, and TrueForge sees its tools;
+  - both agents per profile (created if missing), and a one-tool-call probe per profile;
+  - ripgrep (PATH or VS Code's bundled copy), Python (workspace venv first) and pytest, and workspace trust.
+  - The report is a pass, warn, fail or skip table with a fix per problem, opened as a Markdown preview from global storage.
+
+### Tested
+
+- 504 unit tests pass, 3 skipped (the Flask-only suites). Lint and build pass. Coverage is 96.8% statements and 90.0% branches. The VS Code-only folders (`src/*/vscode`) are excluded from unit coverage and covered by the integration tests.
+- Scripted fallback runs (`test/agent/resilience.test.ts`; real MCP server, scripted TrueForge with one scenario per model, a failed step replayed on retry like the fake-model server):
+  - 401 (switch at once, one request);
+  - 429 (two retries honouring Retry-After, then switch);
+  - 500 that recovers after one retry (no switch), and 500 every time (switch);
+  - a stall (stall timer, retry, switch), and a hang (first-token timer, switch);
+  - a refused connection (switch at once);
+  - a slow-but-healthy first token on a local profile (4.2 s against an 8 s limit: no fallback, "Waiting for Ollama (3 s)…" shown);
+  - a fallback mid-task: the retry asks the model to continue, and the fallback's first message carries the request, plan and staged `app/cli.py`; all three files end up in one change set;
+  - a fallback whose model TrueForge does not know (skipped to the next);
+  - the last profile also failing (one clear final error, workspace byte-identical);
+  - a fatal MCP error (no switch), TrueForge unreachable at session creation, Stop during a backoff wait (under 200 ms), and Stop while the fallback agent is prepared.
+- Unit tests cover the timers on a manual clock, the router and plan decisions, recovery probing, carry-over text, profile parsing, every classifier shape, backoff, the probe (pass, no tool call, 401, timeout, no session), the Doctor checks and table, and the break and restore file edits.
+- VS Code integration tests (8 passing):
+  - Task C: the primary returns 401, `swage.inlineEdit` falls back with no click, Reject all leaves the file unchanged. Changing `swage.models` swaps the primary at once.
+  - Doctor runs every check and gives each failure a fix.
+- `break-primary --mode fake` then `restore-primary`, run on a scratch workspace with a commented `settings.json`: the primary became `swage-fake/primary-down` with label "Gemini" and demo timers, the comment stayed, and restore gave back the same settings (the primary entry is now spread over several lines). A second restore said there was nothing to restore.
+
+### Measured switch times (scripted stand-in, in-process)
+
+From `SWAGE_PRINT_SWITCH=1 npx vitest run test/agent/resilience.test.ts`. The tests scale the timers down (backoff starts at 20 ms; stall 300 ms, first token 400 ms), so the table measures Swage's own decision path. TrueForge, the network and model latency are not in it.
+
+| Failure on the primary                      | Start to switch | Switch to first event on the fallback |
+| ------------------------------------------- | --------------- | ------------------------------------- |
+| 401 invalid key                             | 40 ms           | 0 ms                                  |
+| 429 rate limit (2 retries, Retry-After 1 s) | 2004 ms         | 0 ms                                  |
+| 500 server error (2 retries)                | 63 ms           | 0 ms                                  |
+| stall (300 ms stall timer, 1 retry)         | 623 ms          | 0 ms                                  |
+| hang (400 ms first-token timer, no retry)   | 402 ms          | 1 ms                                  |
+| connection refused                          | 1 ms            | 0 ms                                  |
+| 500 mid-task (after 2 tool steps, 1 retry)  | 161 ms          | 0 ms                                  |
+
+What this means with the production timers (3 retries, backoff 1, 2 and 4 s; S7 measured TrueForge reporting 401 and a refused connection in about 21 ms):
+
+- **401 and refused connection:** about 0.1 s to switch, which is what Task C uses with `break-primary`.
+- **429 and 5xx:** about 7 s of backoff, or longer if Retry-After asks for more.
+- **Stall:** up to 4 × 30 s plus backoff.
+- **Hosted hang:** up to 4 × 45 s plus backoff.
+
+### Open
+
+- **Not run against real TrueForge yet:** TrueForge was off, and live testing is deferred until the build is complete. Still to do:
+  - `break-primary --mode url` (needs TrueForge to register the provider);
+  - the switch times through real TrueForge with the fake-model server (`npm run fake-model`, scenarios `primary-down`, `rate-limit`, `server-error`, `stall`, `hang`);
+  - Doctor's live checks and model probes;
+  - the recovery offer after a real outage;
+  - the status bar and toasts on screen.
+- Timer failures retry up to three times before switching, so a hosted model that hangs costs minutes before the fallback. Consider fewer retries for timer failures; the Task C demo avoids this by using a refused connection.
+- Recovery probes cost one tiny request every 2 minutes per failed profile while on a fallback (at most 30 per profile).
+- `restore-primary` gives back the same values, but jsonc-parser rewrites the primary entry as a multi-line object.
+- Still open from earlier phases: reload safety (F11), session log export (F12), Open TrueForge session (F17) and the performance report (F18).
