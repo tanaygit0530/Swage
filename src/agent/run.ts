@@ -5,7 +5,7 @@ import type { PendingToolCall, SwageEvent } from '../client/events';
 import { DEFAULT_BUDGETS, type Budgets } from '../context/budget';
 import type { ApprovalList, ToolContext } from '../mcp/context';
 import type { Logger } from '../supervisor/supervisor';
-import { summarizeArgs, type HostToWebview, type RunState } from '../ui/protocol';
+import { parseToolArgs, summarizeArgs, type HostToWebview, type RunState } from '../ui/protocol';
 import { buildFirstMessage, type ContextPart } from './context';
 import type { EventRelay } from './relay';
 
@@ -44,12 +44,8 @@ interface PendingApproval extends PendingToolCall {
 
 /** A string argument from a tool call's raw JSON arguments, or '' if absent or unparseable. */
 function argString(rawArgs: string, key: string): string {
-  try {
-    const value = (JSON.parse(rawArgs) as Record<string, unknown>)[key];
-    return typeof value === 'string' ? value : '';
-  } catch {
-    return '';
-  }
+  const value = parseToolArgs(rawArgs)?.[key];
+  return typeof value === 'string' ? value : '';
 }
 
 const silent: Logger = { info: () => undefined, warn: () => undefined, error: () => undefined };

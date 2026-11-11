@@ -107,14 +107,31 @@ export function parseHostMessage(raw: unknown): HostToWebview | undefined {
   return r.success ? r.data : undefined;
 }
 
+/**
+ * Parsed tool arguments. A deferred tool is called through TrueForge's `call_tool`
+ * (`{ mcp_server, tool_name, input }`, verified in trueforge-core DeferredTool.ts), so the real
+ * arguments are in `input`.
+ */
+export function parseToolArgs(rawArgs: string): Record<string, unknown> | undefined {
+  try {
+    const args = JSON.parse(rawArgs) as Record<string, unknown>;
+    if (
+      typeof args['tool_name'] === 'string' &&
+      args['input'] !== null &&
+      typeof args['input'] === 'object'
+    ) {
+      return args['input'] as Record<string, unknown>;
+    }
+    return args;
+  } catch {
+    return undefined;
+  }
+}
+
 /** One-line summary of tool arguments for the timeline (never the full content). */
 export function summarizeArgs(name: string, rawArgs: string): string {
-  let args: Record<string, unknown>;
-  try {
-    args = JSON.parse(rawArgs) as Record<string, unknown>;
-  } catch {
-    return rawArgs.slice(0, 80);
-  }
+  const args = parseToolArgs(rawArgs);
+  if (!args) return rawArgs.slice(0, 80);
   const s = (v: unknown): string => (typeof v === 'string' ? v : JSON.stringify(v));
   switch (name) {
     case 'find_relevant_code':

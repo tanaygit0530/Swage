@@ -60,6 +60,8 @@ describe('agent run with the scripted model', () => {
       'run_tests',
       'submit_change_set',
     ]);
+    // run_tests is deferred, so the model calls it through call_tool; the row still shows the command.
+    expect(of(posts, 'tool_start').find((t) => t.name === 'run_tests')?.summary).toBe('npm test');
     const ends = of(posts, 'tool_end');
     expect(ends).toHaveLength(7);
     expect(ends.every((e) => !e.error && e.resultChars > 0)).toBe(true);

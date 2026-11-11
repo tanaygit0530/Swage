@@ -189,3 +189,15 @@ describe('mention completion helpers', () => {
     expect(applyCompletion('nothing', 7, '@x')).toEqual({ text: 'nothing', cursor: 7 });
   });
 });
+
+describe('deferred tools called through call_tool', () => {
+  it('summarizes the underlying arguments', async () => {
+    const { parseToolArgs } = await import('../../../src/ui/protocol');
+    const raw =
+      '{"mcp_server":"editor-tools","tool_name":"run_tests","input":{"command":"npm test"}}';
+    expect(parseToolArgs(raw)).toEqual({ command: 'npm test' });
+    expect(summarizeArgs('run_tests', raw)).toBe('npm test');
+    expect(parseToolArgs('{"command":"x"}')).toEqual({ command: 'x' });
+    expect(parseToolArgs('nope')).toBeUndefined();
+  });
+});

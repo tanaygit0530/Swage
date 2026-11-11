@@ -159,3 +159,9 @@ Findings:
 - TrueForge's model header timeout (20 s, `MODEL_HTTP_HEADERS_TIMEOUT_MS`) is shorter than a local model's cold start on 8 GB. Options: warm the model before use (Doctor can send a one-token request), or start TrueForge with a larger `MODEL_HTTP_HEADERS_TIMEOUT_MS` for local profiles.
 - A further error shape for the classifier: `Cannot connect to API: Headers Timeout Error` on a local profile usually means "still loading"; retry once after a warm-up instead of switching at once.
 - On 8 GB of RAM, running TrueForge, Ollama with a 7B model, `llama-server` and an editor together appears unstable; keep one local model loaded at a time.
+
+### Deferred tools: `call_tool` (verified 11 November 2026)
+
+Source: `packages/trueforge-core/src/core/runtime/DeferredTool.ts` at tag 0.184.2. For an MCP server whose tools are deferred, TrueForge gives the model four meta tools: `list_tools { mcp_server }`, `get_tool_info { mcp_server, tool_name }`, `get_tool_output_schema { mcp_server, tool_name }` and `call_tool { mcp_server, tool_name, input }` (`input` defaults to `{}`). For `call_tool`, `toolCallInfo` resolves the underlying tool, so the event's tool info names the real tool (`run_tests`), but `function.arguments` stays the `call_tool` envelope.
+
+Effect: Swage unwraps `input` before summarising arguments or reading a `run_command` command for approval (`parseToolArgs`), the fake-model scenarios call deferred tools (`run_tests`) through `call_tool`, and the scripted TrueForge stand-in resolves `call_tool` the same way.

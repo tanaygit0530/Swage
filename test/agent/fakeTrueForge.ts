@@ -252,11 +252,20 @@ export class FakeTrueForge {
         return;
       }
 
-      const calls = (step.toolCalls ?? []).map((c, i) => ({
-        id: `call_${stepIndex}_${i}`,
-        name: c.name,
-        args: c.arguments,
-      }));
+      // A deferred tool arrives as call_tool { mcp_server, tool_name, input }; TrueForge resolves it to the
+      // underlying tool (trueforge-core DeferredTool.ts), so its tool info and gating use the real name.
+      const calls = (step.toolCalls ?? []).map((c, i) => {
+        const wrapped = c.name === 'call_tool' && typeof c.arguments['tool_name'] === 'string';
+        return {
+          id: `call_${stepIndex}_${i}`,
+          name: wrapped ? String(c.arguments['tool_name']) : c.name,
+          args: wrapped
+            ? ((c.arguments['input'] as Record<string, unknown> | undefined) ?? {})
+            : c.arguments,
+          rawName: c.name,
+          rawArgs: c.arguments,
+        };
+      });
       for (const [i, c] of calls.entries()) {
         yield {
           type: 'model.message.delta',
@@ -267,7 +276,7 @@ export class FakeTrueForge {
               index: i,
               id: c.id,
               type: 'function',
-              function: { name: c.name, arguments: JSON.stringify(c.args) },
+              function: { name: c.rawName, arguments: JSON.stringify(c.rawArgs) },
               toolInfo: {
                 type: 'mcp',
                 name: c.name,

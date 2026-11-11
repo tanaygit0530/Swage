@@ -110,9 +110,13 @@
     {
       "toolCalls": [
         {
-          "name": "run_tests",
+          "name": "call_tool",
           "arguments": {
-            "command": "npm test"
+            "mcp_server": "editor-tools",
+            "tool_name": "run_tests",
+            "input": {
+              "command": "npm test"
+            }
           }
         }
       ]
