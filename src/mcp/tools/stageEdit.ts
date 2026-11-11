@@ -1,8 +1,8 @@
 import { z } from 'zod';
 import type { StageInput } from '../../changeset/changeSet';
-import { checkDeletedSymbols } from '../../changeset/symbols';
 import { runTool, textResult, ToolError, type ToolContext } from '../context';
 import type { ToolRegistration } from '../server';
+import { symbolWarnings } from './symbolCheck';
 
 /**
  * stage_edit (blueprint section 6): edit, create or delete a file inside the in-memory change
@@ -93,17 +93,7 @@ export const stageEdit: ToolRegistration = (server, ctx: ToolContext) => {
       }
       ctx.events.onStage?.(call.task.id, path);
 
-      const snapshots = await Promise.all(
-        call.task.changeSet.stagedPaths().map(async (p) => {
-          const staged = call.task.changeSet.staged(p);
-          return {
-            path: p,
-            before: await ctx.readText(p),
-            after: staged?.deleted ? undefined : staged?.content,
-          };
-        }),
-      );
-      const warnings = checkDeletedSymbols(snapshots);
+      const warnings = await symbolWarnings(ctx, call.task);
       const s = result.value;
       const lines = [
         s.blockCount === 0
