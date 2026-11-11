@@ -1,0 +1,54 @@
+{
+  "name": "task-a-flask",
+  "description": "Task A on Flask 3.1.3: the expected two-block edit of get_debug_flag (docstring and logic).",
+  "steps": [
+    {
+      "text": [
+        "Adding ",
+        "off and n ",
+        "to the false values ",
+        "and listing them in the docstring."
+      ],
+      "chunkDelayMs": 30,
+      "toolCalls": [
+        {
+          "name": "declare_context",
+          "arguments": {
+            "plan": [
+              "Treat off and n as false, case-insensitively",
+              "List every false value in the docstring"
+            ],
+            "files": [
+              {
+                "path": "src/flask/helpers.py",
+                "reason": "inline edit of get_debug_flag"
+              }
+            ]
+          }
+        },
+        {
+          "name": "stage_edit",
+          "arguments": {
+            "path": "src/flask/helpers.py",
+            "kind": "edit",
+            "edits": [
+              {
+                "find": "    :envvar:`FLASK_DEBUG` environment variable. The default is ``False``.\n    \"\"\"\n",
+                "replace": "    :envvar:`FLASK_DEBUG` environment variable. The default is ``False``.\n\n    The values ``0``, ``false``, ``no``, ``off`` and ``n`` are treated as\n    false, case-insensitively.\n    \"\"\"\n"
+              },
+              {
+                "find": "    return bool(val and val.lower() not in {\"0\", \"false\", \"no\"})",
+                "replace": "    return bool(val and val.lower() not in {\"0\", \"false\", \"no\", \"off\", \"n\"})"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "text": [
+        "get_debug_flag now treats off and n as false; the docstring lists every false value."
+      ]
+    }
+  ]
+}

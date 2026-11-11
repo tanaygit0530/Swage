@@ -39,7 +39,8 @@
     "smoke": "node scripts/run.mjs scripts/smoke.ts",
     "fake-model": "node scripts/run.mjs scripts/fake-model.ts",
     "spike": "node scripts/run.mjs",
-    "screenshots": "npm run build && node scripts/screenshots.mjs"
+    "screenshots": "npm run build && node scripts/screenshots.mjs",
+    "rehearse:task-a": "SWAGE_FLASK_DIR=${SWAGE_FLASK_DIR:-../flask} SWAGE_REHEARSAL_PRINT=1 vitest run test/rehearsal"
   },
   "contributes": {
     "commands": [

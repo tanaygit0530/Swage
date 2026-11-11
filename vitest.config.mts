@@ -8,6 +8,7 @@ export default defineConfig({
       'test/mcp/**/*.test.ts',
       'test/fake-model/**/*.test.ts',
       'test/agent/**/*.test.ts',
+      'test/rehearsal/**/*.test.ts',
     ],
     environment: 'node',
     coverage: {
