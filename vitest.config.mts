@@ -23,8 +23,13 @@ export default defineConfig({
         'src/ui/**/*.ts',
         'src/review/**/*.ts',
       ],
-      // controller.ts needs VS Code and main.tsx a browser; both are covered by the integration test and F5.
-      exclude: ['src/**/index.ts', 'src/agent/controller.ts', 'src/ui/webview/main.tsx'],
+      // controller.ts and src/review/vscode need VS Code, main.tsx a browser; the integration test and F5 cover them.
+      exclude: [
+        'src/**/index.ts',
+        'src/agent/controller.ts',
+        'src/review/vscode/**',
+        'src/ui/webview/main.tsx',
+      ],
       reporter: ['text', 'text-summary', 'json-summary'],
       thresholds: { lines: 90, statements: 90, functions: 90, branches: 90 },
     },

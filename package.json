@@ -425,6 +425,9 @@
           "markdownDescription": "Start TrueForge automatically when the extension activates."
         }
       }
+    },
+    "configurationDefaults": {
+      "diffEditor.codeLens": true
     }
   },
   "devDependencies": {
