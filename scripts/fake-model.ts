@@ -16,7 +16,18 @@ export const FAKE_PROVIDER = 'swage-fake';
 const port = Number(process.env['SWAGE_FAKE_PORT'] ?? 8787);
 const baseUrl = process.env['TRUEFORGE_BASE_URL'] ?? 'http://localhost:8790';
 const scenarios = loadScenarios();
-const fake = await startFakeModel({ scenarios, port });
+let fake: Awaited<ReturnType<typeof startFakeModel>>;
+try {
+  fake = await startFakeModel({ scenarios, port });
+} catch (err) {
+  if ((err as NodeJS.ErrnoException).code === 'EADDRINUSE') {
+    console.error(
+      `Port ${port} is already in use, probably by another fake-model run. Stop it (lsof -iTCP:${port} -sTCP:LISTEN shows the process), or use SWAGE_FAKE_PORT=<port>.`,
+    );
+    process.exit(1);
+  }
+  throw err;
+}
 console.log(`Fake model serving ${scenarios.length} scenarios at ${fake.baseUrl}`);
 
 try {
