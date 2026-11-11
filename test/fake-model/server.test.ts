@@ -74,21 +74,29 @@ describe('scenarios', () => {
     expect(new Set(scenarios.map((s) => s.name)).size).toBe(scenarios.length);
   });
 
-  it('every find anchor matches its demo file exactly once', () => {
+  it('every find anchor matches its demo file exactly once (except the deliberate misses)', () => {
     let anchors = 0;
+    let misses = 0;
     for (const s of scenarios) {
       for (const step of s.steps) {
         for (const call of step.toolCalls ?? []) {
           if (call.name !== 'stage_edit') continue;
           const file = readFileSync(path.join(DEMO, String(call.arguments['path'])), 'utf8');
           for (const edit of (call.arguments['edits'] as { find: string }[] | undefined) ?? []) {
-            expect(file.split(edit.find).length - 1, `${s.name}: ${edit.find}`).toBe(1);
+            const count = file.split(edit.find).length - 1;
+            // anchor-retry scenarios miss on purpose, so the model has to retry.
+            if (s.name.endsWith('anchor-retry') && count === 0) {
+              misses++;
+              continue;
+            }
+            expect(count, `${s.name}: ${edit.find}`).toBe(1);
             anchors++;
           }
         }
       }
     }
     expect(anchors).toBeGreaterThanOrEqual(5);
+    expect(misses).toBe(1);
   });
 
   it('rejects malformed scenarios', () => {

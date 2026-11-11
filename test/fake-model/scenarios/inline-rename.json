@@ -1,0 +1,38 @@
+{
+  "name": "inline-rename",
+  "description": "Inline edit: rename legacy_name to identity.",
+  "steps": [
+    {
+      "toolCalls": [
+        {
+          "name": "declare_context",
+          "arguments": {
+            "plan": ["Edit the selection"],
+            "files": [
+              {
+                "path": "app/flags.py",
+                "reason": "inline edit of legacy_name"
+              }
+            ]
+          }
+        },
+        {
+          "name": "stage_edit",
+          "arguments": {
+            "path": "app/flags.py",
+            "kind": "edit",
+            "edits": [
+              {
+                "find": "def legacy_name(value):",
+                "replace": "def identity(value):"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "text": ["Renamed the function."]
+    }
+  ]
+}

@@ -7,7 +7,8 @@ import type { ChangeSet } from '../changeset/changeSet';
 import type { ApprovalList, ToolContext } from '../mcp/context';
 import type { Logger } from '../supervisor/supervisor';
 import { parseToolArgs, summarizeArgs, type HostToWebview, type RunState } from '../ui/protocol';
-import { buildFirstMessage, type ContextPart } from './context';
+import type { EditableRange } from '../inline/context';
+import { buildFirstMessage, type ContextPart, type FirstMessage } from './context';
 import type { EventRelay } from './relay';
 
 /**
@@ -39,6 +40,13 @@ export interface AgentRunOptions {
     taskId: string,
     changeSet: ChangeSet,
   ) => Promise<{ applied: boolean; message: string }>;
+  /**
+   * Builds the first message instead of the agent-mode context (the inline edit passes the
+   * selection, enclosing symbol, imports and nearby lines).
+   */
+  readonly firstMessage?: () => Promise<FirstMessage> | FirstMessage;
+  /** Inline edits: the only lines the agent may change; recorded on the task for the range lock. */
+  readonly editableRange?: EditableRange;
   /** Upper bound for draining a cancelled stream before giving up on `turn.done`. */
   readonly drainTimeoutMs?: number;
 }
@@ -126,7 +134,8 @@ export class AgentRun {
     this.setState('starting', 'Assembling context…');
     this.post({ type: 'user', text: prompt });
     const t0 = performance.now();
-    this.opts.ctx.tasks.start(this.taskId);
+    const task = this.opts.ctx.tasks.start(this.taskId);
+    if (this.opts.editableRange) task.editableRange = this.opts.editableRange;
     this.relaySubscription = this.opts.relay.attach({
       onDeclare: (taskId, plan, files) => {
         if (taskId === this.taskId && !this.cancelRequested)
@@ -134,7 +143,9 @@ export class AgentRun {
       },
     });
     try {
-      const first = await buildFirstMessage(prompt, this.opts.ctx, this.budgets);
+      const first = this.opts.firstMessage
+        ? await this.opts.firstMessage()
+        : await buildFirstMessage(prompt, this.opts.ctx, this.budgets);
       this.parts = [...first.parts];
       this.total = first.total;
       this.postBudget();

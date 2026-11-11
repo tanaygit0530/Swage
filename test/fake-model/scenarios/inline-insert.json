@@ -1,0 +1,38 @@
+{
+  "name": "inline-insert",
+  "description": "Inline edit: a pure insertion inside get_port.",
+  "steps": [
+    {
+      "toolCalls": [
+        {
+          "name": "declare_context",
+          "arguments": {
+            "plan": ["Edit the selection"],
+            "files": [
+              {
+                "path": "app/flags.py",
+                "reason": "inline edit of get_port"
+              }
+            ]
+          }
+        },
+        {
+          "name": "stage_edit",
+          "arguments": {
+            "path": "app/flags.py",
+            "kind": "edit",
+            "edits": [
+              {
+                "find": "    val = os.environ.get(\"DEMO_PORT\")\n",
+                "replace": "    val = os.environ.get(\"DEMO_PORT\")\n    val = val.strip() if val else val\n"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "text": ["Strips whitespace from the port."]
+    }
+  ]
+}

@@ -1,0 +1,56 @@
+{
+  "name": "inline-anchor-retry",
+  "description": "Inline edit: the first stage_edit anchor misses (bad indentation), the retry copies it exactly.",
+  "steps": [
+    {
+      "toolCalls": [
+        {
+          "name": "declare_context",
+          "arguments": {
+            "plan": ["Edit the selection"],
+            "files": [
+              {
+                "path": "app/flags.py",
+                "reason": "inline edit of get_debug_flag"
+              }
+            ]
+          }
+        },
+        {
+          "name": "stage_edit",
+          "arguments": {
+            "path": "app/flags.py",
+            "kind": "edit",
+            "edits": [
+              {
+                "find": "return bool(val and val.lower() not in {'0', 'false', 'no'})",
+                "replace": "return bool(val and val.lower() not in {\"0\", \"false\", \"no\", \"off\", \"n\"})"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "text": ["The anchor missed; ", "copying it exactly."],
+      "toolCalls": [
+        {
+          "name": "stage_edit",
+          "arguments": {
+            "path": "app/flags.py",
+            "kind": "edit",
+            "edits": [
+              {
+                "find": "    return bool(val and val.lower() not in {\"0\", \"false\", \"no\"})",
+                "replace": "    return bool(val and val.lower() not in {\"0\", \"false\", \"no\", \"off\", \"n\"})"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "text": ["Done after one retry."]
+    }
+  ]
+}

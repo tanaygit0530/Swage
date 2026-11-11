@@ -1,0 +1,38 @@
+{
+  "name": "inline-delete",
+  "description": "Inline edit: a pure deletion inside get_port.",
+  "steps": [
+    {
+      "toolCalls": [
+        {
+          "name": "declare_context",
+          "arguments": {
+            "plan": ["Edit the selection"],
+            "files": [
+              {
+                "path": "app/flags.py",
+                "reason": "inline edit of get_port"
+              }
+            ]
+          }
+        },
+        {
+          "name": "stage_edit",
+          "arguments": {
+            "path": "app/flags.py",
+            "kind": "edit",
+            "edits": [
+              {
+                "find": "    print(\"using DEMO_PORT\")\n",
+                "replace": ""
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "text": ["Removed the print."]
+    }
+  ]
+}

@@ -1,0 +1,78 @@
+{
+  "name": "inline-cancel",
+  "description": "Inline edit: a slow stream to press Escape in the middle of; the edit is never staged.",
+  "steps": [
+    {
+      "text": [
+        "thinking0 ",
+        "thinking1 ",
+        "thinking2 ",
+        "thinking3 ",
+        "thinking4 ",
+        "thinking5 ",
+        "thinking6 ",
+        "thinking7 ",
+        "thinking8 ",
+        "thinking9 ",
+        "thinking10 ",
+        "thinking11 ",
+        "thinking12 ",
+        "thinking13 ",
+        "thinking14 ",
+        "thinking15 ",
+        "thinking16 ",
+        "thinking17 ",
+        "thinking18 ",
+        "thinking19 ",
+        "thinking20 ",
+        "thinking21 ",
+        "thinking22 ",
+        "thinking23 ",
+        "thinking24 ",
+        "thinking25 ",
+        "thinking26 ",
+        "thinking27 ",
+        "thinking28 ",
+        "thinking29 ",
+        "thinking30 ",
+        "thinking31 ",
+        "thinking32 ",
+        "thinking33 ",
+        "thinking34 ",
+        "thinking35 ",
+        "thinking36 ",
+        "thinking37 ",
+        "thinking38 ",
+        "thinking39 "
+      ],
+      "chunkDelayMs": 150,
+      "toolCalls": [
+        {
+          "name": "declare_context",
+          "arguments": {
+            "plan": ["Edit the selection"],
+            "files": [
+              {
+                "path": "app/flags.py",
+                "reason": "inline edit of get_debug_flag"
+              }
+            ]
+          }
+        },
+        {
+          "name": "stage_edit",
+          "arguments": {
+            "path": "app/flags.py",
+            "kind": "edit",
+            "edits": [
+              {
+                "find": "    return bool(val and val.lower() not in {\"0\", \"false\", \"no\"})",
+                "replace": "    return bool(val and val.lower() not in {\"0\", \"false\", \"no\", \"off\", \"n\"})"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

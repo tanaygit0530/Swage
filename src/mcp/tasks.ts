@@ -1,5 +1,6 @@
 import { ChangeSet, type FileReader } from '../changeset/changeSet';
 import { ReadBudget } from '../context/budget';
+import type { EditableRange } from '../inline/context';
 
 /**
  * Tasks own the per-run state the tools share (blueprint section 8): the change set, the
@@ -18,6 +19,8 @@ export interface Task {
   cancelled: boolean;
   /** First submit_change_set result; a repeated call returns it unchanged. */
   submission?: string;
+  /** Inline edits only: the lines the agent may change (blueprint F13, range lock). */
+  editableRange?: EditableRange;
 }
 
 export class TaskRegistry {

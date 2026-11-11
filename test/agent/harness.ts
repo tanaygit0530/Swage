@@ -11,6 +11,9 @@ import { ApprovalList, createToolContext, type ToolContext } from '../../src/mcp
 import { startEditorToolsServer, type EditorToolsServer } from '../../src/mcp/server';
 import { EDITOR_TOOLS } from '../../src/mcp/tools/index';
 import type { HostToWebview } from '../../src/ui/protocol';
+import { editRange, type InlineRequest, type LineRange } from '../../src/inline/context';
+import { InlineEdit } from '../../src/inline/run';
+import { readFileSync } from 'node:fs';
 import { loadScenarios, type Scenario } from '../fake-model/scenario';
 import { FakeTrueForge, type FakeTrueForgeOptions } from './fakeTrueForge';
 
@@ -99,4 +102,53 @@ export async function waitFor(
     if (Date.now() - start > timeoutMs) throw new Error(`timed out waiting for ${label}`);
     await new Promise((r) => setTimeout(r, 10));
   }
+}
+
+export interface InlineHarness extends Omit<AgentHarness, 'run'> {
+  readonly edit: InlineEdit;
+  readonly statuses: string[];
+  readonly request: InlineRequest;
+}
+
+/**
+ * An inline edit on the demo workspace: `range` (1-based lines) or, without it, the function
+ * around `cursorLine`, exactly as the editor command picks it.
+ */
+export async function startInline(
+  scenario: string | Scenario,
+  target: { path: string; instruction: string; range?: LineRange; cursorLine?: number },
+): Promise<InlineHarness> {
+  const base = await startAgent(scenario);
+  const text = readFileSync(path.join(base.root, target.path), 'utf8');
+  const symbols = base.ctx.index.get(target.path)?.symbols ?? [];
+  const range =
+    target.range ??
+    editRange(symbols, {
+      startLine: target.cursorLine ?? 1,
+      endLine: target.cursorLine ?? 1,
+      endCharacter: 0,
+      empty: true,
+    });
+  const request: InlineRequest = {
+    instruction: target.instruction,
+    path: target.path,
+    text,
+    range,
+    symbols,
+    language: 'python',
+  };
+  const statuses: string[] = [];
+  const edit = new InlineEdit({
+    client: new SwageClient({ baseUrl: 'http://fake', sdk: base.fake.sdk }),
+    ctx: base.ctx,
+    relay: new EventRelay(),
+    approvals: new ApprovalList(),
+    agentName: 'swage-inline-fake',
+    request,
+    onStatus: (t) => statuses.push(t),
+    drainTimeoutMs: 20_000,
+  });
+  const { run: _unused, ...rest } = base;
+  void _unused;
+  return { ...rest, edit, statuses, request };
 }

@@ -1,0 +1,44 @@
+{
+  "name": "inline-logic-docstring",
+  "description": "Inline edit: a logic change and a docstring change in get_debug_flag (two blocks).",
+  "steps": [
+    {
+      "text": ["Treating ", "off and n ", "as false."],
+      "chunkDelayMs": 20,
+      "toolCalls": [
+        {
+          "name": "declare_context",
+          "arguments": {
+            "plan": ["Edit the selection"],
+            "files": [
+              {
+                "path": "app/flags.py",
+                "reason": "inline edit of get_debug_flag"
+              }
+            ]
+          }
+        },
+        {
+          "name": "stage_edit",
+          "arguments": {
+            "path": "app/flags.py",
+            "kind": "edit",
+            "edits": [
+              {
+                "find": "    :envvar:`DEMO_DEBUG` environment variable. The default is ``False``.\n",
+                "replace": "    :envvar:`DEMO_DEBUG` environment variable. The values \"0\", \"false\", \"no\",\n    \"off\" and \"n\" are treated as false, in any letter case. The default is ``False``.\n"
+              },
+              {
+                "find": "    return bool(val and val.lower() not in {\"0\", \"false\", \"no\"})",
+                "replace": "    return bool(val and val.lower() not in {\"0\", \"false\", \"no\", \"off\", \"n\"})"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "text": ["Updated the check and the docstring."]
+    }
+  ]
+}

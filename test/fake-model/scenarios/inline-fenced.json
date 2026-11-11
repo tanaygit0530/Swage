@@ -1,0 +1,16 @@
+{
+  "name": "inline-fenced",
+  "description": "Inline edit: a weak model answers with a code block and no tool call.",
+  "steps": [
+    {
+      "text": [
+        "Here is the new function:\n\n```python\n",
+        "def get_port(default: int = 5000) -> int:\n",
+        "    \"\"\"Read the port from DEMO_PORT.\"\"\"\n",
+        "    val = os.environ.get(\"DEMO_PORT\")\n",
+        "    return int(val) if val else default\n",
+        "```\n"
+      ]
+    }
+  ]
+}

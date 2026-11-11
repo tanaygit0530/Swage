@@ -350,6 +350,7 @@ export class FakeTrueForge {
       for (const c of calls.filter((x) => !this.gated.includes(x.name))) {
         // TrueForge waits for a running MCP call to finish, even after cancel.
         const content = await this.callTool(c.name, c.args);
+        this.log.push(`tool ${c.name} ${content.replace(/\s+/g, ' ').slice(0, 400)}`);
         yield {
           type: 'tool.response',
           id: `resp-${c.id}`,
