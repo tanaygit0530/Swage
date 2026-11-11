@@ -244,10 +244,12 @@
     "vitest": "^5.1.0"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.2",
     "@truefoundry/trueforge-sdk": "0.184.1",
     "@vscode/tree-sitter-wasm": "^0.3.1",
     "diff": "^9.0.0",
     "ignore": "^7.0.14",
-    "shell-quote": "^1.12.0"
+    "shell-quote": "^1.12.0",
+    "zod": "4.6.7"
   }
 }
