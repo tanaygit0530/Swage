@@ -67,7 +67,7 @@ describe('profiles', () => {
     const profiles = parseProfiles(readFileSync('config/models.example.json', 'utf8'));
     expect(profiles.map((p) => `${p.name}=${p.trueforgeModel}`)).toEqual([
       'primary=google-gemini/gemini-3-5-flash',
-      'fallback-1=groq/llama-3-3-70b-versatile',
+      'fallback-1=groq/gpt-oss-120b',
       'fallback-2=ollama/qwen-2-5-coder-7b',
     ]);
   });

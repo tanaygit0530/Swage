@@ -10,7 +10,7 @@
     {
       "name": "fallback-1",
       "kind": "hosted",
-      "trueforgeModel": "groq/llama-3-3-70b-versatile",
+      "trueforgeModel": "groq/gpt-oss-120b",
       "params": { "temperature": 0, "max_tokens": 4096 },
       "timeouts": { "connectMs": 10000, "firstTokenMs": 30000, "stallMs": 30000, "totalMs": 600000 }
     },
