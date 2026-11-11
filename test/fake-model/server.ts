@@ -5,7 +5,7 @@ import { FINAL_TEXT, type Scenario, type ScenarioStep } from './scenario';
 /**
  * An OpenAI-compatible chat-completions server that plays scenarios. The request's `model` is
  * the scenario name. Supports SSE streaming and non-streaming replies, text deltas, tool calls,
- * delays, a stall, HTTP 429 and 500, a dropped connection and a hang. Binds 127.0.0.1 only.
+ * delays, a stall, HTTP 401, 429 and 500, a dropped connection and a hang. Binds 127.0.0.1 only.
  */
 
 export interface FakeModelRequest {
@@ -145,10 +145,17 @@ export async function startFakeModel(options: {
                         type: 'rate_limit_exceeded',
                         code: 'rate_limit_exceeded',
                       }
-                    : {
-                        message: 'The server had an error while processing your request.',
-                        type: 'server_error',
-                      },
+                    : status === 401
+                      ? {
+                          // OpenAI's body for a bad key (no key is involved: this is a fake).
+                          message: 'Invalid API Key',
+                          type: 'invalid_request_error',
+                          code: 'invalid_api_key',
+                        }
+                      : {
+                          message: 'The server had an error while processing your request.',
+                          type: 'server_error',
+                        },
               }),
             );
           return;

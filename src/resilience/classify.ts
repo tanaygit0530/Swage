@@ -135,15 +135,15 @@ export function classifyError(err: unknown, describe: (e: unknown) => string): F
 
 /** Swage's own per-attempt timers expired. All are transient: retry, then switch. */
 export function timeoutFailure(which: TimeoutKind, ms: number): Failure {
-  const s = Math.round(ms / 1000);
+  const t = ms < 1000 ? `${ms} ms` : `${Math.round(ms / 1000)} s`;
   const reason =
     which === 'connect'
-      ? `did not connect in ${s} s`
+      ? `did not connect in ${t}`
       : which === 'firstToken'
-        ? `sent nothing in ${s} s`
+        ? `sent nothing in ${t}`
         : which === 'stall'
-          ? `stalled for ${s} s`
-          : `ran past its ${s} s limit`;
+          ? `stalled for ${t}`
+          : `ran past its ${t} limit`;
   return failure('transient', reason, `Swage ${which} timer: ${reason}`);
 }
 

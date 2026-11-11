@@ -1,6 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import type { TrueForgeApi } from '@truefoundry/trueforge-sdk';
 import { describeError, type ApprovalDecision, type SwageClient } from '../client/client';
+import { agentNameFor } from '../client/manifest';
+import { CONTINUE_MESSAGE, carryOverMessage } from '../resilience/carryOver';
+import { classifyMessage, type Failure } from '../resilience/classify';
+import type { Decision, FallbackPlan, ModelRouter } from '../resilience/fallback';
+import type { ResolvedProfile } from '../resilience/profiles';
+import { Watchdog, type Clock } from '../resilience/watchdog';
 import type { PendingToolCall, SwageEvent } from '../client/events';
 import { DEFAULT_BUDGETS, type Budgets } from '../context/budget';
 import type { ChangeSet } from '../changeset/changeSet';
@@ -49,6 +55,21 @@ export interface AgentRunOptions {
   readonly editableRange?: EditableRange;
   /** Upper bound for draining a cancelled stream before giving up on `turn.done`. */
   readonly drainTimeoutMs?: number;
+  /**
+   * Resilience (blueprint section 8): with a router, the run starts on the active profile's agent
+   * (`<agentBase>-<profile>`), arms that profile's timers, retries transient failures and
+   * switches profiles on hard ones, carrying the task over. Without one, `agentName` is used and
+   * any failure ends the run.
+   */
+  readonly router?: ModelRouter;
+  /** Agent base name, for example `swage-main` or `swage-inline`. */
+  readonly agentBase?: string;
+  /** Makes sure the profile's agent exists in TrueForge before a session is created on it. */
+  readonly prepareAgent?: (profile: ResolvedProfile, agentName: string) => Promise<void>;
+  /** A fallback switch happened (for a toast and the status bar). */
+  readonly onSwitch?: (decision: Extract<Decision, { action: 'switch' }>) => void;
+  /** Timer source for the watchdog and backoff sleeps (tests). */
+  readonly clock?: Clock;
 }
 
 export type RunOutcome = 'done' | 'paused' | 'cancelled' | 'error';
@@ -88,6 +109,11 @@ export class AgentRun {
   private relaySubscription: { dispose(): void } | undefined;
   private readonly drains = new Set<AbortController>();
   private cancelledAt: number | undefined;
+  private plan: FallbackPlan | undefined;
+  private firstText = '';
+  /** True once the current attempt produced any model or tool event. */
+  private attemptActivity = false;
+  private readonly sleeps = new Set<() => void>();
 
   constructor(private readonly opts: AgentRunOptions) {
     this.logger = opts.logger ?? silent;
@@ -153,10 +179,17 @@ export class AgentRun {
         `context assembled in ${Math.round(performance.now() - t0)} ms (${first.used} tokens)`,
       );
       if (this.cancelRequested) return await this.finished;
+      this.firstText = first.text;
 
-      this.sessionId = await this.opts.client.createSession(this.opts.agentName);
+      if (this.opts.router) {
+        this.plan = this.opts.router.begin();
+        if (!(await this.openSession())) return await this.finished;
+      } else {
+        this.sessionId = await this.opts.client.createSession(this.opts.agentName);
+      }
       if (this.cancelRequested) {
-        await this.opts.client.cancel(this.sessionId).catch(() => undefined);
+        if (this.sessionId !== undefined)
+          await this.opts.client.cancel(this.sessionId).catch(() => undefined);
         return await this.finished;
       }
       this.setState('running', 'Running…');
@@ -167,8 +200,116 @@ export class AgentRun {
     return this.finished;
   }
 
+  /** The profile the run is on (with a router). */
+  get profile(): ResolvedProfile | undefined {
+    return this.plan?.current;
+  }
+
+  private agentFor(profile: ResolvedProfile): string {
+    return agentNameFor(this.opts.agentBase ?? 'swage-main', profile);
+  }
+
+  /**
+   * Creates a session on the current profile's agent. Failures go through the classifier: retry,
+   * switch to the next profile, or fail. Returns false when the run ended.
+   */
+  private async openSession(): Promise<boolean> {
+    const plan = this.plan;
+    if (!plan) return false;
+    for (;;) {
+      if (this.cancelRequested) return false;
+      const profile = plan.current;
+      const name = this.agentFor(profile);
+      try {
+        await this.opts.prepareAgent?.(profile, name);
+        this.sessionId = await this.opts.client.createSession(name);
+        this.logger.info(`session on ${profile.name} (${profile.trueforgeModel})`);
+        return true;
+      } catch (err) {
+        const f = classifyMessage(describeError(err));
+        if (!(await this.apply(plan.decide(f), f))) return false;
+      }
+    }
+  }
+
+  /**
+   * Carries out a fallback decision. Returns true when the caller should go on (after a retry
+   * wait or a switch), false when the run ended.
+   */
+  private async apply(decision: Decision, f: Failure): Promise<boolean> {
+    const profile = this.plan?.current;
+    this.logger.warn(`model failure (${f.kind}): ${f.detail} -> ${decision.action}`);
+    if (decision.action === 'fail') {
+      this.fail(decision.message);
+      return false;
+    }
+    if (decision.action === 'retry') {
+      const s = Math.max(1, Math.round(decision.delayMs / 1000));
+      this.setState(
+        'running',
+        `${profile?.label ?? 'The model'} ${f.reason}; retrying in ${s} s (retry ${decision.retry} of ${decision.of})…`,
+      );
+      await this.sleep(decision.delayMs);
+      return !this.cancelRequested;
+    }
+    this.post({ type: 'notice', tone: 'warning', message: decision.message });
+    this.post({ type: 'model', model: `${decision.to.label} (${decision.to.trueforgeModel})` });
+    this.setState('running', decision.message);
+    this.opts.onSwitch?.(decision);
+    return !this.cancelRequested;
+  }
+
+  private sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => {
+      const done = (): void => {
+        this.sleeps.delete(done);
+        resolve();
+      };
+      this.sleeps.add(done);
+      const clock = this.opts.clock;
+      if (clock) clock.setTimeout(done, ms);
+      else setTimeout(done, ms).unref();
+    });
+  }
+
+  /**
+   * After a failed attempt: retry on the same profile, or move the task to the next profile with
+   * a carry-over message, or end the run with one clear line.
+   */
+  private async recover(f: Failure, lastInput: TrueForgeApi.TurnInputItem[]): Promise<void> {
+    const plan = this.plan;
+    if (!plan || this.cancelRequested) return;
+    const decision = plan.decide(f);
+    const hadActivity = this.attemptActivity;
+    if (!(await this.apply(decision, f)) || decision.action === 'fail') return;
+    if (decision.action === 'retry') {
+      const replay =
+        !hadActivity && lastInput.length === 1 && lastInput[0]?.type === 'user.message';
+      await this.runTurn(
+        replay ? lastInput : [{ type: 'user.message', content: CONTINUE_MESSAGE }],
+      );
+      return;
+    }
+    // Switch: the old session is abandoned; the task (and its staged edits) carries over.
+    const old = this.sessionId;
+    if (old !== undefined) void this.opts.client.cancel(old).catch(() => undefined);
+    this.sessionId = undefined;
+    if (!(await this.openSession())) return;
+    const task = this.opts.ctx.tasks.get(this.taskId);
+    const declared = task?.changeSet.declaredContext;
+    const text = carryOverMessage({
+      original: this.firstText,
+      why: `${decision.from.label} ${f.reason}`,
+      plan: declared?.plan ?? [],
+      files: declared?.files ?? [],
+      staged: task?.changeSet.review() ?? [],
+    });
+    await this.runTurn([{ type: 'user.message', content: text }]);
+  }
+
   private fail(message: string): void {
     if (this.cancelRequested) return;
+    if (this.stateValue === 'error') return;
     this.opts.ctx.tasks.cancel(this.taskId);
     this.relaySubscription?.dispose();
     this.setState('error', message.split('\n')[0] ?? message);
@@ -180,8 +321,31 @@ export class AgentRun {
     if (sessionId === undefined) return;
     const seq = ++this.turnSeq;
     let myTurnId: string | undefined;
+    let failure: Failure | undefined;
     const drain = new AbortController();
     this.drains.add(drain);
+    this.attemptActivity = false;
+    const profile = this.plan?.current;
+    const watchdog = profile
+      ? new Watchdog({
+          timeouts: profile.timeouts,
+          ...(this.opts.clock ? { clock: this.opts.clock } : {}),
+          onWaiting: (sec) => {
+            if (seq === this.turnSeq && !this.cancelRequested)
+              this.setState('running', `Waiting for ${profile.label} (${sec} s)…`);
+          },
+          onTimeout: (f) => {
+            if (seq !== this.turnSeq || this.cancelRequested) return;
+            // Abandon this attempt: its late events are dropped, TrueForge stops the turn.
+            this.turnSeq++;
+            this.activeTurnId = undefined;
+            drain.abort();
+            void this.opts.client.cancel(sessionId).catch(() => undefined);
+            void this.recover(f, input);
+          },
+        })
+      : undefined;
+    watchdog?.start();
     try {
       for await (const event of this.opts.client.streamTurn(sessionId, input, {
         signal: drain.signal,
@@ -191,7 +355,19 @@ export class AgentRun {
           if (seq === this.turnSeq && !this.cancelRequested) {
             this.activeTurnId = event.turnId;
             this.opts.ctx.tasks.setTurn(this.taskId, event.turnId);
+            watchdog?.connected();
           }
+          continue;
+        }
+        if (
+          watchdog &&
+          event.type === 'error' &&
+          myTurnId === undefined &&
+          seq === this.turnSeq &&
+          !this.cancelRequested
+        ) {
+          // The turn never started (TrueForge refused the request): classify it all the same.
+          failure = classifyMessage(event.message);
           continue;
         }
         const current =
@@ -210,11 +386,30 @@ export class AgentRun {
           }
           continue;
         }
+        if (watchdog) {
+          if (event.type === 'text') watchdog.activity();
+          else if (event.type === 'tool_start') watchdog.toolStarted(event.toolCallId);
+          else if (event.type === 'tool_result') watchdog.toolEnded(event.toolCallId);
+          else watchdog.stop();
+          if (event.type === 'text' || event.type === 'tool_start') this.attemptActivity = true;
+          if (event.type === 'error') {
+            // Decided after the stream ends: retry, switch or fail.
+            failure = classifyMessage(event.message);
+            continue;
+          }
+          if (event.type === 'done') this.plan?.succeeded();
+        }
         this.handle(event);
       }
     } finally {
+      watchdog?.stop();
       this.drains.delete(drain);
     }
+    if (failure && seq === this.turnSeq && !this.cancelRequested)
+      await this.recover(failure, input);
+    else if (watchdog && seq === this.turnSeq && !this.cancelRequested && myTurnId === undefined)
+      // The stream ended without a turn: the connection to TrueForge failed.
+      await this.recover(classifyMessage('terminated'), input);
   }
 
   private handle(event: SwageEvent): void {
@@ -391,6 +586,7 @@ export class AgentRun {
       return;
     this.cancelRequested = true;
     this.cancelledAt = Date.now();
+    for (const wake of [...this.sleeps]) wake();
     this.setState('cancelled', CANCELLED_MESSAGE);
     this.relaySubscription?.dispose();
     this.opts.ctx.tasks.cancel(this.taskId);

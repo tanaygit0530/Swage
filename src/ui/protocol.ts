@@ -73,6 +73,14 @@ export const HostToWebview = z.discriminatedUnion('type', [
     items: z.array(CompletionItem).max(50),
   }),
   z.object({ type: z.literal('error'), message: Short }),
+  /** A banner in the timeline, for example "Switched to Groq because Gemini returned 429." */
+  z.object({
+    type: z.literal('notice'),
+    tone: z.enum(['info', 'warning', 'error']),
+    message: Short,
+  }),
+  /** The model the run is on now (after a fallback switch). */
+  z.object({ type: z.literal('model'), model: Short }),
 ]);
 export type HostToWebview = z.infer<typeof HostToWebview>;
 

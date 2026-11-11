@@ -85,6 +85,21 @@ describe('panel reducer', () => {
   const run = (...msgs: Parameters<typeof reduce>[1][]): PanelState =>
     msgs.reduce(reduce, initialState);
 
+  it('shows a fallback banner and updates the model in the header', () => {
+    const s = run(
+      { type: 'init', workspace: 'w', model: 'Gemini' },
+      { type: 'notice', tone: 'warning', message: 'Switched to Groq because Gemini returned 429.' },
+      { type: 'model', model: 'Groq (groq/x)' },
+    );
+    expect(s.model).toBe('Groq (groq/x)');
+    expect(s.timeline.at(-1)).toMatchObject({
+      kind: 'notice',
+      tone: 'warning',
+      text: 'Switched to Groq because Gemini returned 429.',
+    });
+    expect(parseHostMessage({ type: 'notice', tone: 'loud', message: 'x' })).toBeUndefined();
+  });
+
   it('streams assistant text into one message per message id', () => {
     const s = run(
       { type: 'user', text: 'do it' },

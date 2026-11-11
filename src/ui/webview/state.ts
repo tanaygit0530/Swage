@@ -26,7 +26,7 @@ export type TimelineItem =
       summary: string;
       decision: 'pending' | 'allowed' | 'denied';
     }
-  | { kind: 'notice'; id: string; text: string; tone: 'info' | 'error' };
+  | { kind: 'notice'; id: string; text: string; tone: 'info' | 'warning' | 'error' };
 
 export interface PanelState {
   readonly workspace: string;
@@ -171,6 +171,16 @@ export function reduce(state: PanelState, msg: HostToWebview): PanelState {
       return msg.requestId >= state.completions.requestId
         ? { ...state, completions: { requestId: msg.requestId, items: msg.items } }
         : state;
+    case 'notice':
+      return {
+        ...state,
+        timeline: [
+          ...state.timeline,
+          { kind: 'notice', id: nextId('n'), text: msg.message, tone: msg.tone },
+        ],
+      };
+    case 'model':
+      return { ...state, model: msg.model };
     case 'error':
       return {
         ...state,

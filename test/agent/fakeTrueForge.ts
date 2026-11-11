@@ -1,4 +1,4 @@
-import type { TrueForgeApi } from '@truefoundry/trueforge-sdk';
+import { TrueForgeError, type TrueForgeApi } from '@truefoundry/trueforge-sdk';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
@@ -31,10 +31,19 @@ interface Session {
   step: number;
   readonly pending: Map<string, { name: string; args: Record<string, unknown> }>;
   active: Turn | undefined;
+  readonly scenario: Scenario;
+  readonly model: string;
 }
 
 export interface FakeTrueForgeOptions {
+  /** The scenario for sessions whose model has no entry in `scenarios`. */
   readonly scenario: Scenario;
+  /**
+   * Scenarios by TrueForge model FQN, for fallback tests: a session on an agent plays the
+   * scenario of the agent's model. With this set, a session on an agent that was never created
+   * fails with TrueForge's 404, and a model without a scenario with its 422.
+   */
+  readonly scenarios?: Readonly<Record<string, Scenario>>;
   readonly mcp: { url: string; token: string };
   readonly gated?: readonly string[];
   /** Emit a delta and a tool.response after the cancelled turn.done, to test late-event dropping. */
@@ -45,10 +54,15 @@ const at = (): string => new Date().toISOString();
 
 export class FakeTrueForge {
   readonly log: string[] = [];
+  /** Every turn's input, by session, for checking what a model was sent. */
+  readonly inputs: { sessionId: string; input: TrueForgeApi.TurnInputItem[] }[] = [];
   private readonly sessionsById = new Map<string, Session>();
   private client: Client | undefined;
   private counter = 0;
   private readonly gated: readonly string[];
+  private readonly agentModels = new Map<string, string>();
+  /** Attempts per model and step, so a failing step with errorTimes recovers like the real fake model. */
+  private readonly attempts = new Map<string, number>();
 
   constructor(private readonly opts: FakeTrueForgeOptions) {
     this.gated = opts.gated ?? ['submit_change_set', 'run_command'];
@@ -76,13 +90,40 @@ export class FakeTrueForge {
 
   // Setup calls (MCP registration and agent upsert) are accepted and recorded.
   readonly agents = {
-    list: (): Promise<AsyncGenerator<{ id: string; name: string }>> =>
-      Promise.resolve((async function* () {})()),
-    create: (req: { name: string }): Promise<{ data: { id: string } }> => {
+    list: (req: { agentName?: string }): Promise<AsyncGenerator<{ id: string; name: string }>> => {
+      const found = [...this.agentModels.keys()].filter((n) => n === req.agentName);
+      return Promise.resolve(
+        (async function* () {
+          for (const name of found) yield { id: `agent-${name}`, name };
+        })(),
+      );
+    },
+    create: (req: {
+      name: string;
+      manifest?: { model?: { name?: string } };
+    }): Promise<{ data: { id: string } }> => {
       this.log.push(`agent.create ${req.name}`);
+      const model = req.manifest?.model?.name;
+      if (this.opts.scenarios && model && !this.opts.scenarios[model])
+        return Promise.reject(
+          new TrueForgeError({
+            message: `Unknown model "${model}"`,
+            statusCode: 422,
+            body: { error: { message: `Unknown model "${model}" — not configured on provider` } },
+          }),
+        );
+      this.agentModels.set(req.name, model ?? '');
       return Promise.resolve({ data: { id: `agent-${req.name}` } });
     },
-    update: (id: string): Promise<{ data: { id: string } }> => Promise.resolve({ data: { id } }),
+    update: (
+      id: string,
+      req: { manifest?: { model?: { name?: string } } },
+    ): Promise<{ data: { id: string } }> => {
+      const name = id.replace(/^agent-/, '');
+      this.log.push(`agent.update ${name}`);
+      this.agentModels.set(name, req.manifest?.model?.name ?? '');
+      return Promise.resolve({ data: { id } });
+    },
   };
 
   readonly settings = {
@@ -105,14 +146,46 @@ export class FakeTrueForge {
 
   readonly models = {
     list: (): Promise<{ data: { name: string }[] }> =>
-      Promise.resolve({ data: [{ name: `swage-fake/${this.opts.scenario.name}` }] }),
+      Promise.resolve({
+        data: [
+          { name: `swage-fake/${this.opts.scenario.name}` },
+          ...Object.keys(this.opts.scenarios ?? {}).map((name) => ({ name })),
+        ],
+      }),
   };
 
   readonly sessions = {
-    create: (req: { agent: { name?: string } }): Promise<{ data: { id: string } }> => {
+    create: (req: {
+      agent: { name?: string; spec?: { model?: { name?: string } } };
+    }): Promise<{ data: { id: string } }> => {
+      const name = req.agent.name;
+      let model = req.agent.spec?.model?.name ?? '';
+      let scenario = this.opts.scenario;
+      if (this.opts.scenarios) {
+        if (name !== undefined) {
+          const m = this.agentModels.get(name);
+          if (m === undefined)
+            return Promise.reject(
+              new TrueForgeError({
+                message: 'Agent not found',
+                statusCode: 404,
+                body: { error: { message: `Agent not found: ${name}` } },
+              }),
+            );
+          model = m;
+        }
+        scenario = this.opts.scenarios[model] ?? scenario;
+      }
       const id = `sess-${++this.counter}`;
-      this.sessionsById.set(id, { id, step: 0, pending: new Map(), active: undefined });
-      this.log.push(`session.create ${req.agent.name ?? 'inline'}`);
+      this.sessionsById.set(id, {
+        id,
+        step: 0,
+        pending: new Map(),
+        active: undefined,
+        scenario,
+        model,
+      });
+      this.log.push(`session.create ${name ?? 'inline'}${model ? ` (${model})` : ''}`);
       return Promise.resolve({ data: { id } });
     },
     cancel: (sessionId: string): Promise<{ data: object }> => {
@@ -132,6 +205,7 @@ export class FakeTrueForge {
       const session = this.sessionsById.get(sessionId);
       if (!session) return Promise.reject(new Error(`no session ${sessionId}`));
       this.log.push(`turn ${req.input?.[0]?.type ?? 'empty'}`);
+      this.inputs.push({ sessionId, input: req.input ?? [] });
       return Promise.resolve(this.play(session, req.input ?? []));
     },
   };
@@ -229,10 +303,21 @@ export class FakeTrueForge {
 
     for (;;) {
       const stepIndex = session.step++;
-      const step: ScenarioStep = this.opts.scenario.steps[stepIndex] ?? { text: [FINAL_TEXT] };
+      const step: ScenarioStep = session.scenario.steps[stepIndex] ?? { text: [FINAL_TEXT] };
       const msgId = `msg-${turn.id}-${stepIndex}`;
 
-      if (step.error !== undefined && step.errorTimes === undefined) {
+      const key = `${session.scenario.name}#${stepIndex}`;
+      const attempt = (this.attempts.get(key) ?? 0) + 1;
+      this.attempts.set(key, attempt);
+      if (
+        step.error !== undefined &&
+        (step.errorTimes === undefined || attempt <= step.errorTimes)
+      ) {
+        // A failed request adds nothing to the conversation, so the retry replays this step.
+        session.step = stepIndex;
+        this.log.push(
+          `model.error ${session.model || session.scenario.name} ${String(step.error)}`,
+        );
         if (step.error === 'hang') {
           await sleep(3_600_000);
           if (turn.cancelled) {
@@ -243,9 +328,11 @@ export class FakeTrueForge {
         const message =
           step.error === 429
             ? '[Model Error] Request failed (429): Rate limit reached for requests. Please try again in 1s.'
-            : step.error === 500
-              ? '[Model Error] Request failed (500): The server had an error while processing your request.'
-              : '[Model Error] Cannot connect to API: connect ECONNREFUSED 127.0.0.1:8787';
+            : step.error === 401
+              ? '[Model Error] Request failed (401): Invalid API Key'
+              : step.error === 500
+                ? '[Model Error] Request failed (500): The server had an error while processing your request.'
+                : '[Model Error] Cannot connect to API: connect ECONNREFUSED 127.0.0.1:8787';
         yield {
           type: 'model.message',
           id: msgId,

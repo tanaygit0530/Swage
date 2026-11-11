@@ -26,9 +26,15 @@ export const StepSchema = z
     /** After this many chunks, pause for stallMs (a stalled stream). */
     stallAfterChunks: z.number().int().min(0).optional(),
     stallMs: z.number().int().min(0).optional(),
-    /** Fail instead of answering: HTTP 429 or 500, drop the connection, or never answer. */
+    /** Fail instead of answering: HTTP 401, 429 or 500, drop the connection, or never answer. */
     error: z
-      .union([z.literal(429), z.literal(500), z.literal('refused'), z.literal('hang')])
+      .union([
+        z.literal(401),
+        z.literal(429),
+        z.literal(500),
+        z.literal('refused'),
+        z.literal('hang'),
+      ])
       .optional(),
     /** Fail only for the first N attempts at this step, then answer normally. */
     errorTimes: z.number().int().min(1).optional(),

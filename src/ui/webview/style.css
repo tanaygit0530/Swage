@@ -172,6 +172,12 @@ header {
   font-style: italic;
 }
 
+.notice-warning {
+  border-left: 3px solid var(--vscode-editorWarning-foreground, #cca700);
+  background: var(--vscode-inputValidation-warningBackground, transparent);
+  padding: 4px 8px;
+  font-style: normal;
+}
 .notice-error {
   color: var(--vscode-errorForeground, #f14c4c);
   font-style: normal;

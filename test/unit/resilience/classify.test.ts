@@ -87,6 +87,16 @@ describe('classify (blueprint section 8; messages as recorded in docs/SPIKES.md)
     expect(kind('TypeError: x is not a function')).toEqual(['fatal', 'failed']);
   });
 
+  it('reads statuses written without parentheses and wording without a status', () => {
+    expect(kind('[Model Error] upstream HTTP 502 bad gateway')).toEqual([
+      'transient',
+      'returned 502',
+    ]);
+    expect(kind('[Model Error] Unauthorized')).toEqual(['hard', 'returned 401']);
+    expect(kind('[Model Error] no such model: x')).toEqual(['hard', 'does not know the model']);
+    expect(kind('TrueForge 404: Session not found')).toEqual(['fatal', 'got TrueForge 404']);
+  });
+
   it('redacts secrets and keeps one line', () => {
     const f = classifyMessage(
       '[Model Error] Request failed (401): Invalid API Key sk-abcdefghijklmnopqrstuvwxyz0123456789\nstack',

@@ -52,6 +52,16 @@ describe('model profiles (blueprint sections 8 and 9)', () => {
     expect(displayName({ trueforgeModel: 'acme/y' })).toBe('Acme');
   });
 
+  it('keeps only the params that are set', () => {
+    const [a, b] = resolveProfiles([
+      { name: 'a', trueforgeModel: 'p/m', params: { temperature: 0 } },
+      { name: 'b', trueforgeModel: 'p/m', params: { max_tokens: 1024 } },
+    ]);
+    expect(a?.params).toEqual({ temperature: 0 });
+    expect(b?.params).toEqual({ max_tokens: 1024 });
+    expect(() => resolveProfiles(['not an object'])).toThrow(/profile 0: /);
+  });
+
   it('accepts a bare list or { profiles }, YAML or JSON', () => {
     expect(parseProfilesText('- name: p\n  trueforgeModel: a/b\n')[0]?.name).toBe('p');
     expect(parseProfilesText('{"profiles":[{"name":"p","trueforgeModel":"a/b"}]}')).toHaveLength(1);

@@ -6,6 +6,7 @@ import {
   formatReport,
   loadManifests,
   MCP_SERVER_NAME,
+  agentPreparer,
   parseProfiles,
   runSetup,
 } from '../../../src/client/setup';
@@ -202,5 +203,24 @@ describe('runSetup', () => {
     });
     expect(report.agents.filter((a) => a.result !== 'error')).toHaveLength(3);
     expect(formatReport(report).join('\n')).toContain('FAILED');
+  });
+});
+
+describe('agentPreparer', () => {
+  it('upserts a profile agent once per model, retries after a failure, and rejects unknown bases', async () => {
+    const { client, calls } = fakeClient({ failAgent: 'swage-inline-fallback-1' });
+    const prepare = agentPreparer(client, manifests);
+    const primary = { name: 'primary', trueforgeModel: 'google-gemini/gemini-3-5-flash' };
+    await prepare(primary, 'swage-main-primary');
+    await prepare(primary, 'swage-main-primary');
+    expect(calls.filter((c) => c === 'agent.update id-swage-main-primary')).toHaveLength(1);
+    // The organiser swaps the primary model: the agent is pushed again.
+    await prepare({ ...primary, trueforgeModel: 'acme/new-model' }, 'swage-main-primary');
+    expect(calls.filter((c) => c === 'agent.update id-swage-main-primary')).toHaveLength(2);
+    const fb = { name: 'fallback-1', trueforgeModel: 'groq/x' };
+    await expect(prepare(fb, 'swage-inline-fallback-1')).rejects.toThrow(/422/);
+    await expect(prepare(fb, 'swage-inline-fallback-1')).rejects.toThrow(/422/);
+    expect(calls.filter((c) => c === 'agent.create swage-inline-fallback-1')).toHaveLength(2);
+    await expect(prepare(fb, 'other-agent')).rejects.toThrow(/No manifest/);
   });
 });

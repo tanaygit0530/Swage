@@ -154,3 +154,29 @@ export function formatReport(report: SetupReport): string[] {
   }
   return lines;
 }
+
+/**
+ * Makes sure a profile's agent exists with the profile's model before a session is opened on it
+ * (fallback profiles are prepared on first use). Cached per agent name and model, so a changed
+ * primary model is pushed again; a failure is not cached, so the next attempt retries.
+ */
+export function agentPreparer(
+  client: SwageClient,
+  manifests: Manifests,
+): (profile: ModelProfile, agentName: string) => Promise<void> {
+  const done = new Map<string, Promise<void>>();
+  return (profile, agentName) => {
+    const agent = AGENTS.find((a) => agentName.startsWith(`${a.base}-`));
+    if (!agent) return Promise.reject(new Error(`No manifest for agent ${agentName}`));
+    const key = `${agentName}@${profile.trueforgeModel}`;
+    let pending = done.get(key);
+    if (!pending) {
+      pending = client
+        .upsertAgent(agentName, agent.description, withProfile(manifests[agent.base], profile))
+        .then(() => undefined);
+      done.set(key, pending);
+      pending.catch(() => done.delete(key));
+    }
+    return pending;
+  };
+}
