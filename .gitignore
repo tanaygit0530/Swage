@@ -1,0 +1,43 @@
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.npm/
+coverage/
+*.tsbuildinfo
+
+# Build output
+dist/
+out/
+
+# VS Code extensions
+*.vsix
+.vscode-test/
+.vscode-test-web/
+
+# Environment and secrets
+.env
+.env.*
+
+# Local databases
+*.sqlite
+*.sqlite3
+*.db
+
+# Local TrueForge / Swage data
+.swage/
+.trueforge/
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
