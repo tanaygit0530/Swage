@@ -69,3 +69,61 @@ Pure TypeScript in `src/changeset` and `src/safety`, with no `vscode` import and
 - Redaction can change text the agent later uses as a find anchor, such as a line with a literal secret. Consider a specific error for anchors that contain `[REDACTED:`.
 - The symbol check only looks inside the change set, not the whole repository; the context index (blueprint section 7) can widen it later.
 - The command policy is string-based. The shadow-copy runner still needs a scrubbed environment, a timeout, an output cap and a process-tree kill.
+
+## Phase 2: Context engine (11 November 2026)
+
+`src/context`: lexical, model-free retrieval in pure TypeScript with no `vscode` import (blueprint section 7). No model calls, no embeddings, works offline.
+
+### Built
+
+- `symbols.ts`: tree-sitter parsing through `@vscode/tree-sitter-wasm` (MIT, offline WASM; decision and verified API in `docs/SPIKES.md`). Covers Python, TypeScript, TSX and JavaScript: top-level and nested symbols (functions, classes, methods, constants, interfaces, types, enums, exports) with line ranges, plus import specifiers. Falls back to the Phase 1 regex extractor if the WASM files cannot load, and plugs into the change-set `SymbolExtractor` hook. The build copies the five WASM files (3.8 MB) to `dist/wasm`.
+- `tokens.ts`: identifier-aware tokens. Splits snake_case, camelCase and acronyms, lowercases, drops stop words and a small suffix stemmer that undoubles consonants (`logging` matches `log`). In code files the bare `import` and `export` keywords are skipped, but they stay searchable in prose.
+- `budget.ts`: token estimate (characters / 4). Budgets are read from the `swage.budgets` default in `package.json`: 5 hinted files, 4,000 tokens per tool result, 30,000 tokens of reads per run, 1,500-token repo map. `truncateToTokens` stays within the budget, marker included, and the marker says how to get more. `ReadBudget` refuses full reads past the run budget and allows ranged reads.
+- `indexer.ts`: `WorkspaceIndex` walks the workspace honouring nested `.gitignore` files, `.swageignore`, the path guard's default ignores and the `swage.ignore` setting. It skips symlinks, binaries (by extension or a NUL byte) and files over 512 KB. Each file record holds path, size, mtime, hash, language, symbols, imports, token frequencies and estimated tokens. Builds are incremental by size and mtime. The cache lives in `.swage/index/index.json`, and the indexer also writes `.swage/.gitignore` containing `*`, so the target repository's `git status` stays clean (Task C). The cache location can be injected. Python (relative, absolute and package) and TypeScript/JavaScript (relative, with extensions and `index` files) imports are resolved into a forward and reverse graph. Watcher hook: `attachWatcher` / `handleEvent` process events in order; changing an ignore file triggers a rebuild, and deleting a folder removes everything under it.
+- `bm25.ts`: BM25 (k1 1.2, b 0.75) over three fields: content, symbol names and path without the extension. On top come an exact-identifier boost, a one-hop import-graph boost from the top 5 hits, and paired tests and same-name docs pages (`docs/cli.rst` for `cli.py`) from the top 10. A pairing bonus never lifts a test or docs page above its source. There is an active-file boost and a query-coverage factor. Every hit carries reasons ("defines `x`", "path matches cli", "paired test for …", "imported by …"), the matched symbols, the best line range and the estimated read cost.
+- `repoMap.ts`: a ranked outline (files plus top-level public symbols) by import centrality or task relevance, capped at the repo-map budget. It drops the lowest-ranked files and says how to see them.
+- `mentions.ts`: parses `@path`, `@symbol`, `@Class.method` and explicit `@file:` and `@symbol:` mentions, ignoring email addresses. Gives fuzzy completion data for the editor. Resolves mentions to redacted content within a per-result cap and a total of 8,000 tokens; `@symbol` attaches the definition and lists its callers. Ambiguous or unknown mentions get suggestions, and a report states each attachment and its token cost.
+- `test/retrieval-eval`: a vendored fixture project (`taskboard`, 40 files: a Python package, tests, docs and a TypeScript client), 20 labelled tasks, and a gate at recall@5 of 0.8 or better. With `SWAGE_FLASK_DIR` set, an optional Flask 3.1.3 run uses 11 labelled queries, including the exact Task A and Task B wording, with the blueprint G16 gates.
+
+### Measured
+
+Fixture (`npm test`, Node 26.8, Apple Silicon):
+
+| Measure                            | Result                                |
+| ---------------------------------- | ------------------------------------- |
+| Mean recall@5 (gate 0.8)           | **0.883**, 16 of 20 tasks fully found |
+| Mean token cost of the top 5 files | 868 tokens                            |
+| Index build, cold (40 files)       | 27 ms                                 |
+| Query time                         | mean 0.35 ms, max 2.5 ms              |
+
+Misses on the fixture: `docs/cli.md` for the config-command task (rank 6 to 10), `auth.py` for "log in with an email address", `config.py` for the `LOG_FORMAT` task, and `app.py` for "JSON error for 405". These need phrase-level understanding that lexical retrieval does not have; tuning further on a fixture I wrote would overfit it.
+
+Flask 3.1.3 at `22d92470` (`SWAGE_FLASK_DIR=~/Desktop/Hackthons/flask npm test`):
+
+| Measure                                        | Result                                                          | Target                  |
+| ---------------------------------------------- | --------------------------------------------------------------- | ----------------------- |
+| Mean recall@10 over 11 queries                 | **1.000**                                                       | 0.8 (G16)               |
+| Mean recall@5                                  | 0.970                                                           |                         |
+| Task B files                                   | `cli.py` #1, `test_cli.py` #3, `docs/cli.rst` #6                | all three in the top 10 |
+| Task A (`get_debug_flag`)                      | `helpers.py` #1                                                 |                         |
+| Index build, cold (229 files, about 17k lines) | 221 to 239 ms                                                   | under 2 s (G15)         |
+| Index rebuild, warm from cache                 | 14 ms (229 of 229 reused); cache 546 KB                         |                         |
+| Query time                                     | mean 2.0 ms, max 4.3 ms                                         | under 300 ms            |
+| tree-sitter init plus four grammars            | 15 ms                                                           |                         |
+| Repo map                                       | 1,420 tokens, 56 of 229 files                                   | about 1,500             |
+| `@src/flask/helpers.py @get_debug_flag`        | 4,070 tokens: file truncated at 3,996, symbol 74 with 9 callers | 8,000                   |
+
+Flask's `git status` stayed clean after the measurements.
+
+### Tested
+
+- 60 context unit tests, plus the fixture evaluation (3 tests) and the optional Flask evaluation. The whole suite is green; lint and build are green.
+- Coverage for `src/changeset`, `src/safety` and `src/context`: 98.5% statements, 93.86% branches, 99.29% functions, 99.62% lines. The threshold is 90%, enforced in CI.
+
+### Open
+
+- Indexing runs on the extension host thread. The blueprint wants a worker thread; Flask builds in about 0.2 s, so this is not urgent.
+- The extension does not use the context engine yet. `find_relevant_code`, `repo_map`, `read_files` (with `ReadBudget`) and the hints block still need wiring into the MCP server, and the VS Code watcher needs an adapter to `WatcherLike`.
+- The cache lives in `.swage/index` inside the workspace, as requested, and is hidden from git by `.swage/.gitignore`. Blueprint section 8 prefers globalStorage; `IndexCache` can be swapped with no other change.
+- The blueprint also suggests boosting files with diagnostics; that is not done, because it needs VS Code. The active-file boost is supported.
+- The Flask evaluation runs locally only, because CI has no Flask checkout. Add a CI step that clones the pinned commit if the evidence should be automatic.
