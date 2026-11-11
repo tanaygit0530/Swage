@@ -2,7 +2,11 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
-    include: ['test/unit/**/*.test.ts', 'test/retrieval-eval/**/*.test.ts'],
+    include: [
+      'test/unit/**/*.test.ts',
+      'test/retrieval-eval/**/*.test.ts',
+      'test/mcp/**/*.test.ts',
+    ],
     environment: 'node',
     coverage: {
       provider: 'v8',
@@ -12,6 +16,7 @@ export default defineConfig({
         'src/context/**/*.ts',
         'src/supervisor/**/*.ts',
         'src/client/**/*.ts',
+        'src/mcp/**/*.ts',
       ],
       exclude: ['src/**/index.ts'],
       reporter: ['text', 'text-summary', 'json-summary'],

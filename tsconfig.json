@@ -21,6 +21,7 @@
     "src/**/*.ts",
     "test/unit/**/*.ts",
     "test/retrieval-eval/*.ts",
+    "test/mcp/**/*.ts",
     "scripts/**/*.ts",
     "*.config.mts"
   ]
