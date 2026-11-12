@@ -31,7 +31,7 @@ header {
 
 .model {
   font-weight: normal;
-  opacity: 0.75;
+  color: var(--vscode-descriptionForeground);
   margin-left: 6px;
   font-family: var(--vscode-editor-font-family);
 }
@@ -42,7 +42,7 @@ header {
 
 .budget-label {
   font-size: 0.9em;
-  opacity: 0.85;
+  color: var(--vscode-descriptionForeground);
 }
 
 .budget-bar {
@@ -71,7 +71,7 @@ header {
 }
 
 .empty {
-  opacity: 0.7;
+  color: var(--vscode-descriptionForeground);
   margin-top: 12px;
 }
 
@@ -123,11 +123,11 @@ header {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  opacity: 0.85;
+  color: var(--vscode-descriptionForeground);
 }
 
 .tool-meta {
-  opacity: 0.7;
+  color: var(--vscode-descriptionForeground);
   white-space: nowrap;
 }
 
@@ -150,7 +150,7 @@ header {
 }
 
 .reason {
-  opacity: 0.8;
+  color: var(--vscode-descriptionForeground);
 }
 
 .approval-pending {
@@ -164,7 +164,7 @@ header {
 }
 
 .decision {
-  opacity: 0.8;
+  color: var(--vscode-descriptionForeground);
 }
 
 .notice {
@@ -191,7 +191,7 @@ footer {
 
 .status {
   font-size: 0.9em;
-  opacity: 0.85;
+  color: var(--vscode-descriptionForeground);
   margin-bottom: 4px;
 }
 
@@ -269,12 +269,12 @@ textarea:focus {
 .completions .kind {
   display: inline-block;
   width: 2.5em;
-  opacity: 0.6;
+  color: var(--vscode-descriptionForeground);
   font-size: 0.85em;
 }
 
 .completions .detail {
-  opacity: 0.6;
+  color: var(--vscode-descriptionForeground);
   margin-left: 6px;
 }
 
@@ -317,4 +317,24 @@ button.stop {
 .actions {
   display: flex;
   gap: 6px;
+}
+
+/* Accessibility: a visible keyboard focus ring on every control, borders that high-contrast
+   themes draw (contrastBorder is transparent elsewhere), and no motion for users who ask. */
+button:focus-visible,
+.completions [role='option']:focus-visible,
+a:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: 2px;
+}
+
+button {
+  border: 1px solid var(--vscode-contrastBorder, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+    transition: none !important;
+  }
 }
