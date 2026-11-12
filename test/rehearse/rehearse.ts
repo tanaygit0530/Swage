@@ -291,7 +291,8 @@ async function taskA(
     selection: `${HELPERS} lines ${range.start}-${range.end}`,
     model: api.models.router?.active.trueforgeModel,
     outcome: result.kind,
-    instructionToDiffMs: api.inline.lastDiffMs,
+    // Only a run that produced a diff has a diff time (lastDiffMs keeps the previous run's value).
+    instructionToDiffMs: result.kind === 'review' ? api.inline.lastDiffMs : undefined,
     wallToReviewMs: wallToReview,
   };
   if (result.kind !== 'review') {
