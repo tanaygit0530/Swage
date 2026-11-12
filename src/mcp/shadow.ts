@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, promises as fsp } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -34,6 +34,27 @@ function toPosix(p: string): string {
   return p.split(path.sep).join('/');
 }
 
+/**
+ * Files git tracks in the workspace (empty when it is not a git repository). A tracked file is
+ * already in the repository, so a test fixture such as Flask's tests/test_apps/.env is copied
+ * into the shadow even though the path guard hides `.env` files from the agent; an untracked
+ * `.env` (where real secrets live) is still left out.
+ */
+export function trackedFiles(root: string): { files: Set<string>; dirs: Set<string> } {
+  const r = spawnSync('git', ['ls-files', '-z'], {
+    cwd: root,
+    encoding: 'utf8',
+    maxBuffer: 1 << 28,
+  });
+  const files = new Set(r.status === 0 ? r.stdout.split('\0').filter(Boolean) : []);
+  const dirs = new Set<string>();
+  for (const f of files) {
+    const parts = f.split('/');
+    for (let i = 1; i < parts.length; i++) dirs.add(parts.slice(0, i).join('/'));
+  }
+  return { files, dirs };
+}
+
 /** Copies the workspace (skipping ignored paths and symlinks) and applies the staged overlay. */
 export async function createShadow(
   root: string,
@@ -41,12 +62,20 @@ export async function createShadow(
   changeSet?: ChangeSet,
 ): Promise<Shadow> {
   const dir = await fsp.mkdtemp(path.join(tmpdir(), 'swage-shadow-'));
+  const tracked = trackedFiles(root);
   const copy = async (rel: string): Promise<void> => {
     const entries = await fsp.readdir(path.join(root, rel), { withFileTypes: true });
     for (const e of entries) {
       const childRel = rel === '' ? e.name : `${rel}/${e.name}`;
       // Symlinks are skipped: a link could let a command write back into the real workspace.
-      if (e.isSymbolicLink() || SKIP_DIRS.has(e.name) || guard.isIgnored(childRel)) continue;
+      if (e.isSymbolicLink() || SKIP_DIRS.has(e.name)) continue;
+      // Virtual environments are not copied: test commands use the real one (prepareCommand).
+      if (e.isDirectory() && existsSync(path.join(root, childRel, 'pyvenv.cfg'))) continue;
+      if (
+        guard.isIgnored(childRel) &&
+        !(e.isFile() ? tracked.files.has(childRel) : tracked.dirs.has(childRel))
+      )
+        continue;
       if (e.isDirectory()) {
         await fsp.mkdir(path.join(dir, childRel), { recursive: true });
         await copy(childRel);

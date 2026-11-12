@@ -8,6 +8,7 @@ import {
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -17,6 +18,7 @@ import {
   describeChanges,
   diffSnapshots,
   prepareCommand,
+  trackedFiles,
   venvProgram,
   runProcess,
   scrubbedEnv,
@@ -249,5 +251,39 @@ describe('runProcess', () => {
     });
     expect(r.exitCode).toBeNull();
     expect(r.output).toMatch(/ENOENT/);
+  });
+});
+
+describe('the shadow copy matches what the project tests need', () => {
+  it('copies tracked test fixtures the guard hides (tests/app/.env) but not an untracked .env or a venv', async () => {
+    const ws = realpathSync(mkdtempSync(path.join(tmpdir(), 'swage-shadow-git-')));
+    const put = (rel: string, text: string): void => {
+      mkdirSync(path.dirname(path.join(ws, rel)), { recursive: true });
+      writeFileSync(path.join(ws, rel), text);
+    };
+    put('tests/app/.env', 'FOO=env\n');
+    put('tests/test_x.py', 'def test_x(): pass\n');
+    put('.venv/pyvenv.cfg', 'home = /usr/bin\n');
+    put('.venv/lib/big.py', 'x = 1\n');
+    execFileSync('git', ['init', '-q'], { cwd: ws });
+    execFileSync('git', ['add', 'tests'], { cwd: ws });
+    put('.env', 'REAL_SECRET=1\n'); // untracked: a developer's own secrets
+    expect([...trackedFiles(ws).files].sort()).toEqual(['tests/app/.env', 'tests/test_x.py']);
+    const shadow = await createShadow(ws, new PathGuard({ root: ws }));
+    try {
+      expect(existsSync(path.join(shadow.dir, 'tests/app/.env'))).toBe(true);
+      expect(existsSync(path.join(shadow.dir, '.env'))).toBe(false);
+      expect(existsSync(path.join(shadow.dir, '.venv'))).toBe(false);
+      expect(existsSync(path.join(shadow.dir, 'tests/test_x.py'))).toBe(true);
+    } finally {
+      await shadow.dispose();
+      rmSync(ws, { recursive: true, force: true });
+    }
+  });
+
+  it('works outside git (nothing tracked)', () => {
+    const ws = mkdtempSync(path.join(tmpdir(), 'swage-shadow-nogit-'));
+    expect(trackedFiles(ws).files.size).toBe(0);
+    rmSync(ws, { recursive: true, force: true });
   });
 });
