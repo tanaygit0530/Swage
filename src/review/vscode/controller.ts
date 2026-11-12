@@ -245,6 +245,15 @@ export class ReviewController implements vscode.Disposable {
     return this.applierFor.applier;
   }
 
+  /**
+   * Forgets the in-memory undo history, as a window reload does; the next undo reads the
+   * checkpoints back from global storage. Used by the integration test that proves undo works
+   * after a reload.
+   */
+  reloadFromStorage(): void {
+    this.applierFor = undefined;
+  }
+
   /** Where this workspace's undo history lives in global storage. */
   checkpointPath(): string | undefined {
     const root = this.root();
