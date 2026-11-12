@@ -505,7 +505,8 @@ export class AgentRun {
     const task = this.opts.ctx.tasks.get(this.taskId);
     const staged = task?.changeSet.stagedPaths() ?? [];
     const submitted = task?.changeSet.status === 'submitted';
-    if (staged.length > 0 && !submitted && task && this.opts.review) {
+    // Only edits still in staging: after Apply or Discard the change set has moved on.
+    if (staged.length > 0 && task?.changeSet.status === 'staging' && this.opts.review) {
       // The agent stopped (step limit, or it gave up) without submitting: its staged edits are
       // still reviewable, never lost and never written without the user (blueprint F15).
       this.setState(
