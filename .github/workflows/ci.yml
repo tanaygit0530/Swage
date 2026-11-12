@@ -13,7 +13,14 @@ concurrency:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    # Required on Linux and macOS. Windows runs as an experiment: Swage is not tested there yet
+    # (README, Limitations), so its result is reported but does not fail the workflow.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.os == 'windows-latest' }}
     steps:
       - uses: actions/checkout@v4
 
