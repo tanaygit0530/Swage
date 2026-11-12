@@ -73,6 +73,7 @@ async function world(
   profiles: ProfileSpec[],
   retries = 2,
   routerOptions: { maxRetryWaitMs?: number; maxQuotaWaitMs?: number } = {},
+  reviewed?: string[][],
 ): Promise<World> {
   const root = realpathSync(mkdtempSync(path.join(tmpdir(), 'swage-res-')));
   cpSync(DEMO, root, { recursive: true });
@@ -128,6 +129,14 @@ async function world(
       loadManifests(path.join(__dirname, '..', '..', 'trueforge', 'agents')),
     ),
     onSwitch: (decision) => switches.push({ decision, at: performance.now() }),
+    ...(reviewed
+      ? {
+          review: (_t: string, cs: { stagedPaths(): string[] }) => {
+            reviewed.push(cs.stagedPaths().sort());
+            return new Promise<{ applied: boolean; message: string }>(() => undefined);
+          },
+        }
+      : {}),
     drainTimeoutMs: 5000,
   });
   return {
@@ -471,6 +480,30 @@ describe('resilience with the scripted model (blueprint section 8)', () => {
     expect(notices(w)[0]).toBe('Switched to Groq because Gemini returned 429.');
     expect(notices(w)[1]).toMatch(/^Every model is rate-limited; waiting 1 s for (Gemini|Groq)\.$/);
     expect(of(w.posts, 'approval')[0]?.calls[0]?.name).toBe('submit_change_set');
+  });
+
+  it('every profile fails after edits were staged: the edits open for review instead of being lost', async () => {
+    const [cli] = step(3).toolCalls ?? [];
+    const reviewed: string[][] = [];
+    w = await world(
+      [
+        {
+          ...GEMINI,
+          scenario: s('pstaged', [step(2), { toolCalls: [cli as never] }, { error: 401 }]),
+        },
+        { ...GROQ, scenario: s('fdown', [{ error: 401 }]) },
+      ],
+      2,
+      {},
+      reviewed,
+    );
+    const before = treeHash(w.root);
+    expect(await w.run.start(REQUEST)).toBe('error');
+    expect(reviewed).toEqual([['app/cli.py']]);
+    expect(of(w.posts, 'status').at(-1)?.message).toMatch(
+      /^All model profiles failed: .* The 1 staged file\(s\) are open for review; nothing is applied unless you apply it\.$/,
+    );
+    expect(treeHash(w.root)).toBe(before);
   });
 
   it('Stop during a backoff wait cancels at once', async () => {

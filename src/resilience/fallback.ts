@@ -46,6 +46,11 @@ export interface RouterOptions {
    * task waits for the first one to come back, up to this much waiting in total. Default 3 min.
    */
   readonly maxQuotaWaitMs?: number;
+  /**
+   * Switches allowed in one task. Profiles that keep hitting their rate limit would otherwise
+   * hand the task back and forth; past this the task ends with one clear line. Default 6.
+   */
+  readonly maxSwitches?: number;
   readonly backoff?: BackoffOptions;
   readonly clock?: Clock;
 }
@@ -190,6 +195,7 @@ export class FallbackPlan {
   /** Profiles waiting out a timed rate limit in this task, with the time they come back. */
   private readonly quotaUntil = new Map<string, number>();
   private quotaWaitedMs = 0;
+  private switches = 0;
 
   /** Tried profiles that cannot be used now: failed for good, or still inside their rate limit. */
   private blocked(now: number): Set<string> {
@@ -226,6 +232,11 @@ export class FallbackPlan {
     if (f.kind === 'transient' && f.retryAfterMs !== undefined)
       this.quotaUntil.set(from.name, now + f.retryAfterMs);
     else this.quotaUntil.delete(from.name);
+    if (this.switches >= (this.router.options.maxSwitches ?? 6))
+      return {
+        action: 'fail',
+        message: `Gave up after ${this.switches} model switches: every model kept failing, last ${from.label} ${f.reason}. ${WORKSPACE_UNCHANGED}`,
+      };
     const to = this.router.next(from, this.blocked(now));
     if (to) return this.moveTo(from, to, f, switchMessage(from, to, f));
     // Every profile is blocked. If some only wait out a rate limit, wait for the first to return.
@@ -256,6 +267,7 @@ export class FallbackPlan {
   ): Decision {
     this.profile = to;
     this.retriesUsed = 0;
+    this.switches++;
     this.router.moveTo(to);
     return {
       action: 'switch',

@@ -4,7 +4,12 @@ import { describeError, type ApprovalDecision, type SwageClient } from '../clien
 import { agentNameFor } from '../client/manifest';
 import { CONTINUE_MESSAGE, carryOverMessage } from '../resilience/carryOver';
 import { classifyMessage, type Failure } from '../resilience/classify';
-import type { Decision, FallbackPlan, ModelRouter } from '../resilience/fallback';
+import {
+  WORKSPACE_UNCHANGED,
+  type Decision,
+  type FallbackPlan,
+  type ModelRouter,
+} from '../resilience/fallback';
 import type { ResolvedProfile } from '../resilience/profiles';
 import { Watchdog, type Clock } from '../resilience/watchdog';
 import type { PendingToolCall, SwageEvent } from '../client/events';
@@ -242,6 +247,19 @@ export class AgentRun {
     const profile = this.plan?.current;
     this.logger.warn(`model failure (${f.kind}): ${f.detail} -> ${decision.action}`);
     if (decision.action === 'fail') {
+      // Giving up with edits already staged: keep them reviewable instead of throwing them away
+      // (blueprint F15). Nothing is written unless the user applies it.
+      const task = this.opts.ctx.tasks.get(this.taskId);
+      const staged = task?.changeSet.stagedPaths() ?? [];
+      if (staged.length > 0 && task?.changeSet.status === 'staging' && this.opts.review) {
+        this.relaySubscription?.dispose();
+        this.setState(
+          'error',
+          `${decision.message.replace(WORKSPACE_UNCHANGED, '').trim()} The ${staged.length} staged file(s) are open for review; nothing is applied unless you apply it.`,
+        );
+        void this.opts.review(this.taskId, task.changeSet);
+        return false;
+      }
       this.fail(decision.message);
       return false;
     }

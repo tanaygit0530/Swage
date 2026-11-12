@@ -265,6 +265,24 @@ describe('router and fallback plan', () => {
     expect(plan.decide({ ...transient, retryAfterMs: 20_000 }).action).toBe('switch');
   });
 
+  it('stops handing the task back and forth after maxSwitches', () => {
+    const clock = new FakeClock();
+    const router = new ModelRouter(profiles.slice(0, 2), { clock, maxSwitches: 3 });
+    const plan = router.begin();
+    const actions: string[] = [];
+    for (let i = 0; i < 5; i++) {
+      actions.push(plan.decide({ ...transient, retryAfterMs: 15_000 }).action);
+      clock.advance(20_000); // each limit is over by the time the other model fails
+    }
+    expect(actions).toEqual(['switch', 'switch', 'switch', 'fail', 'fail']);
+    expect(plan.decide(hard)).toMatchObject({
+      action: 'fail',
+      message: expect.stringMatching(
+        /^Gave up after 3 model switches: every model kept failing, last Groq returned 401\./,
+      ),
+    });
+  });
+
   it('gives up with one clear line once the total wait would pass the cap, or a profile failed for good', () => {
     const clock = new FakeClock();
     const router = new ModelRouter(profiles.slice(0, 2), { clock, maxQuotaWaitMs: 60_000 });
