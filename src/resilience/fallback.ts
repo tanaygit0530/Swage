@@ -23,6 +23,8 @@ export type Decision =
       readonly to: ResolvedProfile;
       readonly failure: Failure;
       readonly message: string;
+      /** Wait this long before using `to` (every profile is waiting out a rate limit). */
+      readonly delayMs?: number;
     }
   | { readonly action: 'fail'; readonly message: string };
 
@@ -39,6 +41,11 @@ export interface RouterOptions {
    * while an untried profile is left: the task moves on at once. Default 10 s.
    */
   readonly maxRetryWaitMs?: number;
+  /**
+   * When every profile is waiting out a timed rate limit (a free tier's per-minute quota), the
+   * task waits for the first one to come back, up to this much waiting in total. Default 3 min.
+   */
+  readonly maxQuotaWaitMs?: number;
   readonly backoff?: BackoffOptions;
   readonly clock?: Clock;
 }
@@ -180,17 +187,28 @@ export class FallbackPlan {
     return this.tried;
   }
 
+  /** Profiles waiting out a timed rate limit in this task, with the time they come back. */
+  private readonly quotaUntil = new Map<string, number>();
+  private quotaWaitedMs = 0;
+
+  /** Tried profiles that cannot be used now: failed for good, or still inside their rate limit. */
+  private blocked(now: number): Set<string> {
+    const out = new Set<string>();
+    for (const [p] of this.tried) {
+      const until = this.quotaUntil.get(p.name);
+      if (until === undefined || until > now) out.add(p.name);
+    }
+    return out;
+  }
+
   /** What to do after a failure on the current profile. */
   decide(f: Failure): Decision {
     if (f.kind === 'fatal')
       return { action: 'fail', message: `${this.profile.label} ${f.reason}: ${f.detail}` };
+    const now = this.router.clock.now();
     const limit = f.timeout ? this.router.timeoutRetries : this.router.retries;
-    const longWait =
-      (f.retryAfterMs ?? 0) > (this.router.options.maxRetryWaitMs ?? 10_000) &&
-      this.router.next(
-        this.profile,
-        new Set([...this.tried.map(([p]) => p.name), this.profile.name]),
-      ) !== undefined;
+    // A server that asks for a long wait is not waited for on the spot: another profile goes on.
+    const longWait = (f.retryAfterMs ?? 0) > (this.router.options.maxRetryWaitMs ?? 10_000);
     if (f.kind === 'transient' && this.retriesUsed < limit && !longWait) {
       this.retriesUsed++;
       return {
@@ -203,12 +221,50 @@ export class FallbackPlan {
     const from = this.profile;
     this.tried.push([from, f]);
     this.router.recordFailure(from, f);
-    const to = this.router.next(from, new Set(this.tried.map(([p]) => p.name)));
-    if (!to) return { action: 'fail', message: allFailedMessage(this.tried) };
+    // A timed rate limit ("retry in 24s") only blocks the profile until then; a per-minute quota
+    // clears, so the profile can be used again later in the same task.
+    if (f.kind === 'transient' && f.retryAfterMs !== undefined)
+      this.quotaUntil.set(from.name, now + f.retryAfterMs);
+    else this.quotaUntil.delete(from.name);
+    const to = this.router.next(from, this.blocked(now));
+    if (to) return this.moveTo(from, to, f, switchMessage(from, to, f));
+    // Every profile is blocked. If some only wait out a rate limit, wait for the first to return.
+    let soonest: { name: string; at: number } | undefined;
+    for (const [name, at] of this.quotaUntil)
+      if (!soonest || at < soonest.at) soonest = { name, at };
+    const target = soonest && this.router.profiles.find((p) => p.name === soonest?.name);
+    const wait = soonest ? Math.max(0, soonest.at - now) : 0;
+    if (target && this.quotaWaitedMs + wait <= (this.router.options.maxQuotaWaitMs ?? 180_000)) {
+      this.quotaWaitedMs += wait;
+      return this.moveTo(
+        from,
+        target,
+        f,
+        `Every model is rate-limited; waiting ${Math.max(1, Math.round(wait / 1000))} s for ${target.label}.`,
+        wait,
+      );
+    }
+    return { action: 'fail', message: allFailedMessage(this.tried) };
+  }
+
+  private moveTo(
+    from: ResolvedProfile,
+    to: ResolvedProfile,
+    f: Failure,
+    message: string,
+    delayMs?: number,
+  ): Decision {
     this.profile = to;
     this.retriesUsed = 0;
     this.router.moveTo(to);
-    return { action: 'switch', from, to, failure: f, message: switchMessage(from, to, f) };
+    return {
+      action: 'switch',
+      from,
+      to,
+      failure: f,
+      message,
+      ...(delayMs === undefined ? {} : { delayMs }),
+    };
   }
 
   /** The current profile answered (the turn finished): it is healthy. */

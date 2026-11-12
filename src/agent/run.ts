@@ -258,6 +258,8 @@ export class AgentRun {
     this.post({ type: 'model', model: `${decision.to.label} (${decision.to.trueforgeModel})` });
     this.setState('running', decision.message);
     this.opts.onSwitch?.(decision);
+    // Every model is waiting out a rate limit: wait for the first one, then go on with the task.
+    if (decision.delayMs !== undefined && decision.delayMs > 0) await this.sleep(decision.delayMs);
     return !this.cancelRequested;
   }
 

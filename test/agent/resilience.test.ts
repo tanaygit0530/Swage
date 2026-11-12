@@ -69,7 +69,11 @@ function s(name: string, steps: ScenarioStep[]): Scenario {
   return { name, steps };
 }
 
-async function world(profiles: ProfileSpec[], retries = 2): Promise<World> {
+async function world(
+  profiles: ProfileSpec[],
+  retries = 2,
+  routerOptions: { maxRetryWaitMs?: number; maxQuotaWaitMs?: number } = {},
+): Promise<World> {
   const root = realpathSync(mkdtempSync(path.join(tmpdir(), 'swage-res-')));
   cpSync(DEMO, root, { recursive: true });
   const index = new WorkspaceIndex({ root, parser: await createParser(), cache: null });
@@ -100,7 +104,7 @@ async function world(profiles: ProfileSpec[], retries = 2): Promise<World> {
         timeouts: p.timeouts ?? FAST,
       })),
     ),
-    { retries, backoff: { baseMs: 20, maxMs: 100, jitter: 0 } },
+    { retries, backoff: { baseMs: 20, maxMs: 100, jitter: 0 }, ...routerOptions },
   );
   const posts: HostToWebview[] = [];
   const times: number[] = [];
@@ -445,6 +449,28 @@ describe('resilience with the scripted model (blueprint section 8)', () => {
     expect(w.fake.log.some((l) => l.startsWith('session.create swage-main-fallback-1'))).toBe(
       false,
     );
+  });
+
+  it('every model rate-limited (a free tier per-minute quota): waits for the first, then finishes the task', async () => {
+    // Both answer 429 "try again in 1s" once; waits over 500 ms count as long here.
+    w = await world(
+      [
+        {
+          ...GEMINI,
+          scenario: s('pq', [{ ...step(2), error: 429, errorTimes: 1 }, step(3), step(5)]),
+        },
+        {
+          ...GROQ,
+          scenario: s('fq', [{ ...step(2), error: 429, errorTimes: 1 }, step(3), step(5)]),
+        },
+      ],
+      2,
+      { maxRetryWaitMs: 500 },
+    );
+    expect(await w.run.start(REQUEST)).toBe('paused');
+    expect(notices(w)[0]).toBe('Switched to Groq because Gemini returned 429.');
+    expect(notices(w)[1]).toMatch(/^Every model is rate-limited; waiting 1 s for (Gemini|Groq)\.$/);
+    expect(of(w.posts, 'approval')[0]?.calls[0]?.name).toBe('submit_change_set');
   });
 
   it('Stop during a backoff wait cancels at once', async () => {

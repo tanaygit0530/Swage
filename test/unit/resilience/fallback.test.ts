@@ -227,7 +227,8 @@ describe('router and fallback plan', () => {
   });
 
   it('a long server-requested wait moves on to an untried profile instead of waiting', () => {
-    const router = new ModelRouter(profiles, { backoff: { baseMs: 1000, jitter: 0 } });
+    const clock = new FakeClock();
+    const router = new ModelRouter(profiles, { clock, backoff: { baseMs: 1000, jitter: 0 } });
     const quota: Failure = { ...transient, retryAfterMs: 23_756 };
     const plan = router.begin();
     expect(plan.decide(quota)).toMatchObject({ action: 'switch', to: { name: 'fallback-1' } });
@@ -236,8 +237,47 @@ describe('router and fallback plan', () => {
       delayMs: 5000,
     });
     expect(plan.decide(quota)).toMatchObject({ action: 'switch', to: { name: 'fallback-2' } });
-    // Nothing untried is left: wait as asked, then give up.
-    expect(plan.decide(quota)).toMatchObject({ action: 'retry', delayMs: 23_756 });
+  });
+
+  it('every profile rate-limited: waits for the first to come back, then uses it again (free-tier quotas)', () => {
+    const clock = new FakeClock();
+    const router = new ModelRouter(profiles.slice(0, 2), { clock });
+    const plan = router.begin();
+    // Gemini: retry in 30 s; Groq: retry in 13 s. Groq comes back first.
+    expect(plan.decide({ ...transient, retryAfterMs: 30_000 })).toMatchObject({
+      action: 'switch',
+      to: { name: 'fallback-1' },
+    });
+    clock.advance(2000);
+    expect(plan.decide({ ...transient, retryAfterMs: 13_000 })).toMatchObject({
+      action: 'switch',
+      to: { name: 'fallback-1' },
+      delayMs: 13_000,
+      message: 'Every model is rate-limited; waiting 13 s for Groq.',
+    });
+    // Later, Gemini's minute is over: a new limit on Groq moves the task back to Gemini at once.
+    clock.advance(40_000);
+    expect(plan.decide({ ...transient, retryAfterMs: 20_000 })).toMatchObject({
+      action: 'switch',
+      to: { name: 'primary' },
+      message: 'Switched to Gemini because Groq returned 429.',
+    });
+    expect(plan.decide({ ...transient, retryAfterMs: 20_000 }).action).toBe('switch');
+  });
+
+  it('gives up with one clear line once the total wait would pass the cap, or a profile failed for good', () => {
+    const clock = new FakeClock();
+    const router = new ModelRouter(profiles.slice(0, 2), { clock, maxQuotaWaitMs: 60_000 });
+    const plan = router.begin();
+    expect(plan.decide({ ...transient, retryAfterMs: 50_000 }).action).toBe('switch');
+    expect(plan.decide({ ...transient, retryAfterMs: 50_000 })).toMatchObject({
+      action: 'switch',
+      delayMs: 50_000,
+    });
+    expect(plan.decide({ ...transient, retryAfterMs: 50_000 })).toMatchObject({ action: 'fail' });
+    const hardPlan = new ModelRouter(profiles.slice(0, 2), { clock }).begin();
+    expect(hardPlan.decide(hard).action).toBe('switch');
+    expect(hardPlan.decide(hard)).toMatchObject({ action: 'fail' });
   });
 
   it('starts later tasks on the active profile and wraps to earlier ones', () => {
