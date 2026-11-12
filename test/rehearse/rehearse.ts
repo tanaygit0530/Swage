@@ -630,9 +630,27 @@ async function setModels(models: unknown): Promise<void> {
   await waitFor(() => api.models.router?.primary.trueforgeModel === want, 10_000);
 }
 
-async function taskC(id: string, original: unknown): Promise<boolean> {
+/** The statement's Task C: an endpoint that is unreachable from the start (a closed local port). */
+function closedEndpoint(): Promise<{ url: string; requests: number; close(): void }> {
+  return new Promise((resolve) => {
+    const probe = createServer();
+    probe.listen(0, '127.0.0.1', () => {
+      const addr = probe.address();
+      const port = typeof addr === 'object' && addr ? addr.port : 0;
+      probe.close(() =>
+        resolve({ url: `http://127.0.0.1:${port}/v1`, requests: 0, close: () => undefined }),
+      );
+    });
+  });
+}
+
+async function taskC(
+  id: string,
+  original: unknown,
+  mode: 'unreachable' | 'mid-task',
+): Promise<boolean> {
   await reset();
-  const endpoint = await dyingEndpoint();
+  const endpoint = mode === 'unreachable' ? await closedEndpoint() : await dyingEndpoint();
   const sdk = new TrueForge({ baseUrl: TRUEFORGE, timeoutInSeconds: 30 });
   await sdk.settings.modelProviders.createOrUpdate({
     manifest: {
@@ -697,7 +715,10 @@ async function taskC(id: string, original: unknown): Promise<boolean> {
       ok,
       summary: `${rec.switches[0] ?? 'no switch'}; ${result.kind}; Reject all; git status ${st === '' ? 'clean' : 'DIRTY'}; max lag ${maxLag} ms`,
       primary:
-        'swage-relay/primary (a local endpoint that drops the connection mid-answer, then refuses)',
+        mode === 'unreachable'
+          ? 'swage-relay/primary (TrueForge provider on a closed local port: unreachable from the start, as in the statement)'
+          : 'swage-relay/primary (a local endpoint that drops the connection mid-answer, then refuses)',
+      mode,
       fallback: FALLBACK,
       primaryRequests: endpoint.requests,
       primaryFailure,
@@ -790,6 +811,9 @@ suite('Swage rehearsal on Flask 3.1.3', function () {
 
   test('Task C: the primary becomes unreachable mid-task; automatic fallback; Reject all', async () => {
     if (!TASKS.has('c')) return;
-    for (let i = 1; i <= RUNS_C; i++) await taskC(`c-${i}`, original);
+    // Run 1 is the statement's own wording (an unreachable endpoint configured before Task A);
+    // the rest make the primary fail in the middle of its answer.
+    for (let i = 1; i <= RUNS_C; i++)
+      await taskC(`c-${i}`, original, i === 1 ? 'unreachable' : 'mid-task');
   });
 });
