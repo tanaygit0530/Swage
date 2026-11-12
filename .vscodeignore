@@ -7,4 +7,5 @@
 !media/**
 !trueforge/agents/*.json
 !README.md
+!CHANGELOG.md
 !LICENSE
