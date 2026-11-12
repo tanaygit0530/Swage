@@ -147,6 +147,22 @@ export function scrubbedEnv(
   };
 }
 
+/** Virtual environments a Python project usually keeps at its root. */
+const VENV_DIRS = ['.venv', 'venv', 'env'];
+
+/** `<root>/.venv/bin/<program>` (or Scripts\\<program>.exe on Windows) when it exists. */
+export function venvProgram(root: string, program: string): string | undefined {
+  if (!/^(pytest|py\.test|python|python3(\.\d+)?)$/.test(program)) return undefined;
+  for (const dir of VENV_DIRS) {
+    const candidate =
+      process.platform === 'win32'
+        ? path.join(root, dir, 'Scripts', `${program}.exe`)
+        : path.join(root, dir, 'bin', program);
+    if (existsSync(candidate)) return candidate;
+  }
+  return undefined;
+}
+
 /**
  * Prepares argv and env for a test command in the shadow: a relative program path such as
  * `.venv/bin/python` resolves against the real workspace (virtualenvs are not copied), Python
@@ -164,6 +180,11 @@ export function prepareCommand(
   if (program.includes('/') && !path.isAbsolute(program)) {
     const real = path.join(root, program);
     if (!existsSync(path.join(shadowDir, program)) && existsSync(real)) out[0] = real;
+  } else if (!program.includes('/') && !program.includes('\\')) {
+    // A bare `pytest` or `python` uses the workspace's virtual environment when it has one, so
+    // tests run with the project's dependencies, not whatever is first on the PATH.
+    const local = venvProgram(root, program);
+    if (local) out[0] = local;
   }
   if (runner === 'pytest') out.push('-p', 'no:cacheprovider');
   const src = path.join(shadowDir, 'src');

@@ -17,6 +17,7 @@ import {
   describeChanges,
   diffSnapshots,
   prepareCommand,
+  venvProgram,
   runProcess,
   scrubbedEnv,
   snapshot,
@@ -147,6 +148,16 @@ describe('environment and argv', () => {
       `${path.join(shadowDir, 'src')}${path.delimiter}${shadowDir}`,
     );
     expect(prepareCommand(['npm', 'test'], root, root).argv).toEqual(['npm', 'test']);
+    // A bare pytest or python uses the workspace venv (no global pytest needed on the judge's machine).
+    mkdirSync(path.join(root, '.venv', 'bin'), { recursive: true });
+    writeFileSync(path.join(root, '.venv', 'bin', 'pytest'), '');
+    expect(
+      prepareCommand(['pytest', 'tests/test_cli.py', '-q'], root, root, 'pytest').argv[0],
+    ).toBe(path.join(root, '.venv', 'bin', 'pytest'));
+    expect(prepareCommand(['python3', '-m', 'pytest'], root, root, 'pytest').argv[0]).toBe(
+      'python3',
+    );
+    expect(venvProgram(root, 'node')).toBeUndefined();
     rmSync(shadowDir, { recursive: true, force: true });
   });
 });
