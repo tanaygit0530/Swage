@@ -11,8 +11,8 @@ export const COMMAND_PREFIX = 'swage.';
 
 export const COMMANDS = [
   { id: 'swage.inlineEdit', title: 'Inline Edit' },
-  { id: 'swage.openAgent', title: 'Open Agent' },
-  { id: 'swage.stop', title: 'Stop' },
+  { id: 'swage.openAgent', title: 'Open Agent Panel' },
+  { id: 'swage.stop', title: 'Stop Run' },
   { id: 'swage.reviewChanges', title: 'Review Changes' },
   { id: 'swage.undoLastChangeSet', title: 'Undo Last Change Set' },
   { id: 'swage.switchModel', title: 'Switch Model' },

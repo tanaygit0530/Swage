@@ -1,8 +1,26 @@
 {
   "name": "swage",
   "displayName": "Swage",
-  "description": "An editor-native coding agent for VS Code whose agent loop runs on TrueForge.",
-  "version": "0.0.1",
+  "description": "Editor-native coding agent for VS Code on TrueForge: inline edits and multi-file agent runs, reviewed block by block, with undo, cancellation and automatic model fallback.",
+  "icon": "media/icon.png",
+  "galleryBanner": {
+    "color": "#C2401C",
+    "theme": "dark"
+  },
+  "preview": true,
+  "keywords": [
+    "trueforge",
+    "coding agent",
+    "inline edit",
+    "mcp",
+    "diff review",
+    "ai"
+  ],
+  "homepage": "https://github.com/tanaygit0530/Swage#readme",
+  "bugs": {
+    "url": "https://github.com/tanaygit0530/Swage/issues"
+  },
+  "version": "0.1.0",
   "publisher": "swage-dev",
   "license": "MIT",
   "private": true,
@@ -56,12 +74,12 @@
       },
       {
         "command": "swage.openAgent",
-        "title": "Open Agent",
+        "title": "Open Agent Panel",
         "category": "Swage"
       },
       {
         "command": "swage.stop",
-        "title": "Stop",
+        "title": "Stop Run",
         "category": "Swage"
       },
       {
