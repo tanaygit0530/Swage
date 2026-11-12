@@ -1,4 +1,5 @@
 import { defineConfig } from '@vscode/test-cli';
+import { userDataArgs } from './scripts/vscode-user-data.mjs';
 
 // The rehearsal (scripts/rehearse.mjs run): a test VS Code on the Flask clone, the real extension,
 // the running TrueForge and real models. No sdkFactory: nothing is scripted.
@@ -6,7 +7,7 @@ export default defineConfig({
   files: 'out/test/rehearse/**/*.test.js',
   version: 'stable',
   workspaceFolder: process.env.REHEARSE_DIR,
-  launchArgs: ['--disable-extensions'],
+  launchArgs: [...userDataArgs(), '--disable-extensions'],
   env: {
     SWAGE_TEST_API: '1',
     REHEARSE_OUT: process.env.REHEARSE_OUT ?? '',
