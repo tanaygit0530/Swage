@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { ChangeSet, type FileReader } from '../changeset/changeSet';
 import { ReadBudget } from '../context/budget';
 import type { EditableRange } from '../inline/context';
@@ -21,6 +22,20 @@ export interface Task {
   submission?: string;
   /** Inline edits only: the lines the agent may change (blueprint F13, range lock). */
   editableRange?: EditableRange;
+  /** The last run_tests: on which staged state, and whether it passed. */
+  lastTests?: { readonly fingerprint: string; readonly ok: boolean; readonly command: string };
+  /** The staged state for which submit_change_set already asked for passing tests once. */
+  submitGate?: string;
+}
+
+/** A fingerprint of the staged edits, so a test result can be matched to exactly that state. */
+export function stagedFingerprint(task: Task): string {
+  const h = createHash('sha256');
+  for (const p of task.changeSet.stagedPaths().sort()) {
+    const v = task.changeSet.staged(p);
+    h.update(`${p}\0${v?.deleted ? '<deleted>' : (v?.content ?? '')}\0`);
+  }
+  return h.digest('hex').slice(0, 16);
 }
 
 export class TaskRegistry {

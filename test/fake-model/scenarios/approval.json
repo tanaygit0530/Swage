@@ -50,6 +50,17 @@
       ]
     },
     {
+      "text": ["No test covers the docs, so I am submitting again."],
+      "toolCalls": [
+        {
+          "name": "submit_change_set",
+          "arguments": {
+            "summary": "Documented the config command; docs only, no test applies."
+          }
+        }
+      ]
+    },
+    {
       "text": ["Understood."]
     }
   ]

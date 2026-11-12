@@ -23,7 +23,13 @@ export async function runInShadow(
   call: ToolCall,
   command: string,
   argv: readonly string[],
-  options: { runner?: string; timeoutS: number; env?: Record<string, string> },
+  options: {
+    runner?: string;
+    timeoutS: number;
+    env?: Record<string, string>;
+    /** Told the exit code (null when the command timed out or did not run). */
+    onExit?: (exitCode: number | null) => void;
+  },
 ): Promise<CallToolResult> {
   const t0 = performance.now();
   const shadow = await createShadow(ctx.root, ctx.guard, call.task.changeSet);
@@ -39,6 +45,7 @@ export async function runInShadow(
       signal: call.signal,
     });
     call.signal.throwIfAborted();
+    options.onExit?.(run.timedOut ? null : run.exitCode);
     const changes = diffSnapshots(before, await snapshot(shadow.dir));
     ctx.logger.info(
       `shadow copy ${Math.round(tCopy - t0)} ms, command ${run.ms} ms, total ${Math.round(performance.now() - t0)} ms`,

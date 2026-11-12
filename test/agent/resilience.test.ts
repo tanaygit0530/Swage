@@ -229,7 +229,12 @@ describe('resilience with the scripted model (blueprint section 8)', () => {
   });
 
   it('500 that recovers on a retry: no switch', async () => {
-    const flaky = s('p500once', [{ ...step(2), error: 500, errorTimes: 1 }, step(3), step(5)]);
+    const flaky = s('p500once', [
+      { ...step(2), error: 500, errorTimes: 1 },
+      step(3),
+      step(4),
+      step(5),
+    ]);
     w = await world([
       { ...GEMINI, scenario: flaky },
       { ...GROQ, scenario: THREE },
@@ -304,7 +309,7 @@ describe('resilience with the scripted model (blueprint section 8)', () => {
   });
 
   it('a slow but healthy first token on a local profile does not fall back', async () => {
-    const slow = s('pslow', [{ ...step(2), firstTokenDelayMs: 4200 }, step(3), step(5)]);
+    const slow = s('pslow', [{ ...step(2), firstTokenDelayMs: 4200 }, step(3), step(4), step(5)]);
     w = await world([
       { ...OLLAMA, name: 'primary', scenario: slow, timeouts: { ...FAST, firstTokenMs: 8000 } },
       { ...GROQ, scenario: THREE },
@@ -323,7 +328,7 @@ describe('resilience with the scripted model (blueprint section 8)', () => {
   it('a fallback in the middle of a task carries the plan and the staged edits over', async () => {
     const [cli, tests, docs] = (step(3).toolCalls ?? []).map((c) => c);
     const primary = s('pmid', [step(2), { toolCalls: [cli as never] }, { error: 500 }]);
-    const fallback = s('fmid', [{ toolCalls: [tests as never, docs as never] }, step(5)]);
+    const fallback = s('fmid', [{ toolCalls: [tests as never, docs as never] }, step(4), step(5)]);
     w = await world(
       [
         { ...GEMINI, scenario: primary },
@@ -466,11 +471,11 @@ describe('resilience with the scripted model (blueprint section 8)', () => {
       [
         {
           ...GEMINI,
-          scenario: s('pq', [{ ...step(2), error: 429, errorTimes: 1 }, step(3), step(5)]),
+          scenario: s('pq', [{ ...step(2), error: 429, errorTimes: 1 }, step(3), step(4), step(5)]),
         },
         {
           ...GROQ,
-          scenario: s('fq', [{ ...step(2), error: 429, errorTimes: 1 }, step(3), step(5)]),
+          scenario: s('fq', [{ ...step(2), error: 429, errorTimes: 1 }, step(3), step(4), step(5)]),
         },
       ],
       2,

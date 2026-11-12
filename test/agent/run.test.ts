@@ -98,6 +98,11 @@ describe('agent run with the scripted model', () => {
     expect(await h.run.decide(call?.toolCallId ?? '', true)).toBe('done');
     expect(h.ctx.tasks.get(h.run.taskId)?.changeSet.status).toBe('submitted');
     expect(allText(h.posts)).toContain('Understood.');
+    // The first submit had no passing run_tests: Swage declined it and the agent submitted again.
+    expect(of(h.posts, 'notice').map((n) => n.message)).toEqual([
+      'Swage asked the agent to pass run_tests before showing the change set.',
+    ]);
+    expect(allText(h.posts)).toContain('No test covers the docs, so I am submitting again.');
     expect(h.fake.log).toContain('turn user.tool_approval');
   });
 

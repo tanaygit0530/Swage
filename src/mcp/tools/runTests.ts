@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { classifyCommand } from '../../safety/commandPolicy';
 import { runTool, ToolError, type ToolContext } from '../context';
 import type { ToolRegistration } from '../server';
+import { stagedFingerprint } from '../tasks';
 import { DEFAULT_TIMEOUT_S, MAX_TIMEOUT_S, runInShadow } from './exec';
 
 /**
@@ -40,9 +41,14 @@ export const runTests: ToolRegistration = (server, ctx: ToolContext) => {
             `${decision.reason} run_tests only runs allowlisted test commands; use run_command for anything else.`,
           );
         }
+        const fingerprint = stagedFingerprint(call.task);
         return runInShadow(ctx, call, args.command, decision.argv, {
           runner: decision.runner,
           timeoutS: args.timeout_seconds ?? DEFAULT_TIMEOUT_S,
+          // Remembered for submit_change_set's test gate.
+          onExit: (code) => {
+            call.task.lastTests = { fingerprint, ok: code === 0, command: args.command };
+          },
         });
       },
     ),

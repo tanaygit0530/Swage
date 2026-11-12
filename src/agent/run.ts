@@ -16,6 +16,7 @@ import type { PendingToolCall, SwageEvent } from '../client/events';
 import { DEFAULT_BUDGETS, type Budgets } from '../context/budget';
 import type { ChangeSet } from '../changeset/changeSet';
 import type { ApprovalList, ToolContext } from '../mcp/context';
+import { stagedFingerprint } from '../mcp/tasks';
 import type { Logger } from '../supervisor/supervisor';
 import { parseToolArgs, summarizeArgs, type HostToWebview, type RunState } from '../ui/protocol';
 import type { EditableRange } from '../inline/context';
@@ -491,6 +492,32 @@ export class AgentRun {
     if (event.paused && pending.length > 0) {
       this.pending = pending.map((p) => ({ ...p }));
       const task = this.opts.ctx.tasks.get(this.taskId);
+      // Test gate (blueprint F13): edits are not put in front of the user before they passed
+      // run_tests once. The first submit of an untested or failing state is declined with the
+      // reason; submitting the same edits again opens the review (for changes no test covers).
+      const submit = this.pending.find((p) => p.name === 'submit_change_set');
+      if (submit && task && this.pending.length === 1) {
+        const fingerprint = stagedFingerprint(task);
+        const tested = task.lastTests;
+        if (
+          !(tested?.fingerprint === fingerprint && tested.ok) &&
+          task.submitGate !== fingerprint
+        ) {
+          task.submitGate = fingerprint;
+          this.post({
+            type: 'notice',
+            tone: 'info',
+            message: 'Swage asked the agent to pass run_tests before showing the change set.',
+          });
+          this.declineInternally(
+            submit,
+            tested?.fingerprint === fingerprint
+              ? `Not submitted: run_tests failed on these exact staged edits (${tested.command}). Fix the failure, run the tests again, then call submit_change_set. If the failure is unrelated to this change, call submit_change_set again and say why in the summary.`
+              : 'Not submitted: no passing run_tests on the current staged edits. Run the relevant tests with run_tests (for example the test file you changed), fix any failure, then call submit_change_set. If no test applies, call submit_change_set again and say why in the summary.',
+          );
+          return;
+        }
+      }
       this.post({
         type: 'approval',
         calls: this.pending.map((p) => ({
@@ -500,7 +527,6 @@ export class AgentRun {
           summary: this.approvalSummary(p, task?.changeSet.review() ?? []),
         })),
       });
-      const submit = this.pending.find((p) => p.name === 'submit_change_set');
       if (submit && this.opts.review && task) {
         this.setState(
           'paused',
@@ -591,6 +617,18 @@ export class AgentRun {
     this.setState('running', 'Running…');
     void this.runTurnWithApprovals(decisions);
     return resumed;
+  }
+
+  /**
+   * Declines one pending call without asking the user and resumes the turn (the test gate). The
+   * run stays running: no approval card is shown and start()'s outcome is not resolved early.
+   */
+  private declineInternally(call: PendingApproval, reason: string): void {
+    this.pending = [];
+    this.setState('running', 'Asking the agent to pass run_tests before review…');
+    void this.runTurnWithApprovals([
+      { threadId: call.threadId, toolCallId: call.toolCallId, allow: false, reason },
+    ]);
   }
 
   private async runTurnWithApprovals(decisions: ApprovalDecision[]): Promise<void> {
