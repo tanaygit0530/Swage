@@ -39,6 +39,8 @@
     "smoke": "node scripts/run.mjs scripts/smoke.ts",
     "fake-model": "node scripts/run.mjs scripts/fake-model.ts",
     "spike": "node scripts/run.mjs",
+    "scan:secrets": "node scripts/secret-scan.mjs",
+    "check:licences": "node scripts/licence-check.mjs",
     "break-primary": "node scripts/run.mjs scripts/break-primary.ts",
     "restore-primary": "node scripts/run.mjs scripts/restore-primary.ts",
     "screenshots": "npm run build && node scripts/screenshots.mjs",
