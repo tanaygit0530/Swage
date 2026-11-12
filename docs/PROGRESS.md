@@ -486,3 +486,43 @@ What this means with the production timers (S7 measured TrueForge reporting 401 
 - Recovery probes cost one tiny request every 2 minutes per failed profile while on a fallback (at most 30 per profile).
 - `restore-primary` gives back the same values, but jsonc-parser rewrites the primary entry as a multi-line object.
 - Still open from earlier phases: reload safety (F11), session log export (F12), Open TrueForge session (F17) and the performance report (F18).
+
+## Phase 9: Round 1 deliverables (12 November 2026)
+
+Blueprint sections 10, 13, 16 and 17.
+
+### Built
+
+- **`README.md`**: what Swage is, screenshots, requirements, a copy-paste quick start, model profiles, where each of the five required capabilities lives in the code, limitations, and a "no keys in this repository" note.
+- **`docs/WRITEUP.md`**: the eight required headings within the section 13 word budget (about 810 words plus the diagram and three tables), with measured numbers. Team details and the scorecard's video timestamps are left for the team to fill in.
+- **`docs/DEMO_SCRIPT.md`**: a 3:45 shot list with exact commands and instructions, and what each rubric point needs on screen.
+- **`docs/RELEASE.md`**: how to build `swage-0.1.0.vsix` and attach it to a draft release, without publishing.
+- **`docs/EVIDENCE.md`**: generated from `docs/evidence`, marked partial until testing resumes. Medians now cover passed runs only.
+- **Security:**
+  - `npm run scan:secrets` reads every blob in the git history plus the working tree. Result: 133 commits, 1,009 blobs, no secrets, and a canary of each real key format is caught.
+  - `npm run check:licences`: all 104 shipped packages are MIT, ISC or BSD.
+  - Both run in a new CI job with the full history.
+- **Polish:**
+  - A Marketplace icon matching the activity-bar glyph, version 0.1.0 with banner, keywords and links, and the `CHANGELOG.md`.
+  - Command titles "Open Agent Panel" and "Stop Run".
+  - Agent panel secondary text uses `descriptionForeground` instead of opacity; controls have focus rings, buttons draw the high-contrast border, and reduced motion is respected.
+
+### Tested
+
+- **Quick start on a fresh clone from GitHub in a temporary folder:**
+  - `npm ci` took 39 s; `npm run build` passed; 508 unit tests passed.
+  - `npm run package` gave 18 files, 1 MB.
+  - The VSIX installed into an isolated VS Code profile, and the log shows "Swage activated in 2 ms".
+  - `trueforge/start.sh` was healthy on a spare port in about 8 s, with the UI answering HTTP 200.
+  - `npm run test:integration`: 8 passing, including Doctor against the live TrueForge.
+- **Fixed from that run:**
+  - Integration tests failed with "listen EINVAL" when the clone sat in a deep folder: VS Code's socket path exceeded the macOS limit. The test configurations now use a short user-data folder when needed.
+  - The README now says what to do when `code` is not on PATH.
+
+### Open (by hand)
+
+- Record the video following `docs/DEMO_SCRIPT.md`; fill in the scorecard timestamps and the team details in `docs/WRITEUP.md`.
+- Export the write-up to PDF (at most 3 pages) and host it at a public link.
+- Make the repository public, create the draft release if wanted, and submit the three links in the Techfest portal before 20 November 2026, 23:59 IST.
+- Testing deferred: the final rehearsal (`node scripts/rehearse.mjs run`), then regenerate `docs/EVIDENCE.md`.
+- CI runs on Ubuntu only (section 13 asks for three operating systems), and the light-theme panel colours were not checked on screen.
