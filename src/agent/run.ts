@@ -505,6 +505,16 @@ export class AgentRun {
     const task = this.opts.ctx.tasks.get(this.taskId);
     const staged = task?.changeSet.stagedPaths() ?? [];
     const submitted = task?.changeSet.status === 'submitted';
+    if (staged.length > 0 && !submitted && task && this.opts.review) {
+      // The agent stopped (step limit, or it gave up) without submitting: its staged edits are
+      // still reviewable, never lost and never written without the user (blueprint F15).
+      this.setState(
+        'done',
+        `The agent stopped without submitting. Review the ${staged.length} staged file(s): apply what you want, or discard.`,
+      );
+      void this.opts.review(this.taskId, task.changeSet);
+      return;
+    }
     this.setState(
       'done',
       staged.length > 0 && !submitted

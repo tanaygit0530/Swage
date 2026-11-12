@@ -1,7 +1,7 @@
 import { cpSync, mkdtempSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
-import { AgentRun, type AgentView } from '../../src/agent/run';
+import { AgentRun, type AgentRunOptions, type AgentView } from '../../src/agent/run';
 import { EventRelay } from '../../src/agent/relay';
 import { SwageClient } from '../../src/client/client';
 import { Bm25Searcher } from '../../src/context/bm25';
@@ -35,6 +35,7 @@ export interface AgentHarness {
 export async function startAgent(
   scenario: string | Scenario,
   options: Partial<Omit<FakeTrueForgeOptions, 'scenario' | 'mcp'>> = {},
+  runOptions: Partial<Pick<AgentRunOptions, 'review'>> = {},
 ): Promise<AgentHarness> {
   const script = typeof scenario === 'string' ? scenarios.get(scenario) : scenario;
   if (!script) throw new Error(`unknown scenario ${String(scenario)}`);
@@ -75,6 +76,7 @@ export async function startAgent(
     view,
     logger,
     drainTimeoutMs: 20_000,
+    ...runOptions,
   });
   return {
     root,

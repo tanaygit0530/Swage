@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { buildFirstMessage } from '../../src/agent/context';
 import { EventRelay } from '../../src/agent/relay';
 import type { HostToWebview } from '../../src/ui/protocol';
+import { loadScenarios, type Scenario } from '../fake-model/scenario';
 import { treeHash } from '../mcp/harness';
 import { startAgent, type AgentHarness } from './harness';
 
@@ -107,5 +108,41 @@ describe('agent run edge cases', () => {
     expect(h.run.session).toBeUndefined();
     expect(h.run.request).toBe('Anything.');
     await h.run.cancel();
+  });
+});
+
+describe('the agent stops without submitting (blueprint F15)', () => {
+  it('opens the review for its staged edits instead of dropping them', async () => {
+    const reviewed: string[][] = [];
+    const three = loadScenarios().find((x) => x.name === 'three-file-edit');
+    if (!three) throw new Error('scenario');
+    // Declare, stage three files, then stop talking: no run_tests, no submit_change_set.
+    const scenario = {
+      name: 'no-submit',
+      steps: [three.steps[2], three.steps[3], { text: ['I am out of steps.'] }],
+    } as Scenario;
+    const x = await startAgent(
+      scenario,
+      {},
+      {
+        review: (_taskId, changeSet) => {
+          reviewed.push(changeSet.stagedPaths().sort());
+          return new Promise(() => undefined);
+        },
+      },
+    );
+    try {
+      const before = treeHash(x.root);
+      expect(await x.run.start('Add a config command')).toBe('done');
+      expect(reviewed).toEqual([['app/cli.py', 'docs/cli.md', 'tests/test_cli.py']]);
+      const last = x.posts.filter((p) => p.type === 'status').at(-1);
+      expect(last).toMatchObject({
+        state: 'done',
+        message: expect.stringMatching(/stopped without submitting\. Review the 3 staged file/),
+      });
+      expect(treeHash(x.root)).toBe(before);
+    } finally {
+      await x.close();
+    }
   });
 });
