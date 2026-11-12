@@ -1,0 +1,19 @@
+{
+  "id": "b-2",
+  "at": "2026-11-11T16:01:24.772Z",
+  "task": "B",
+  "instruction": "Add a new built-in CLI command flask config that prints the loaded application's configuration as JSON, masking the values of any key containing SECRET, PASSWORD, TOKEN or KEY as \"***\". It must appear in flask --help, be covered by a test, and be documented alongside the other built-in commands.",
+  "model": "google-gemini/gemini-3-5-flash-lite",
+  "toReviewMs": 6,
+  "ok": false,
+  "summary": "no change set to review (run starting)",
+  "runState": "starting",
+  "retrievalHits": [],
+  "maxEventLoopLagMs": 0,
+  "tools": [],
+  "toolSequence": [],
+  "tokens": 0,
+  "turns": 0,
+  "switches": [],
+  "modelErrors": []
+}

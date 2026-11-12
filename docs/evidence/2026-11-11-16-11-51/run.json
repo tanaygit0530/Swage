@@ -1,0 +1,21 @@
+{
+  "runId": "2026-11-11-16-11-51",
+  "swageCommit": "19d6ec7f706fd793d24da9c39b8fdba00a378855",
+  "swageDirty": false,
+  "trueforge": "0.184.2",
+  "profiles": [
+    {
+      "name": "primary",
+      "label": "Gemini Flash Lite (latest)",
+      "kind": "hosted",
+      "trueforgeModel": "google-gemini/gemini-flash-lite-latest"
+    },
+    {
+      "name": "fallback-1",
+      "label": "Gemini 3.5 Flash Lite",
+      "kind": "hosted",
+      "trueforgeModel": "google-gemini/gemini-3-5-flash-lite"
+    }
+  ],
+  "tasks": "cancel,a,toggle,undo,b,c"
+}

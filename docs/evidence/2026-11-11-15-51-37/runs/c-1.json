@@ -1,0 +1,53 @@
+{
+  "id": "c-1",
+  "at": "2026-11-11T16:06:04.677Z",
+  "task": "C",
+  "instruction": "Treat the values 'off' and 'n' as false as well, case-insensitively, and update the docstring to list every value that is treated as false.",
+  "ok": true,
+  "summary": "Switched to Gemini because the primary refused the connection.; review; Reject all; git status clean; max lag 33 ms",
+  "primary": "swage-relay/primary (a local endpoint that drops the connection mid-answer, then refuses)",
+  "fallback": "google-gemini/gemini-flash-lite-latest",
+  "primaryRequests": 1,
+  "primaryFailure": {
+    "kind": "hard",
+    "reason": "refused the connection",
+    "detail": "[Model Error] Cannot connect to API: connect ECONNREFUSED 127.0.0.1:52141"
+  },
+  "activeAfter": "fallback-1",
+  "outcome": "review",
+  "blocks": 2,
+  "startToDiffMs": 30485,
+  "rejectedAll": true,
+  "maxEventLoopLagMs": 33,
+  "gitStatusAfter": "",
+  "tools": [
+    {
+      "name": "declare_context",
+      "ms": 21,
+      "error": false,
+      "args": "{\"plan\":[\"Declare context and stage edit for get_debug_flag function.\"],\"files\":[{\"path\":\"src/flask/helpers.py\",\"reason\":\"inline edit of lines 28-33 to include off and n as false values and update docstring\"}]}"
+    },
+    {
+      "name": "stage_edit",
+      "ms": 42,
+      "error": false,
+      "args": "{\"edits\":[{\"replace\":\"def get_debug_flag() -> bool:\\n    \\\"\\\"\\\"Get whether debug mode should be enabled for the app, indicated by the\\n    :envvar:`FLASK_DEBUG` environment variable. The default is ``False``.\\n    Values '0', 'false', 'no', 'off', and 'n' are treated as false.\\n    \\\"\\\"\\\"\\n    val = os.environ.get(\\\"FLASK_DEBUG\\\")\\n    return bool(val and val.lower() not in {\\\"0\\\", \\\"false\\\", \\\"no\\\", \\\"off\\\", \\\"n\\\"})\",\"find\":\"def get_debug_flag() -> bool:\\n    \\\"\\\"\\\"Get whether debug mode should be enabled for the app, indicated by the\\n    :envvar:`FLASK_DEBUG` environment variable. The default is ``False``.\\n    \\\"\\\"\\\"\\n    val = os.environ.get(\\\"FLASK_DEBUG\\\")\\n    return bool(val and val.lower() not in {\\\"0\\\", \\\"false\\\", \\\"no\\\"})\"}],\"path\":\"src/flask/helpers.py\",\"kind\":\"edit\"}"
+    }
+  ],
+  "toolSequence": [
+    "declare_context",
+    "stage_edit"
+  ],
+  "tokens": 12711,
+  "turns": 0,
+  "switches": [
+    "Switched to Gemini because the primary refused the connection."
+  ],
+  "modelErrors": [
+    "[Model Error] Request failed (200): Failed to process successful response: Failed to process successful response: terminated: other side closed",
+    "[Model Error] Cannot connect to API: connect ECONNREFUSED 127.0.0.1:52141",
+    "[Model Error] Request failed (429): You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://aistudio.google.com/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. \n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_input_token_count, limit: 250000, model: gemini-3.5-flash-lite, description: Generate content input tokens per minute limit exceeded on Free Tier. See https://aistudio.google.com/docs/rate-limits.\nPlease retry in 19.69720181s.",
+    "[Model Error] Request failed (429): You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://aistudio.google.com/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. \n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_input_token_count, limit: 250000, model: gemini-3.5-flash-lite, description: Generate content input tokens per minute limit exceeded on Free Tier. See https://aistudio.google.com/docs/rate-limits.\nPlease retry in 14.348097809s."
+  ],
+  "firstEventMs": 82
+}

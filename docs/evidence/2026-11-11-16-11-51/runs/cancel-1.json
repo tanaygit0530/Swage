@@ -1,0 +1,21 @@
+{
+  "id": "cancel-1",
+  "at": "2026-11-11T16:12:29.779Z",
+  "task": "cancel",
+  "ok": true,
+  "summary": "cancelled: Cancelled. Workspace unchanged.; Stop to UI 1 ms; git status clean",
+  "outcome": "cancelled",
+  "message": "Cancelled. Workspace unchanged.",
+  "stopToUiMs": 1,
+  "stoppedAfter": {
+    "text": 0,
+    "tools": 0
+  },
+  "gitStatusAfter": "",
+  "tools": [],
+  "toolSequence": [],
+  "tokens": 0,
+  "turns": 0,
+  "switches": [],
+  "modelErrors": []
+}

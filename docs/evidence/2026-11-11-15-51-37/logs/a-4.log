@@ -1,0 +1,6 @@
+   8703 ms  tool declare_context {"files":[{"path":"src/flask/helpers.py","reason":"inline edit of lines 28-33"}],"plan":["Update get_debug_flag to treat 'off' and 'n' as false case-insensitively and update docstring."]}
+   8723 ms  result declare_context (257 chars) Context declared: 1 file(s). You can now stage edits to these files with stage_edit. Plan: 1. Update get_debug_flag to treat 'off' and 'n' as false case-insensitively and update docstring. Files: - src/flask/helpers.py (existing): inline edit of lines 28-33
+  11044 ms  tool stage_edit {"path":"src/flask/helpers.py","kind":"edit","edits":[{"replace":"def get_debug_flag() -> bool:\n    \"\"\"Get whether debug mode should be enabled for the app, indicated by the\n    :envvar:`FLASK_DEBUG` environment variable. The default is ``False``.\n    Values ``\"0\"``, ``\"false\"``, ``\"no\"``, ``\"off\"``, and ``\"n\"`` are\n    considered false.\n    \"\"\"\n    val = os.environ.get(\"FLA
+  11065 ms  result stage_edit (163 chars) Staged modify of src/flask/helpers.py: 2 block(s), +3 -1 lines. Nothing is written to disk until the user reviews and accepts. Staged so far: src/flask/helpers.py.
+  12624 ms  turn done, 7515 tokens
+model text: Updated `get_debug_flag` and its docstring to treat 'off' and 'n' as false case-insensitively.

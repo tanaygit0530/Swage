@@ -1,0 +1,20 @@
+{
+  "id": "a-5",
+  "at": "2026-11-11T16:01:25.041Z",
+  "task": "A",
+  "instruction": "Treat the values 'off' and 'n' as false as well, case-insensitively, and update the docstring to list every value that is treated as false.",
+  "selection": "src/flask/helpers.py lines 28-33",
+  "model": "google-gemini/gemini-3-5-flash-lite",
+  "outcome": "refused",
+  "instructionToDiffMs": 12706,
+  "wallToReviewMs": 0,
+  "ok": false,
+  "summary": "refused: Swage is already running. Stop it first (Escape).",
+  "reason": "Swage is already running. Stop it first (Escape).",
+  "tools": [],
+  "toolSequence": [],
+  "tokens": 0,
+  "turns": 0,
+  "switches": [],
+  "modelErrors": []
+}
