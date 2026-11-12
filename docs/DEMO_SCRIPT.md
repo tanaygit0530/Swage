@@ -15,7 +15,7 @@ Target length 3:45, leaving 15 s of margin. Record at 1080p, with the editor fon
    ```bash
    cd ../flask && git checkout 3.1.3 && git status
    ```
-   It must show a clean tree at commit `22d92470`. The `.venv` has Flask installed in editable mode and pytest 9.0.2 (see `node scripts/rehearse.mjs setup` for the pinned list).
+   It must show a clean tree at commit `22d92470`. If `.venv/` shows as untracked (Python older than 3.13 does not ignore its own venv), run `echo '*' > .venv/.gitignore`. The `.venv` has Flask installed in editable mode and pytest 9.0.2 (see `node scripts/rehearse.mjs setup` for the pinned list).
 3. **Profiles:** `../flask/.vscode/settings.json` holds `swage.models`, with a fast primary and a working fallback. The rehearsal used `gemini-flash-lite-latest` and `gemini-3-5-flash-lite`. Warm both up with one inline edit each, then Undo.
 4. **Swage:** press F5 and pick **Run Swage on Flask (../flask)**. Run **Swage: Doctor**; every row must be green. Keep the report tab open for the title shot.
 5. **Housekeeping:**

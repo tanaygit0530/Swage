@@ -149,6 +149,9 @@ function setup() {
     say(`Creating .venv with ${base} (${pythonVersion(base)})`);
     sh(base, ['-m', 'venv', '.venv'], { cwd: dir });
   }
+  // Python 3.13+ writes .venv/.gitignore ("*") itself; older ones do not, and the venv would show
+  // in `git status` as an untracked folder, which Task C must show clean.
+  writeFileSync(path.join(dir, '.venv', '.gitignore'), '*\n');
   // Old pips (21.x ships with Python 3.9) cannot install a pyproject.toml project in editable mode.
   sh(
     python,

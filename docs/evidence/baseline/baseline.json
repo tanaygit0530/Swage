@@ -21,14 +21,14 @@
   ],
   "suite": {
     "ok": true,
-    "summary": "490 passed in 0.99s",
-    "ms": 1180
+    "summary": "490 passed in 0.77s",
+    "ms": 959
   },
   "testCli": {
     "ok": true,
     "summary": "58 passed in 0.09s",
-    "ms": 263
+    "ms": 272
   },
-  "swageCommit": "1340824a47585f9a15699c62ecb27b8f8656bb68",
-  "at": "2026-11-12T05:50:31.739Z"
+  "swageCommit": "e5da2f380c9cf90c434058b945c10eb0344d6c82",
+  "at": "2026-11-12T05:51:46.257Z"
 }
