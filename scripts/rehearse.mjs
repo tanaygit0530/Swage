@@ -11,7 +11,7 @@
 // Options: --dir <flask clone> (default: <tmp>/swage-rehearsal/flask-3.1.3), --profiles <yaml>
 // TrueForge must be running (trueforge/start.sh) for `run`. No key is read or printed.
 import { execFileSync, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 
@@ -63,6 +63,40 @@ export function redact(text) {
     .replace(/((?:api[_-]?key|token|secret|password)["'\s:=]+)[^\s"',}]{6,}/gi, '$1***');
 }
 
+function pythonVersion(exe) {
+  const r = spawnSync(exe, ['-c', 'import sys; print("%d.%d.%d" % sys.version_info[:3])'], {
+    encoding: 'utf8',
+  });
+  return r.status === 0 ? r.stdout.trim() : undefined;
+}
+
+function pythonOk(exe) {
+  const v = pythonVersion(exe);
+  if (!v) return false;
+  const [major, minor] = v.split('.').map(Number);
+  return major > 3 || (major === 3 && minor >= 10);
+}
+
+/** The first Python 3.10+ among SWAGE_PYTHON, versioned names on PATH, python3, and usual installs. */
+function findPython() {
+  const home = process.env.HOME ?? '';
+  const candidates = [
+    process.env.SWAGE_PYTHON,
+    'python3.13',
+    'python3.12',
+    'python3.11',
+    'python3.10',
+    'python3',
+    '/opt/homebrew/bin/python3',
+    '/usr/local/bin/python3',
+    '/opt/anaconda3/bin/python3',
+    '/opt/miniconda3/bin/python3',
+    path.join(home, 'anaconda3', 'bin', 'python3'),
+    path.join(home, 'miniconda3', 'bin', 'python3'),
+  ].filter(Boolean);
+  return candidates.find((c) => pythonOk(c));
+}
+
 function pytest(argv = []) {
   const t0 = Date.now();
   const r = spawnSync(python, ['-m', 'pytest', '-q', '-p', 'no:cacheprovider', ...argv], {
@@ -102,7 +136,25 @@ function setup() {
   );
 
   step(2, 'Virtual environment with Flask (editable) and its pinned test dependencies');
-  if (!existsSync(python)) sh('python3', ['-m', 'venv', '.venv'], { cwd: dir });
+  // pytest 9.0.2 (Flask's pin) needs Python 3.10 or newer, and macOS's /usr/bin/python3 is 3.9.
+  // Use the newest 3.10+ interpreter found, and replace a venv built on an older one.
+  if (existsSync(python) && !pythonOk(python))
+    rmSync(path.join(dir, '.venv'), { recursive: true, force: true });
+  if (!existsSync(python)) {
+    const base = findPython();
+    if (!base)
+      throw new Error(
+        'No Python 3.10 or newer found. Install one, or set SWAGE_PYTHON to its path.',
+      );
+    say(`Creating .venv with ${base} (${pythonVersion(base)})`);
+    sh(base, ['-m', 'venv', '.venv'], { cwd: dir });
+  }
+  // Old pips (21.x ships with Python 3.9) cannot install a pyproject.toml project in editable mode.
+  sh(
+    python,
+    ['-m', 'pip', 'install', '--quiet', '--disable-pip-version-check', '--upgrade', 'pip'],
+    { cwd: dir },
+  );
   sh(
     python,
     ['-m', 'pip', 'install', '--quiet', '--disable-pip-version-check', '-e', '.', ...TEST_DEPS],
