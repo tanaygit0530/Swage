@@ -56,6 +56,8 @@ trueforge/start.sh
   code --install-extension swage-0.1.0.vsix
   ```
 
+  If `code` is not found, run **Shell Command: Install 'code' command in PATH** from VS Code's command palette, or use **Extensions → … → Install from VSIX…** instead.
+
 **5. Point Swage at your models.** In the window where Swage runs, open the folder you want to work on, then add this to its `.vscode/settings.json` (or to your user settings). Use the model names from step 3.
 
 ```json
