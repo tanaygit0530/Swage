@@ -627,6 +627,11 @@ export class AgentRun {
     );
   }
 
+  /** Calls waiting for the user's approval (the panel shows them as cards). */
+  get pendingCalls(): readonly { toolCallId: string; name: string }[] {
+    return this.pending.map((p) => ({ toolCallId: p.toolCallId, name: p.name }));
+  }
+
   /** The TrueForge session id, once created. */
   get session(): string | undefined {
     return this.sessionId;

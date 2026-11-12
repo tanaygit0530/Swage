@@ -464,20 +464,37 @@ async function taskB(id: string, opts: { keep?: boolean } = {}): Promise<boolean
   void api.startRun(TASK_B);
   // Wait for this run to exist before reading its state (the last run's state is still "done").
   const started = await waitFor(() => api.runTaskId() !== previous, 120_000);
-  const reviewed =
-    started &&
-    (await waitFor(
-      () =>
-        api.review.current !== undefined ||
-        ['done', 'error', 'cancelled'].includes(api.runState() ?? ''),
-      15 * 60_000,
-    ));
+  // Wait for the change set; answer any other approval card (a run_command) with a denial, as a
+  // cautious user would, so the agent goes on with run_tests instead of waiting forever.
+  const denied: string[] = [];
+  const deadline = Date.now() + 15 * 60_000;
+  let reviewed = false;
+  while (started && Date.now() < deadline) {
+    if (api.review.current !== undefined) {
+      reviewed = true;
+      break;
+    }
+    const state = api.runState() ?? '';
+    if (['done', 'error', 'cancelled'].includes(state)) {
+      reviewed = true;
+      break;
+    }
+    if (state === 'paused')
+      denied.push(
+        ...(await api.decidePending(
+          false,
+          'Not approved in this rehearsal. Use run_tests to run the tests.',
+        )),
+      );
+    await sleep(500);
+  }
   const toReviewMs = rec.ms;
   const base: Record<string, unknown> = {
     task: 'B',
     instruction: TASK_B,
     model: api.models.router?.active.trueforgeModel,
     toReviewMs,
+    approvalsDenied: denied,
   };
   const declared = rec.tools.find((t) => t.name === 'declare_context')?.args;
   const hits = retrievalHits(rec);
@@ -778,7 +795,11 @@ suite('Swage rehearsal on Flask 3.1.3', function () {
   test('Task B: agent mode on files it finds itself, apply, tests', async () => {
     if (!TASKS.has('b')) return;
     const n = TASKS.has('undo') ? RUNS_B - 1 : RUNS_B;
-    for (let i = 1; i <= n; i++) await taskB(`b-${i}`);
+    for (let i = 1; i <= n; i++) {
+      // A minute between runs lets a free tier's input-tokens-per-minute limit recover.
+      if (i > 1) await sleep(60_000);
+      await taskB(`b-${i}`);
+    }
   });
 
   test('Double undo: Task A and Task B applied, then Undo twice', async () => {

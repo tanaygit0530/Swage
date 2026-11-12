@@ -281,6 +281,18 @@ export class AgentController implements vscode.WebviewViewProvider, vscode.Dispo
     return this.run?.taskId;
   }
 
+  /**
+   * Answers every pending approval card except the change-set review (tests; the panel does
+   * this one card at a time). Returns the names of the calls decided.
+   */
+  async decidePending(allow: boolean, reason?: string): Promise<string[]> {
+    const run = this.run;
+    if (!run) return [];
+    const calls = run.pendingCalls.filter((c) => !run.isReviewCall(c.toolCallId));
+    for (const c of calls) await this.trackBusy(run.decide(c.toolCallId, allow, reason));
+    return calls.map((c) => c.name);
+  }
+
   /** State of the current run, for tests and the status bar. */
   get runState(): string | undefined {
     return this.run?.state;

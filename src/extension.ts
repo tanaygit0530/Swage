@@ -19,6 +19,7 @@ export interface SwageTestApi {
   startRun(prompt: string): Promise<void>;
   runState(): string | undefined;
   runTaskId(): string | undefined;
+  decidePending(allow: boolean, reason?: string): Promise<string[]>;
   resetRuntime(): Promise<void>;
   onRunEvent(listener: (e: RunEventRecord) => void): vscode.Disposable;
   readonly review: ReviewController;
@@ -86,6 +87,7 @@ export function activate(context: vscode.ExtensionContext): SwageTestApi | undef
     startRun: (prompt) => agent.start(prompt),
     runState: () => agent.runState,
     runTaskId: () => agent.runTaskId,
+    decidePending: (allow, reason) => agent.decidePending(allow, reason),
     resetRuntime: () => agent.resetRuntime(),
     onRunEvent: (listener) => agent.onRunEvent(listener),
     review: reviewer,
