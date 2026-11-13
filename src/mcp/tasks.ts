@@ -26,6 +26,8 @@ export interface Task {
   lastTests?: { readonly fingerprint: string; readonly ok: boolean; readonly command: string };
   /** The staged state for which submit_change_set already asked for passing tests once. */
   submitGate?: string;
+  /** The staged state for which submit_change_set was already sent back for unstaged declared files. */
+  coverageGate?: string;
 }
 
 /** A fingerprint of the staged edits, so a test result can be matched to exactly that state. */

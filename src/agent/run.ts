@@ -636,6 +636,29 @@ export class AgentRun {
       // run_tests once. The first submit of an untested or failing state is declined with the
       // reason; submitting the same edits again opens the review (for changes no test covers).
       const submit = this.pending.find((p) => p.name === 'submit_change_set');
+      // Plan gate: the agent declared a file it meant to change (often the test) and then
+      // submitted without staging it, for example after a model switch. Sent back once with the
+      // file names; submitting the same edits again goes on (a declared file may need no change).
+      if (submit && task && this.pending.length === 1) {
+        const fingerprint = stagedFingerprint(task);
+        const staged = new Set(task.changeSet.stagedPaths());
+        const missing = task.changeSet.declaredContext.files.filter((f) => !staged.has(f.path));
+        if (staged.size > 0 && missing.length > 0 && task.coverageGate !== fingerprint) {
+          task.coverageGate = fingerprint;
+          const list = missing.map((f) => `${f.path} (${f.reason})`).join('; ');
+          this.post({
+            type: 'notice',
+            tone: 'info',
+            message: `Swage asked the agent to finish the plan: no edit staged yet for ${missing.map((f) => f.path).join(', ')}.`,
+          });
+          this.declineInternally(
+            submit,
+            `Not submitted: you declared these files but staged no edit to them: ${list}. Stage the planned change (for example the test the task asks for), run the tests, then call submit_change_set. If a file needs no change after all, call submit_change_set again and say why in the summary.`,
+            'Asking the agent to finish the declared plan before review…',
+          );
+          return;
+        }
+      }
       if (submit && task && this.pending.length === 1) {
         const fingerprint = stagedFingerprint(task);
         const tested = task.lastTests;
@@ -785,10 +808,14 @@ export class AgentRun {
    * Declines one pending call without asking the user and resumes the turn (the test gate). The
    * run stays running: no approval card is shown and start()'s outcome is not resolved early.
    */
-  private declineInternally(call: PendingApproval, reason: string): void {
+  private declineInternally(
+    call: PendingApproval,
+    reason: string,
+    message = 'Asking the agent to pass run_tests before review…',
+  ): void {
     this.resumeInternally(
       [{ threadId: call.threadId, toolCallId: call.toolCallId, allow: false, reason }],
-      'Asking the agent to pass run_tests before review…',
+      message,
     );
   }
 

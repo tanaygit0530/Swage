@@ -148,3 +148,58 @@ describe('Planning mode: re-declarations', () => {
     expect(plans[1]?.files.map((f) => f.path)).toEqual(['app/cli.py', 'docs/cli.md']);
   });
 });
+
+describe('plan gate: declared files left unstaged', () => {
+  it('sends the first submit back naming the declared file without an edit, once', async () => {
+    const submit = {
+      toolCalls: [{ name: 'submit_change_set', arguments: { summary: 'Add new module' } }],
+    };
+    h = await startAgent(
+      {
+        name: 'forgot-test',
+        description: 'declares a module and its test, stages only the module',
+        steps: [
+          {
+            toolCalls: [
+              {
+                name: 'declare_context',
+                arguments: {
+                  plan: ['Add the module', 'Test it'],
+                  files: [
+                    { path: 'app/extra.py', reason: 'the new module' },
+                    { path: 'tests/test_cli.py', reason: 'the test the task asks for' },
+                  ],
+                },
+              },
+            ],
+          },
+          {
+            toolCalls: [
+              {
+                name: 'stage_edit',
+                arguments: { path: 'app/extra.py', kind: 'write', content: 'VALUE = 1\n' },
+              },
+            ],
+          },
+          submit,
+          submit,
+          submit,
+          { text: ['Done.'] },
+        ],
+      } as never,
+      {},
+      { review: () => new Promise(() => undefined) },
+    );
+    expect(await h.run.start('Add a module with a test.')).toBe('paused');
+    const notices = of(h.posts, 'notice').map((n) => n.message);
+    expect(notices[0]).toMatch(/finish the plan: no edit staged yet for tests\/test_cli\.py/);
+    expect(notices[1]).toMatch(/pass run_tests/);
+    const declined = of(h.posts, 'tool_end').filter((e) =>
+      e.result?.startsWith('Tool call denied'),
+    );
+    expect(declined[0]?.result).toContain('tests/test_cli.py (the test the task asks for)');
+    // The third submit opens the review: each gate sends a state back only once.
+    expect(h.run.pendingCalls.map((c) => c.name)).toEqual(['submit_change_set']);
+    expect(of(h.posts, 'walkthrough')).toHaveLength(1);
+  });
+});

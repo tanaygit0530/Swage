@@ -21,15 +21,24 @@ const DEFAULT_PROFILES = [
     kind: 'hosted',
     trueforgeModel: 'google-gemini/gemini-3-5-flash-lite',
   },
+  // A thinking model with its own free-tier quota: slower to its first token, so a longer wait.
   {
     name: 'fallback-2',
+    label: 'Gemini 3.5 Flash',
+    kind: 'hosted',
+    trueforgeModel: 'google-gemini/gemini-3-5-flash',
+    params: { max_tokens: 8192 },
+    timeouts: { firstTokenMs: 90_000 },
+  },
+  {
+    name: 'fallback-3',
     label: 'Gemini 3.1 Flash Lite',
     kind: 'hosted',
     trueforgeModel: 'google-gemini/gemini-3-1-flash-lite',
   },
   // Local and free of quotas: the last resort when every free tier is rate-limited.
   {
-    name: 'fallback-3',
+    name: 'fallback-4',
     label: 'Ollama Qwen 7B',
     kind: 'local',
     trueforgeModel: 'ollama/qwen-2-5-coder-7b',
