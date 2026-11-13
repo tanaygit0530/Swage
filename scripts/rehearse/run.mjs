@@ -21,6 +21,19 @@ const DEFAULT_PROFILES = [
     kind: 'hosted',
     trueforgeModel: 'google-gemini/gemini-3-5-flash-lite',
   },
+  {
+    name: 'fallback-2',
+    label: 'Gemini 3.1 Flash Lite',
+    kind: 'hosted',
+    trueforgeModel: 'google-gemini/gemini-3-1-flash-lite',
+  },
+  // Local and free of quotas: the last resort when every free tier is rate-limited.
+  {
+    name: 'fallback-3',
+    label: 'Ollama Qwen 7B',
+    kind: 'local',
+    trueforgeModel: 'ollama/qwen-2-5-coder-7b',
+  },
 ];
 
 export async function main({ repo, dir, args, flag, step, say, sh }) {
