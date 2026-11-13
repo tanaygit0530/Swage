@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Swage">
+  <title>Swage</title>
+  <!-- A swage block: a forging block with a round groove, and one spark. Original Swage mark. -->
+  <path fill="#A7B0BB" d="M4 12H12A4 4 0 0 0 20 12H28V17L24 20V24H27V27H5V24H8V20L4 17Z"/>
+  <path fill="#F26B1D" d="M23 1.5L24.3 4.7L27.5 6L24.3 7.3L23 10.5L21.7 7.3L18.5 6L21.7 4.7Z"/>
+  <circle fill="#F26B1D" cx="28.2" cy="1.8" r="1.1"/>
+</svg>

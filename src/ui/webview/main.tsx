@@ -10,6 +10,7 @@ import {
   type PanelState,
   type TimelineItem,
 } from './state';
+import { Logo } from './logo';
 
 /**
  * The Swage agent panel (blueprint sections 3 and 4): a Preact webview bundled into
@@ -106,7 +107,14 @@ function Item({ item }: { item: TimelineItem }) {
     case 'user':
       return <div class="msg user">{item.text}</div>;
     case 'assistant':
-      return <div class="msg assistant">{item.text}</div>;
+      return (
+        <div class="turn">
+          <span class="avatar" title="Swage">
+            <Logo size={20} />
+          </span>
+          <div class="msg assistant">{item.text}</div>
+        </div>
+      );
     case 'tool':
       return <ToolRow item={item} />;
     case 'plan':
@@ -284,7 +292,12 @@ function App() {
       <main class="timeline" aria-live="polite">
         {state.timeline.length === 0 && (
           <div class="empty">
-            Describe a change. Mention files with @path or symbols with @name; Swage finds the rest.
+            <Logo size={64} title="Swage" />
+            <div class="empty-name">Swage</div>
+            <div class="empty-hint">
+              Describe a change. Mention files with @path or symbols with @name; Swage finds the
+              rest.
+            </div>
           </div>
         )}
         {state.timeline.map((item) => (

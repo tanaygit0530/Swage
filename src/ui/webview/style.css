@@ -356,3 +356,81 @@ button {
   outline: 1px solid var(--vscode-focusBorder);
   outline-offset: 1px;
 }
+
+/* ---- Swage mark, avatar and empty state (redesign step 1) ---- */
+
+:root {
+  --swage-accent: #f26b1d;
+  --swage-radius: 8px;
+  --swage-border: var(
+    --vscode-widget-border,
+    var(--vscode-panel-border, rgba(128, 128, 128, 0.35))
+  );
+}
+
+.swage-logo .logo-block {
+  fill: currentColor;
+  opacity: 0.85;
+}
+
+.swage-logo .logo-spark {
+  fill: var(--swage-accent);
+}
+
+body.vscode-high-contrast .swage-logo .logo-spark,
+body.vscode-high-contrast-light .swage-logo .logo-spark {
+  fill: currentColor;
+}
+
+.turn {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin: 10px 0;
+}
+
+.turn > .msg {
+  margin: 0;
+  padding: 1px 0 0;
+  flex: 1;
+  min-width: 0;
+}
+
+.avatar {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  color: var(--vscode-foreground);
+}
+
+.msg.user {
+  margin-left: 28px;
+  border: none;
+  border-radius: var(--swage-radius);
+  background: var(--vscode-input-background);
+  padding: 8px 10px;
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  text-align: center;
+  min-height: 60%;
+  padding: 24px 16px;
+  color: var(--vscode-foreground);
+}
+
+.empty-name {
+  font-size: 1.6em;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.empty-hint {
+  color: var(--vscode-descriptionForeground);
+  max-width: 28em;
+}

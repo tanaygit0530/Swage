@@ -13,7 +13,7 @@ npm run package                     # writes swage-0.1.0.vsix
 shasum -a 256 swage-0.1.0.vsix      # record the checksum in the release notes
 ```
 
-The package should list 18 files (about 1 MB): `dist/extension.js`, `dist/webview.js`, `dist/webview-style.css`, five tree-sitter `.wasm` files, `media/icon.png`, `media/swage.svg`, both agent manifests, README, CHANGELOG and LICENSE. There is no source, no `node_modules`, and no `config/` or `docs/`.
+The package should list 19 files (about 1 MB): `dist/extension.js`, `dist/webview.js`, `dist/webview-style.css`, five tree-sitter `.wasm` files, `media/icon.png`, `media/swage-icon.svg`, `media/swage-logo.svg`, both agent manifests, README, CHANGELOG and LICENSE. There is no source, no `node_modules`, and no `config/` or `docs/`.
 
 Optionally, install it into a throwaway profile before releasing:
 
