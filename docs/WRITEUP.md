@@ -97,7 +97,7 @@ A rehearsal found that TrueForge tells the model to discover _every_ tool of a s
 - fallback `google-gemini/gemini-3-5-flash-lite`;
 - both on the Gemini free tier (cost: 0).
 
-**Supported but not verified end to end:** Groq, and local Ollama or llama.cpp (also free).
+**Also tried:** local Ollama Qwen 7B (free; it made no native tool calls through TrueForge, so Swage hands the task on). Groq is supported, but this team's key had no access to the configured model.
 
 **Profiles** set connect, first-token, stall and total timers; local models get longer limits.
 
@@ -107,34 +107,34 @@ A rehearsal found that TrueForge tells the model to discover _every_ tool of a s
 - 429 and 5xx retry with backoff and honour "retry in N s".
 - The next model receives the task, plan and staged edits.
 
-**Switching models.** Edit `swage.models`, or run **Swage: Switch Model**, which can also set a new primary from TrueForge's model list (for the live call).
+**Switching models.** One click in the agent panel's **model picker**; **Other models… → Add a model from TrueForge…** adds any model TrueForge has (for the organisers' live call). Also `swage.models`, or **Swage: Switch Model**.
 
 ## 6. Scorecard
 
-| Criterion               | Video    | Claim                                                                                                                                                                                                           |
-| ----------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A1 Inline edit          | ⟨mm:ss⟩  | Per-block Accept, Reject and revert in the native diff. Rehearsal: 8 of 9 runs passed (the ninth was blocked by a since-fixed harness bug), median 10 to 11 s instruction to diff, `FLASK_DEBUG=off` → `False`. |
-| A2 Agent mode           | ⟨mm:ss⟩  | No file named. The agent found `cli.py`, `test_cli.py` and `docs/cli.rst`, and `test_cli.py` passed (59).                                                                                                       |
-| A3 Streaming and cancel | ⟨mm:ss⟩  | Live tokens. Stop reaches the UI in 1 to 23 ms, `git status` stays clean.                                                                                                                                       |
-| B1 Context              | ⟨mm:ss⟩  | Plan and Context Receipt with budget bar; recall@10 of 1.000 on Flask.                                                                                                                                          |
-| B2 Diff safety          | ⟨mm:ss⟩  | Per-block review, atomic Apply, Undo twice, clean `git status`.                                                                                                                                                 |
-| B3 Resilience           | ⟨mm:ss⟩  | The primary drops mid-answer; automatic switch with no click; Reject all; clean `git status`. 3 of 3 runs.                                                                                                      |
-| B4 TrueForge            | ⟨mm:ss⟩  | Session page: MCP tool calls, the approval pause and deferred `run_tests` discovery.                                                                                                                            |
-| C1 Video                | ⟨mm:ss⟩  | A, B and C in order, each verified, no cut from instruction to diff.                                                                                                                                            |
-| C2 Write-up             | this PDF | Architecture, strategy, trade-offs and honest limits, with measured numbers.                                                                                                                                    |
+| Criterion               | Video    | Claim                                                                                                                                                                            |
+| ----------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A1 Inline edit          | ⟨mm:ss⟩  | Per-block Accept, Reject and revert in the native diff. Rehearsals: 4 to 6 s from instruction to diff when quota is free, `FLASK_DEBUG=off` → `False`, all 490 Flask tests pass. |
+| A2 Agent mode           | ⟨mm:ss⟩  | No file named. The agent found `cli.py`, `test_cli.py` and `docs/cli.rst` itself and passed `test_cli.py` (59) in rehearsal; see section 8 for the models.                       |
+| A3 Streaming and cancel | ⟨mm:ss⟩  | Live tokens. Stop reaches the UI in 1 to 23 ms, `git status` stays clean.                                                                                                        |
+| B1 Context              | ⟨mm:ss⟩  | Plan and Context Receipt with budget bar; recall@10 of 1.000 on Flask.                                                                                                           |
+| B2 Diff safety          | ⟨mm:ss⟩  | Per-block review, atomic Apply, Undo twice, clean `git status`.                                                                                                                  |
+| B3 Resilience           | ⟨mm:ss⟩  | The primary drops mid-answer; automatic switch with no click; Reject all; clean `git status`. 3 of 3 runs.                                                                       |
+| B4 TrueForge            | ⟨mm:ss⟩  | Session page: MCP tool calls, the approval pause and deferred `run_tests` discovery.                                                                                             |
+| C1 Video                | ⟨mm:ss⟩  | A, B and C in order, each verified, no cut from instruction to diff.                                                                                                             |
+| C2 Write-up             | this PDF | Architecture, strategy, trade-offs and honest limits, with measured numbers.                                                                                                     |
 
 ## 7. Tools used
 
 - **AI coding assistant:** Claude Code (Anthropic) wrote and reviewed much of the code, tests and documentation under our direction.
 - **Development:** VS Code, Node.js, Git, GitHub Actions.
-- **Models:** Gemini through TrueForge.
+- **Models:** Gemini (free tier) and Ollama Qwen 7B, through TrueForge.
 
 ## 8. Known limitations and another month
 
 **Limitations.**
 
-- **Free-tier latency dominates.** Inline diffs took 5 to 36 s.
-- **Agent mode on the free tier is fragile.** Only one of three Task B rehearsals finished: it took 7.8 minutes through Google's 503 and 429 errors. A harness bug and the quota stopped the other two, and Swage's fixes for those are in.
+- **Free-tier limits dominate.** Inline diffs took 4 to 6 s with quota free, and up to 54 s while quotas recovered.
+- **Task B needs a capable model.** Swage discovers the files, plans, stages, gates on tests and reviews correctly, but on 13 November no free model available to us could finish it. Gemini's free tier ran out of input tokens per minute mid-task, and Ollama Qwen 7B made no native tool calls. Swage waits out quotas, caps switches, and opens the unfinished edits for review instead of losing them.
 - **Verification is narrow.** Swage is verified with Gemini only, and on macOS only; CI runs on Ubuntu.
 - **Not yet built:**
   - A running task does not survive a window reload.
