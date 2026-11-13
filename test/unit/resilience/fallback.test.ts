@@ -298,6 +298,19 @@ describe('router and fallback plan', () => {
     expect(hardPlan.decide(hard)).toMatchObject({ action: 'fail' });
   });
 
+  it('new tasks go back to a profile whose rate limit is over, but not past a hard failure', () => {
+    const clock = new FakeClock();
+    const router = new ModelRouter(profiles, { clock });
+    router.begin().decide({ ...transient, retryAfterMs: 20_000 }); // Gemini rate-limited -> Groq
+    expect(router.active.name).toBe('fallback-1');
+    expect(router.begin().current.name).toBe('fallback-1'); // still inside the limit
+    clock.advance(20_000);
+    expect(router.begin().current.name).toBe('primary'); // the minute is over: back to Gemini
+    router.begin().decide(hard); // Gemini 401 -> Groq
+    clock.advance(600_000);
+    expect(router.begin().current.name).toBe('fallback-1'); // a hard failure is not retried
+  });
+
   it('starts later tasks on the active profile and wraps to earlier ones', () => {
     const router = new ModelRouter(profiles);
     router.setActive('fallback-1');

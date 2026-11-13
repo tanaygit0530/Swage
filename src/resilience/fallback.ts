@@ -162,8 +162,29 @@ export class ModelRouter {
     return undefined;
   }
 
-  /** Starts following one task, on the active profile. */
+  /**
+   * Starts following one task. It starts on the active profile, unless Swage left a profile ahead
+   * of it because of a timed rate limit that is over by now: new tasks go back to the better model
+   * instead of staying on a fallback. Hard failures, and a profile the user picked, are kept.
+   */
   begin(): FallbackPlan {
+    const now = this.clock.now();
+    const activeIndex = this.list.findIndex((p) => p.name === this.activeName);
+    for (const p of this.list.slice(0, Math.max(0, activeIndex))) {
+      const record = this.failed.get(p.name);
+      // Only a profile Swage left because of a rate limit comes back; one the user chose to leave
+      // (no failure record) stays where the user put it.
+      const over =
+        record !== undefined &&
+        record.failure.kind === 'transient' &&
+        record.failure.retryAfterMs !== undefined &&
+        record.at + record.failure.retryAfterMs <= now;
+      if (over) {
+        this.failed.delete(p.name);
+        this.moveTo(p);
+        break;
+      }
+    }
     return new FallbackPlan(this);
   }
 
