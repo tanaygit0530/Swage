@@ -94,14 +94,14 @@ The **agent definitions** in `trueforge/agents/*.json` are loaded automatically.
 
 ## Using Swage
 
-| What                                | How                                                                                                                                                                                                    |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Inline edit                         | Select code (or put the cursor in a function), press **Cmd/Ctrl+Alt+K**, type the instruction. Review the blocks in the diff, then **Apply**.                                                          |
-| Agent mode                          | Click the **Swage** icon in the activity bar, type a request (`@file` and `@symbol` mentions work), press Enter. Review the change set in the **Review** view, **Accept All** or per block, **Apply**. |
-| Stop                                | **Escape** while a run is going, or **Swage: Stop Run**. The workspace is never changed by a stopped run.                                                                                              |
-| Undo                                | **Swage: Undo Last Change Set**; it works twice in a row and after a window reload.                                                                                                                    |
-| Switch model                        | Click the status bar item, or **Swage: Switch Model**.                                                                                                                                                 |
-| Make the primary fail (demo Task C) | `npm run break-primary -- --workspace ../flask`, then `npm run restore-primary`.                                                                                                                       |
+| What                                | How                                                                                                                                                                                                      |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Inline edit                         | Select code (or put the cursor in a function), press **Cmd/Ctrl+Alt+K**, type the instruction. Review the blocks in the diff, then **Apply**.                                                            |
+| Agent mode                          | Click the **Swage** icon in the activity bar, type a request (`@file` and `@symbol` mentions work), press Enter. Review the change set in the **Review** view, **Accept All** or per block, **Apply**.   |
+| Stop                                | **Escape** while a run is going, or **Swage: Stop Run**. The workspace is never changed by a stopped run.                                                                                                |
+| Undo                                | **Swage: Undo Last Change Set**; it works twice in a row and after a window reload.                                                                                                                      |
+| Switch model                        | Use the **model picker** in the agent panel header, or click the status bar item. **Other models… → Add a model from TrueForge…** adds any model TrueForge has (Gemini, Groq, Ollama…) and uses it next. |
+| Make the primary fail (demo Task C) | `npm run break-primary -- --workspace ../flask`, then `npm run restore-primary`.                                                                                                                         |
 
 ## Model profiles
 
@@ -156,8 +156,8 @@ Design and decisions: [`docs/BLUEPRINT.md`](docs/BLUEPRINT.md), verified TrueFor
 
 - **Free-tier models are slow and rate-limited.**
   - Inline edits took 5 to 36 s from instruction to diff in rehearsals.
-  - One agent-mode run took 7.8 minutes through Google's 503 and 429 errors. Swage retried and switched as designed, but a paid key or a less loaded model is needed for snappy runs.
-- **Tested with Gemini models only.** Groq, Ollama and llama.cpp profiles are supported but were not verified end to end.
+  - Agent-mode runs exhausted Gemini's free tier (250,000 input tokens per minute per model). Swage waits out quotas and caps switches, but finishing Task B reliably needs a paid key or a model with more quota.
+- **Models tested:** Gemini (free tier) end to end. Ollama Qwen 7B answered but made no native tool calls through TrueForge (Swage hands the task on). Groq is supported but was not verified.
 - The inline instruction box is VS Code's quick input at the top of the window, not a widget inside the editor (that needs a proposed API).
 - Retrieval is lexical, symbol and import based, with no embeddings.
 - A running task does not yet survive a window reload (applied change sets and their undo do).
