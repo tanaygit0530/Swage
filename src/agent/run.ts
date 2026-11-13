@@ -159,8 +159,8 @@ export class AgentRun {
   private submitSummary: string | undefined;
   /** Planning mode: the user approved a plan, so later declare_context calls pass on their own. */
   private planApproved = false;
-  /** The approved declare_context is about to run: its card already shows the plan. */
-  private skipNextPlanPost = false;
+  /** The files of the approved declare_context: its card already shows that plan. */
+  private approvedPlanKey: string | undefined;
 
   constructor(private readonly opts: AgentRunOptions) {
     this.logger = opts.logger ?? silent;
@@ -212,8 +212,9 @@ export class AgentRun {
     this.relaySubscription = this.opts.relay.attach({
       onDeclare: (taskId, plan, files) => {
         if (taskId !== this.taskId || this.cancelRequested) return;
-        if (this.skipNextPlanPost) {
-          this.skipNextPlanPost = false;
+        const key = JSON.stringify(files.map((f) => f.path));
+        if (this.approvedPlanKey === key) {
+          this.approvedPlanKey = undefined;
           return;
         }
         this.post({ type: 'plan', steps: [...plan], files: [...files] });
@@ -811,7 +812,10 @@ export class AgentRun {
     if (call?.name !== 'declare_context') return Promise.resolve(undefined);
     if (approve) {
       this.planApproved = true;
-      this.skipNextPlanPost = true;
+      const files = (parseToolArgs(call.arguments)?.['files'] ?? []) as { path?: unknown }[];
+      this.approvedPlanKey = JSON.stringify(
+        Array.isArray(files) ? files.map((f) => (f as { path?: unknown } | null)?.path) : [],
+      );
       return this.decide(toolCallId, true);
     }
     const note = feedback?.trim();

@@ -1312,3 +1312,152 @@ button.primary:disabled,
   font: inherit;
   resize: vertical;
 }
+
+/* ---- States and polish (redesign step 7) ---- */
+
+.panel {
+  position: relative;
+}
+
+.timeline {
+  scroll-behavior: smooth;
+}
+
+.dots {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  height: 20px;
+}
+
+.dots span {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--vscode-descriptionForeground);
+  animation: swage-dot 1.2s ease-in-out infinite;
+}
+
+.dots span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.dots span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes swage-dot {
+  0%,
+  80%,
+  100% {
+    opacity: 0.25;
+    transform: translateY(0);
+  }
+  40% {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
+}
+
+.msg.assistant.streaming .md > :last-child::after {
+  content: '';
+  display: inline-block;
+  width: 7px;
+  height: 1em;
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  background: var(--vscode-editorCursor-foreground, var(--vscode-foreground));
+  animation: swage-caret 1s steps(1) infinite;
+}
+
+@keyframes swage-caret {
+  50% {
+    opacity: 0;
+  }
+}
+
+.notice {
+  margin: 8px 0 8px 28px;
+  padding: 4px 8px;
+  border-radius: var(--swage-radius);
+  font-style: normal;
+  color: var(--vscode-descriptionForeground);
+}
+
+.notice-warning {
+  border: 1px solid var(--vscode-editorWarning-foreground, #cca700);
+  border-left-width: 3px;
+  background: var(--vscode-inputValidation-warningBackground, transparent);
+  color: var(--vscode-foreground);
+}
+
+.notice-error {
+  border: 1px solid var(--vscode-errorForeground, #f14c4c);
+  border-left-width: 3px;
+  color: var(--vscode-foreground);
+}
+
+.stopped-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px;
+  border: 1px solid var(--swage-border);
+  border-radius: 999px;
+  font-size: 0.85em;
+  color: var(--vscode-foreground);
+  white-space: nowrap;
+}
+
+.approval-title {
+  margin-bottom: 4px;
+}
+
+.approval-command {
+  margin: 4px 0;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: var(--vscode-textCodeBlock-background, rgba(128, 128, 128, 0.15));
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.approval-pending {
+  border-color: var(--vscode-focusBorder);
+}
+
+.approval .card-body {
+  padding-top: 8px;
+}
+
+.decision-allowed {
+  color: var(--vscode-testing-iconPassed, #3fb950);
+}
+
+.decision-denied {
+  color: var(--vscode-descriptionForeground);
+}
+
+.jump-latest {
+  position: absolute;
+  left: 50%;
+  bottom: 140px;
+  transform: translateX(-50%);
+  z-index: 5;
+  padding: 3px 12px;
+  border: 1px solid var(--swage-border);
+  border-radius: 999px;
+  background: var(--vscode-button-secondaryBackground, var(--vscode-editorWidget-background));
+  color: var(--vscode-button-secondaryForeground, var(--vscode-foreground));
+  box-shadow: 0 2px 8px var(--vscode-widget-shadow, rgba(0, 0, 0, 0.25));
+  font-size: 0.9em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .timeline {
+    scroll-behavior: auto;
+  }
+  .msg.assistant.streaming .md > :last-child::after {
+    animation: none;
+  }
+}

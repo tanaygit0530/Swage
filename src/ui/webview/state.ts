@@ -49,6 +49,8 @@ export type TimelineItem =
       switchBack?: { name: string; label: string };
       /** An error banner of a failed run: offer Retry. */
       retry?: boolean;
+      /** The run was stopped: a "Stopped" chip; the staged edits were discarded. */
+      stopped?: boolean;
     }
   | {
       kind: 'edit';
@@ -214,6 +216,7 @@ export function reduce(state: PanelState, msg: HostToWebview): PanelState {
                 text: msg.message,
                 tone: msg.state === 'error' ? 'error' : 'info',
                 ...(msg.state === 'error' ? { retry: true } : {}),
+                ...(msg.state === 'cancelled' ? { stopped: true, retry: true } : {}),
               },
             ]
           : [];

@@ -112,3 +112,39 @@ describe('Planning mode (declare_context needs approval)', () => {
     ).toBe(true);
   });
 });
+
+describe('Planning mode: re-declarations', () => {
+  it('lets later declarations pass once a plan was approved, and reads loose plan arguments', async () => {
+    const declare = (files: unknown[], plan: unknown[]) => ({
+      toolCalls: [{ name: 'declare_context', arguments: { plan, files } }],
+    });
+    h = await startAgent(
+      {
+        name: 'redeclare',
+        description: 'declares twice',
+        steps: [
+          declare([{ path: 'app/cli.py', reason: 'the CLI' }, { path: 7 }, null], ['Add it', 3]),
+          declare(
+            [
+              { path: 'app/cli.py', reason: 'the CLI' },
+              { path: 'docs/cli.md', reason: 'the docs' },
+            ],
+            ['Add it', 'Document it'],
+          ),
+          { text: ['Done.'] },
+        ],
+      } as never,
+      { gated: ['submit_change_set', 'run_command', 'declare_context'] },
+    );
+    expect(await h.run.start('Add a config command.')).toBe('paused');
+    const card = of(h.posts, 'plan')[0];
+    expect(card?.steps).toEqual(['Add it']);
+    expect(card?.files).toEqual([{ path: 'app/cli.py', reason: 'the CLI' }]);
+    expect(await h.run.decidePlan(card?.toolCallId ?? '', true)).toBe('done');
+    // The second declaration ran without a card, and its plan shows as a read-only card.
+    const plans = of(h.posts, 'plan');
+    expect(plans).toHaveLength(2);
+    expect(plans[1]?.awaiting).toBeUndefined();
+    expect(plans[1]?.files.map((f) => f.path)).toEqual(['app/cli.py', 'docs/cli.md']);
+  });
+});

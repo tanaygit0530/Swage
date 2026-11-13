@@ -8,6 +8,8 @@ import { barModel } from './changes';
 import { FilesBar, Toast } from './filesBar';
 import { Composer } from './composerView';
 import { PlanCard } from './planCard';
+import { ApprovalCard } from './approvalCard';
+import { isNearBottom, isThinking, streamingId } from './view';
 import { initialState, isBusy, reducePanel, type TimelineItem } from './state';
 import { Logo } from './logo';
 
@@ -19,6 +21,9 @@ import { Logo } from './logo';
 declare function acquireVsCodeApi(): { postMessage(msg: unknown): void };
 const vscode = acquireVsCodeApi();
 const send = (msg: WebviewToHost): void => vscode.postMessage(msg);
+/** Render context for the memoised items: which message streams, whether the bar shows. */
+let streamingNow: string | undefined;
+let barShown = false;
 /** The App's dispatch for local actions (set once the App mounts). */
 let dispatchLocal: (action: LocalAction) => void = () => undefined;
 
@@ -105,48 +110,25 @@ function ToolRow({ item }: { item: Extract<TimelineItem, { kind: 'tool' }> }) {
   );
 }
 
-function ApprovalCard({ item }: { item: Extract<TimelineItem, { kind: 'approval' }> }) {
-  const label =
-    item.name === 'submit_change_set' ? 'Review the submitted change set' : `Run ${item.name}?`;
-  return (
-    <div class={`card approval approval-${item.decision}`}>
-      <div class="card-title">{label}</div>
-      <pre class="approval-summary">{item.summary}</pre>
-      {item.decision === 'pending' ? (
-        <div class="actions">
-          <button
-            type="button"
-            class="primary"
-            onClick={() => send({ type: 'approve', toolCallId: item.id, allow: true })}
-          >
-            Approve
-          </button>
-          <button
-            class="secondary"
-            onClick={() =>
-              send({
-                type: 'approve',
-                toolCallId: item.id,
-                allow: false,
-                reason: 'Denied by the user',
-              })
-            }
-          >
-            Deny
-          </button>
-        </div>
-      ) : (
-        <div class="decision">{item.decision === 'allowed' ? 'Approved' : 'Denied'}</div>
-      )}
-    </div>
-  );
-}
-
 function Notice({ item }: { item: Extract<TimelineItem, { kind: 'notice' }> }) {
   const back = item.switchBack;
   return (
-    <div class={`notice notice-${item.tone}`} role={item.tone === 'error' ? 'alert' : undefined}>
-      <span class="notice-text">{item.text}</span>
+    <div
+      class={`notice notice-${item.tone}${item.stopped ? ' notice-stopped' : ''}`}
+      role={item.tone === 'error' ? 'alert' : undefined}
+    >
+      {item.stopped && (
+        <span class="stopped-chip">
+          <svg width="10" height="10" viewBox="0 0 16 16" aria-hidden="true">
+            <rect x="3" y="3" width="10" height="10" rx="1.5" fill="currentColor" />
+          </svg>
+          Stopped
+        </span>
+      )}
+      <span class="notice-text">
+        {item.text}
+        {item.stopped ? ' Staged edits were discarded.' : ''}
+      </span>
       {back && (
         <button
           type="button"
@@ -172,14 +154,37 @@ function Notice({ item }: { item: Extract<TimelineItem, { kind: 'notice' }> }) {
 }
 
 /** One timeline entry. Unchanged entries keep their object, so only the streaming one re-renders. */
-class ItemView extends Component<{ item: TimelineItem }> {
-  override shouldComponentUpdate(next: { item: TimelineItem }): boolean {
-    return next.item !== this.props.item;
+class ItemView extends Component<{ item: TimelineItem; streaming: boolean; bar: boolean }> {
+  override shouldComponentUpdate(next: {
+    item: TimelineItem;
+    streaming: boolean;
+    bar: boolean;
+  }): boolean {
+    return (
+      next.item !== this.props.item ||
+      next.streaming !== this.props.streaming ||
+      next.bar !== this.props.bar
+    );
   }
 
   override render() {
     return <Item item={this.props.item} />;
   }
+}
+
+function Thinking() {
+  return (
+    <div class="turn thinking" role="status" aria-label="Swage is thinking">
+      <span class="avatar">
+        <Logo size={20} />
+      </span>
+      <span class="dots" aria-hidden="true">
+        <span />
+        <span />
+        <span />
+      </span>
+    </div>
+  );
 }
 
 function Item({ item }: { item: TimelineItem }) {
@@ -192,7 +197,7 @@ function Item({ item }: { item: TimelineItem }) {
           <span class="avatar" title="Swage">
             <Logo size={20} />
           </span>
-          <div class="msg assistant">
+          <div class={`msg assistant${item.id === streamingNow ? ' streaming' : ''}`}>
             <Markdown text={item.text} send={send} />
           </div>
         </div>
@@ -208,7 +213,7 @@ function Item({ item }: { item: TimelineItem }) {
         />
       );
     case 'approval':
-      return <ApprovalCard item={item} />;
+      return <ApprovalCard item={item} send={send} barVisible={barShown} />;
     case 'notice':
       return <Notice item={item} />;
     case 'edit':
@@ -257,6 +262,8 @@ function App() {
   const [state, dispatch] = useReducer(reducePanel, initialState);
   dispatchLocal = dispatch;
   const bottom = useRef<HTMLDivElement>(null);
+  const thread = useRef<HTMLElement>(null);
+  const [follow, setFollow] = useState(true);
 
   useEffect(() => {
     const onMessage = (e: MessageEvent): void => {
@@ -268,7 +275,17 @@ function App() {
     return () => window.removeEventListener('message', onMessage);
   }, []);
 
-  useEffect(() => bottom.current?.scrollIntoView({ block: 'end' }), [state.timeline]);
+  // Auto-scroll follows the thread until the user scrolls up; "Jump to latest" brings it back.
+  useEffect(() => {
+    if (follow) bottom.current?.scrollIntoView({ block: 'end' });
+  }, [state.timeline, follow, state.status]);
+  const onScroll = (): void => {
+    const el = thread.current;
+    if (el) setFollow(isNearBottom(el.scrollTop, el.clientHeight, el.scrollHeight));
+  };
+  const bar = barModel(state);
+  streamingNow = streamingId(state);
+  barShown = bar.visible;
 
   // The "Applied N files. Undo" toast stays 10 s.
   const toastId = state.toast?.id;
@@ -285,7 +302,14 @@ function App() {
           <BudgetMeter {...state.budget} />
         </header>
       )}
-      <main class="timeline" aria-live="polite">
+      <main
+        class="timeline"
+        ref={thread}
+        role="log"
+        aria-live="polite"
+        aria-label="Conversation"
+        onScroll={onScroll}
+      >
         {state.timeline.length === 0 && (
           <div class="empty">
             <Logo size={64} title="Swage" />
@@ -297,12 +321,31 @@ function App() {
           </div>
         )}
         {state.timeline.map((item) => (
-          <ItemView key={item.id} item={item} />
+          <ItemView
+            key={item.id}
+            item={item}
+            streaming={item.id === streamingNow}
+            bar={bar.visible}
+          />
         ))}
+        {isThinking(state) && <Thinking />}
         <div ref={bottom} />
       </main>
+      {!follow && (
+        <button
+          type="button"
+          class="jump-latest"
+          aria-label="Jump to the latest message"
+          onClick={() => {
+            setFollow(true);
+            bottom.current?.scrollIntoView({ block: 'end' });
+          }}
+        >
+          Jump to latest ↓
+        </button>
+      )}
       <footer>
-        <FilesBar model={barModel(state)} send={send} />
+        <FilesBar model={bar} send={send} />
         {state.toast && (
           <Toast
             text={state.toast.text}

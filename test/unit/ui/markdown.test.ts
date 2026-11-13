@@ -122,3 +122,68 @@ describe('Markdown parser', () => {
     ]);
   });
 });
+
+describe('Markdown parser: edge cases', () => {
+  it('keeps a list item together across a blank line before indented text', () => {
+    const [list] = parseMarkdown('- item one\n\n  more about one\n- item two');
+    if (list?.t !== 'list') throw new Error('not a list');
+    expect(list.items).toHaveLength(2);
+    expect(list.items[0]).toHaveLength(2);
+  });
+
+  it('joins lazy continuation lines into the item', () => {
+    const [list] = parseMarkdown('- first line\nsecond line\n- next');
+    if (list?.t !== 'list') throw new Error('not a list');
+    expect(list.items[0]?.[0]).toMatchObject({
+      t: 'p',
+      c: [{ t: 'text', v: 'first line\nsecond line' }],
+    });
+  });
+
+  it('ends a list at a different marker or a blank line', () => {
+    const blocks = parseMarkdown('1) one\n2) two\n\nafter');
+    expect(blocks.map((b) => b.t)).toEqual(['list', 'p']);
+    expect(blocks[0]).toMatchObject({ ordered: true, start: 1 });
+    expect(parseMarkdown('- a\n1. b').map((b) => b.t)).toEqual(['list', 'list']);
+  });
+
+  it('stops a paragraph before a table or a block', () => {
+    expect(parseMarkdown('text\n| a | b |\n|---|---|\n| 1 | 2 |').map((b) => b.t)).toEqual([
+      'p',
+      'table',
+    ]);
+    expect(parseMarkdown('text\n# Title').map((b) => b.t)).toEqual(['p', 'h']);
+  });
+
+  it('supports tilde fences, closing hashes and underscore emphasis', () => {
+    expect(parseMarkdown('~~~\nraw\n~~~')[0]).toEqual({
+      t: 'code',
+      lang: '',
+      v: 'raw',
+      open: false,
+    });
+    expect(parseMarkdown('## Title ##')[0]).toEqual({
+      t: 'h',
+      level: 2,
+      c: [{ t: 'text', v: 'Title' }],
+    });
+    expect(parseInline('an _em_ and __strong__')).toEqual([
+      { t: 'text', v: 'an ' },
+      { t: 'em', c: [{ t: 'text', v: 'em' }] },
+      { t: 'text', v: ' and ' },
+      { t: 'strong', c: [{ t: 'text', v: 'strong' }] },
+    ]);
+  });
+
+  it('leaves unmatched markers and backticks as text', () => {
+    expect(parseInline('a * b and `open')).toEqual([{ t: 'text', v: 'a * b and `open' }]);
+    expect(parseInline('[no link] here')).toEqual([{ t: 'text', v: '[no link] here' }]);
+  });
+
+  it('parses centred and unaligned table columns, and short rows', () => {
+    const [t] = parseMarkdown('a | b | c\n:-: | --- | :--\n1 | 2');
+    if (t?.t !== 'table') throw new Error('not a table');
+    expect(t.align).toEqual(['center', undefined, 'left']);
+    expect(t.rows[0]?.[2]).toEqual([]);
+  });
+});
