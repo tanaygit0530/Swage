@@ -38,6 +38,7 @@ describe('agent run with the scripted model', () => {
       'mentions',
       'repo map',
       'hints',
+      'code excerpts',
       'file reads',
     ]);
     expect(budget?.used).toBeGreaterThan(0);

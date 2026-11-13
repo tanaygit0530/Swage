@@ -420,7 +420,8 @@
             "hintsFiles": 5,
             "hintsTokens": 1000,
             "toolResultTokens": 4000,
-            "readsPerRunTokens": 30000
+            "readsPerRunTokens": 30000,
+            "excerptTokens": 4000
           },
           "properties": {
             "repoMapTokens": {
@@ -447,6 +448,11 @@
               "type": "integer",
               "minimum": 0,
               "description": "Total full-file read budget per run."
+            },
+            "excerptTokens": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Code excerpts of the top retrieved files sent with the request, so the agent needs fewer search and read calls. 0 sends none."
             }
           }
         },
@@ -468,6 +474,13 @@
           "type": "boolean",
           "default": true,
           "markdownDescription": "Start TrueForge automatically when the extension activates."
+        },
+        "swage.rateLimitWaitSeconds": {
+          "type": "number",
+          "default": 40,
+          "minimum": 0,
+          "maximum": 120,
+          "markdownDescription": "When a model is rate-limited and asks to retry within this many seconds (a free tier's per-minute quota), Swage waits on the same model and keeps the agent's context instead of switching models. `0` always switches at once."
         }
       }
     },

@@ -23,6 +23,7 @@ beforeAll(async () => {
         hintsTokens: 1000,
         toolResultTokens: 4000,
         readsPerRunTokens: 9000,
+        excerptTokens: 0,
       },
     },
   });

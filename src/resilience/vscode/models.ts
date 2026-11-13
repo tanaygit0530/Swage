@@ -12,6 +12,12 @@ import { profileForModel, profilesFrom, type ResolvedProfile } from '../profiles
  * the setting changes, so the organisers can swap the primary model at any time.
  */
 
+/** swage.rateLimitWaitSeconds in milliseconds (0 to 120 s). */
+function rateLimitWait(): number {
+  const s = vscode.workspace.getConfiguration('swage').get<number>('rateLimitWaitSeconds', 40);
+  return Math.max(0, Math.min(120, Number.isFinite(s) ? s : 40)) * 1000;
+}
+
 export class ModelsController implements vscode.Disposable {
   private routerValue: ModelRouter | undefined;
   private error: string | undefined;
@@ -30,6 +36,8 @@ export class ModelsController implements vscode.Disposable {
       vscode.commands.registerCommand('swage.switchModel', () => this.pick()),
       vscode.workspace.onDidChangeConfiguration((e) => {
         if (e.affectsConfiguration('swage.models')) this.load();
+        if (e.affectsConfiguration('swage.rateLimitWaitSeconds') && this.routerValue)
+          this.routerValue.rateLimitWaitMs = rateLimitWait();
       }),
     );
     this.load();
@@ -55,6 +63,7 @@ export class ModelsController implements vscode.Disposable {
       if (this.routerValue) this.routerValue.setProfiles(profiles);
       else {
         this.routerValue = new ModelRouter(profiles);
+        this.routerValue.rateLimitWaitMs = rateLimitWait();
         this.routerSub = this.routerValue.onDidChange(() => this.refresh());
         if (this.client) this.attach(this.client);
       }

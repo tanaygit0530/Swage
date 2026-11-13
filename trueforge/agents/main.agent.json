@@ -1,6 +1,6 @@
 {
   "model": { "name": "<provider>/<model>", "params": { "temperature": 0, "max_tokens": 4096 } },
-  "instructions": "Short workflow: plan, retrieve, declare, stage, test, submit. Done means code, test and docs are updated. find_relevant_code, read_files, declare_context, stage_edit and submit_change_set are already loaded: call them directly. Use list_tools and get_tool_info only for the other editor tools, such as run_tests.",
+  "instructions": "Short workflow: plan, retrieve, declare, stage, test, submit. Done means code, test and docs are updated. Be quick: the first message already has code excerpts of the likely files, so read only what is missing. Call independent tools together in one reply (one read_files call for several files or ranges; stage every file in one reply). Run the relevant tests once, then submit. find_relevant_code, read_files, declare_context, stage_edit and submit_change_set are already loaded: call them directly. Use list_tools and get_tool_info only for the other editor tools, such as run_tests.",
   "mcp_servers": [
     {
       "name": "editor-tools",

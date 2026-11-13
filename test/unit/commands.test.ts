@@ -44,12 +44,13 @@ describe('command manifest', () => {
     );
   });
 
-  it('declares the settings from blueprint section 9', () => {
+  it('declares the settings from blueprint section 9, plus the rate-limit wait', () => {
     expect(Object.keys(manifest.contributes.configuration.properties).sort()).toEqual([
       'swage.autoStart',
       'swage.budgets',
       'swage.ignore',
       'swage.models',
+      'swage.rateLimitWaitSeconds',
       'swage.truefoundry.baseUrl',
     ]);
   });

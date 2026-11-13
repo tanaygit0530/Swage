@@ -17,6 +17,8 @@ export interface Budgets {
   readonly toolResultTokens: number;
   /** Full-file reads per run. */
   readonly readsPerRunTokens: number;
+  /** Code excerpts of the top retrieved files in the first message. */
+  readonly excerptTokens: number;
 }
 
 export const DEFAULT_BUDGETS: Budgets = Object.freeze({

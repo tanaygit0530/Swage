@@ -452,3 +452,37 @@ describe('carry-over message', () => {
     ).toContain('Nothing was staged before the switch; start the task from the beginning.');
   });
 });
+
+describe('waiting out a short rate limit on the same model', () => {
+  it('retries on the same profile after the asked wait, up to three times, then switches', () => {
+    const clock = new FakeClock();
+    const router = new ModelRouter(profiles, { clock, rateLimitWaitMs: 40_000 });
+    const plan = router.begin();
+    const quota: Failure = { ...transient, retryAfterMs: 38_000 };
+    for (let i = 1; i <= 3; i++)
+      expect(plan.decide(quota)).toMatchObject({
+        action: 'retry',
+        delayMs: 38_500,
+        retry: i,
+        of: 3,
+      });
+    expect(plan.current.name).toBe('primary');
+    expect(plan.decide(quota)).toMatchObject({ action: 'switch', to: { name: 'fallback-1' } });
+  });
+
+  it('switches at once for a longer wait, when turned off, and within the total wait budget', () => {
+    const quota: Failure = { ...transient, retryAfterMs: 50_000 };
+    const on = new ModelRouter(profiles, { rateLimitWaitMs: 40_000 }).begin();
+    expect(on.decide(quota).action).toBe('switch');
+    const off = new ModelRouter(profiles).begin();
+    expect(off.decide({ ...transient, retryAfterMs: 30_000 }).action).toBe('switch');
+    const tight = new ModelRouter(profiles, {
+      rateLimitWaitMs: 40_000,
+      maxQuotaWaitMs: 30_000,
+    }).begin();
+    expect(tight.decide({ ...transient, retryAfterMs: 35_000 }).action).toBe('switch');
+    const router = new ModelRouter(profiles);
+    router.rateLimitWaitMs = 40_000;
+    expect(router.begin().decide({ ...transient, retryAfterMs: 20_000 }).action).toBe('retry');
+  });
+});

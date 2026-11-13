@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { buildFirstMessage } from '../../src/agent/context';
+import { DEFAULT_BUDGETS } from '../../src/context/budget';
 import { EventRelay } from '../../src/agent/relay';
 import type { HostToWebview } from '../../src/ui/protocol';
 import { loadScenarios, type Scenario } from '../fake-model/scenario';
@@ -56,6 +57,22 @@ describe('first message', () => {
     expect(first.text).toContain('Candidate files from retrieval');
     expect(first.parts.find((p) => p.label === 'mentions')?.tokens).toBeGreaterThan(0);
     expect(first.total).toBeGreaterThan(first.used);
+  });
+
+  it('sends code excerpts of the top hits within their budget, and none when the budget is 0', async () => {
+    h = await startAgent('approval');
+    const prompt = 'Add a config command next to the cli commands';
+    const first = await buildFirstMessage(prompt, h.ctx);
+    expect(first.text).toContain('Code excerpts of the top candidates');
+    const excerpt = first.parts.find((p) => p.label === 'code excerpts');
+    expect(excerpt?.tokens).toBeGreaterThan(0);
+    expect(excerpt?.tokens).toBeLessThanOrEqual(DEFAULT_BUDGETS.excerptTokens);
+    expect(first.text).toMatch(/Call independent tools together in one reply/);
+    const none = await buildFirstMessage(prompt, h.ctx, { ...DEFAULT_BUDGETS, excerptTokens: 0 });
+    expect(none.text).not.toContain('Code excerpts');
+    expect(none.parts.some((p) => p.label === 'code excerpts')).toBe(false);
+    const tiny = await buildFirstMessage(prompt, h.ctx, { ...DEFAULT_BUDGETS, excerptTokens: 5 });
+    expect(tiny.text).not.toContain('Code excerpts');
   });
 });
 

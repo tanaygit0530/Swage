@@ -51,6 +51,12 @@ export interface RouterOptions {
    * hand the task back and forth; past this the task ends with one clear line. Default 6.
    */
   readonly maxSwitches?: number;
+  /**
+   * A rate limit that asks to wait at most this long ("retry in 38 s", a free tier's per-minute
+   * quota) is waited out on the same model and session, which keeps the agent's whole context,
+   * instead of moving the task to another model that starts from a carry-over. 0 turns it off.
+   */
+  readonly rateLimitWaitMs?: number;
   readonly backoff?: BackoffOptions;
   readonly clock?: Clock;
 }
@@ -59,6 +65,9 @@ export interface FailureRecord {
   readonly failure: Failure;
   readonly at: number;
 }
+
+/** Rate-limit waits on the same model in one task before the task moves on. */
+const RATE_LIMIT_WAITS = 3;
 
 export const WORKSPACE_UNCHANGED = 'Nothing was applied; the workspace is unchanged.';
 
@@ -90,7 +99,11 @@ export class ModelRouter {
     this.retries = options.retries ?? 3;
     this.timeoutRetries = Math.min(options.timeoutRetries ?? 1, this.retries);
     this.clock = options.clock ?? realClock;
+    this.rateLimitWaitMs = options.rateLimitWaitMs ?? 0;
   }
+
+  /** See RouterOptions.rateLimitWaitMs; the swage.rateLimitWaitSeconds setting changes it. */
+  rateLimitWaitMs: number;
 
   get profiles(): readonly ResolvedProfile[] {
     return this.list;
@@ -217,6 +230,7 @@ export class FallbackPlan {
   private readonly quotaUntil = new Map<string, number>();
   private quotaWaitedMs = 0;
   private switches = 0;
+  private rateLimitWaits = 0;
 
   /** Tried profiles that cannot be used now: failed for good, or still inside their rate limit. */
   private blocked(now: number): Set<string> {
@@ -233,6 +247,24 @@ export class FallbackPlan {
     if (f.kind === 'fatal')
       return { action: 'fail', message: `${this.profile.label} ${f.reason}: ${f.detail}` };
     const now = this.router.clock.now();
+    // A short timed rate limit: wait on the same model and session (at most three times).
+    const asked = f.retryAfterMs;
+    if (
+      f.kind === 'transient' &&
+      asked !== undefined &&
+      asked <= this.router.rateLimitWaitMs &&
+      this.rateLimitWaits < RATE_LIMIT_WAITS &&
+      this.quotaWaitedMs + asked <= (this.router.options.maxQuotaWaitMs ?? 180_000)
+    ) {
+      this.rateLimitWaits++;
+      this.quotaWaitedMs += asked;
+      return {
+        action: 'retry',
+        delayMs: asked + 500,
+        retry: this.rateLimitWaits,
+        of: RATE_LIMIT_WAITS,
+      };
+    }
     const limit = f.timeout ? this.router.timeoutRetries : this.router.retries;
     // A server that asks for a long wait is not waited for on the spot: another profile goes on.
     const longWait = (f.retryAfterMs ?? 0) > (this.router.options.maxRetryWaitMs ?? 10_000);

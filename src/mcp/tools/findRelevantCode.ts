@@ -23,6 +23,24 @@ function bestLine(text: string, query: string): number {
   return best;
 }
 
+/**
+ * The lines to show for a search hit: its best matching symbol (up to 40 lines), or 8 lines
+ * either side of the line that matches the query best. Shared with the first message's excerpts.
+ */
+export function snippetRange(
+  text: string,
+  hit: { lines?: { start: number; end: number } | undefined },
+  query: string,
+): { start: number; end: number } {
+  if (hit.lines)
+    return {
+      start: hit.lines.start,
+      end: Math.min(hit.lines.end, hit.lines.start + MAX_SYMBOL_LINES - 1),
+    };
+  const at = bestLine(text, query);
+  return { start: at - CONTEXT_LINES, end: at + CONTEXT_LINES };
+}
+
 export const findRelevantCode: ToolRegistration = (server, ctx: ToolContext) => {
   server.registerTool(
     'find_relevant_code',
@@ -67,15 +85,7 @@ export const findRelevantCode: ToolRegistration = (server, ctx: ToolContext) => 
         const parts = [`${hits.length} result(s) for "${args.query}". ${DATA_NOTE}`];
         for (const [i, hit] of hits.entries()) {
           const text = (await ctx.readText(hit.path)) ?? '';
-          const range = hit.lines
-            ? {
-                start: hit.lines.start,
-                end: Math.min(hit.lines.end, hit.lines.start + MAX_SYMBOL_LINES - 1),
-              }
-            : (() => {
-                const at = bestLine(text, args.query);
-                return { start: at - CONTEXT_LINES, end: at + CONTEXT_LINES };
-              })();
+          const range = snippetRange(text, hit, args.query);
           const s = sliceLines(text, range.start, range.end);
           parts.push(
             `${i + 1}. ${hit.path} (score ${hit.score}; about ${hit.estimatedTokens} tokens to read whole)\n   why: ${hit.reasons.join('; ') || 'lexical match'}\n${fileBlock(hit.path, s.start, s.end, s.total, s.content)}`,
