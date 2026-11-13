@@ -11,6 +11,8 @@ export default defineConfig({
       'test/rehearsal/**/*.test.ts',
     ],
     environment: 'node',
+    // Scripted agent runs with real MCP servers take a few seconds; on a busy machine more.
+    testTimeout: 15_000,
     coverage: {
       provider: 'v8',
       include: [
