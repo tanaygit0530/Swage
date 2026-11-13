@@ -9,6 +9,7 @@ import {
   LOCAL_TIMEOUTS,
   parseProfilesText,
   profilesFrom,
+  profileForModel,
   providerName,
   resolveProfiles,
 } from '../../../src/resilience/profiles';
@@ -60,6 +61,20 @@ describe('model profiles (blueprint sections 8 and 9)', () => {
     expect(a?.params).toEqual({ temperature: 0 });
     expect(b?.params).toEqual({ max_tokens: 1024 });
     expect(() => resolveProfiles(['not an object'])).toThrow(/profile 0: /);
+  });
+
+  it('names a model added from the picker and gives local providers local timeouts', () => {
+    expect(profileForModel('groq/gpt-oss-120b', ['primary'])).toEqual({
+      name: 'added-1',
+      kind: 'hosted',
+      trueforgeModel: 'groq/gpt-oss-120b',
+    });
+    expect(profileForModel('ollama/qwen-2-5-coder-7b', ['primary', 'added-1'])).toEqual({
+      name: 'added-2',
+      kind: 'local',
+      trueforgeModel: 'ollama/qwen-2-5-coder-7b',
+    });
+    expect(profileForModel('llamacpp/qwen', []).kind).toBe('local');
   });
 
   it('accepts a bare list or { profiles }, YAML or JSON', () => {

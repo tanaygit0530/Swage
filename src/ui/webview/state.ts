@@ -31,6 +31,16 @@ export type TimelineItem =
 export interface PanelState {
   readonly workspace: string;
   readonly model: string;
+  /** The model picker: profiles and the active one. */
+  readonly models: {
+    readonly active: string;
+    readonly items: readonly {
+      name: string;
+      label: string;
+      model: string;
+      note?: string | undefined;
+    }[];
+  };
   readonly status: RunState;
   readonly statusMessage: string;
   readonly timeline: readonly TimelineItem[];
@@ -42,6 +52,7 @@ export interface PanelState {
 export const initialState: PanelState = {
   workspace: '',
   model: '',
+  models: { active: '', items: [] },
   status: 'idle',
   statusMessage: '',
   timeline: [],
@@ -181,6 +192,14 @@ export function reduce(state: PanelState, msg: HostToWebview): PanelState {
       };
     case 'model':
       return { ...state, model: msg.model };
+    case 'models': {
+      const active = msg.items.find((m) => m.name === msg.active);
+      return {
+        ...state,
+        models: { active: msg.active, items: msg.items },
+        model: active ? `${active.label} (${active.model})` : state.model,
+      };
+    }
     case 'error':
       return {
         ...state,

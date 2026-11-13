@@ -85,6 +85,26 @@ describe('panel reducer', () => {
   const run = (...msgs: Parameters<typeof reduce>[1][]): PanelState =>
     msgs.reduce(reduce, initialState);
 
+  it('fills the model picker and shows the active model, with a note on a failed one', () => {
+    const s = run({
+      type: 'models',
+      active: 'fallback-1',
+      items: [
+        { name: 'primary', label: 'Gemini', model: 'google-gemini/flash', note: 'returned 429' },
+        { name: 'fallback-1', label: 'Ollama', model: 'ollama/qwen' },
+      ],
+    });
+    expect(s.models.active).toBe('fallback-1');
+    expect(s.models.items).toHaveLength(2);
+    expect(s.model).toBe('Ollama (ollama/qwen)');
+    expect(parseWebviewMessage({ type: 'selectModel', name: 'primary' })).toEqual({
+      type: 'selectModel',
+      name: 'primary',
+    });
+    expect(parseWebviewMessage({ type: 'moreModels' })).toEqual({ type: 'moreModels' });
+    expect(parseWebviewMessage({ type: 'selectModel' })).toBeUndefined();
+  });
+
   it('shows a fallback banner and updates the model in the header', () => {
     const s = run(
       { type: 'init', workspace: 'w', model: 'Gemini' },

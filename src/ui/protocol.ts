@@ -81,6 +81,14 @@ export const HostToWebview = z.discriminatedUnion('type', [
   }),
   /** The model the run is on now (after a fallback switch). */
   z.object({ type: z.literal('model'), model: Short }),
+  /** The model profiles for the panel's model picker, and the active one. */
+  z.object({
+    type: z.literal('models'),
+    active: Short,
+    items: z
+      .array(z.object({ name: Short, label: Short, model: Short, note: Short.optional() }))
+      .max(50),
+  }),
 ]);
 export type HostToWebview = z.infer<typeof HostToWebview>;
 
@@ -89,6 +97,10 @@ export const WebviewToHost = z.discriminatedUnion('type', [
   z.object({ type: z.literal('submit'), text: z.string().trim().min(1).max(20_000) }),
   z.object({ type: z.literal('stop') }),
   z.object({ type: z.literal('retry') }),
+  /** The user picked a profile in the panel's model picker. */
+  z.object({ type: z.literal('selectModel'), name: Short }),
+  /** "Other models…": open Swage: Switch Model (add any TrueForge model, change the primary). */
+  z.object({ type: z.literal('moreModels') }),
   z.object({
     type: z.literal('approve'),
     toolCallId: Short,

@@ -164,3 +164,24 @@ export function profilesFrom(setting: unknown, extensionDir?: string): ResolvedP
     'No model profile: add one to the swage.models setting (see config/models.example.yaml).',
   );
 }
+
+/** Providers that usually run on the user's machine, so a new profile for them is `local`. */
+const LOCAL_PROVIDER = /ollama|llama|lmstudio|vllm|local/i;
+
+/**
+ * A profile for a TrueForge model added from the model picker: a unique name (`added-1`, ...),
+ * `local` timeouts for local providers, and no label (it comes from the provider).
+ */
+export function profileForModel(
+  trueforgeModel: string,
+  existingNames: readonly string[],
+): { name: string; kind: 'hosted' | 'local'; trueforgeModel: string } {
+  let n = 1;
+  while (existingNames.includes(`added-${n}`)) n++;
+  const provider = trueforgeModel.split('/')[0] ?? '';
+  return {
+    name: `added-${n}`,
+    kind: LOCAL_PROVIDER.test(provider) ? 'local' : 'hosted',
+    trueforgeModel,
+  };
+}

@@ -338,3 +338,21 @@ button {
     transition: none !important;
   }
 }
+
+/* The model picker in the header: a native select, themed like VS Code's dropdowns. */
+.model-picker {
+  max-width: 100%;
+  margin-left: 6px;
+  padding: 1px 4px;
+  font: inherit;
+  font-weight: normal;
+  color: var(--vscode-dropdown-foreground);
+  background: var(--vscode-dropdown-background);
+  border: 1px solid var(--vscode-dropdown-border, var(--vscode-contrastBorder, transparent));
+  border-radius: 2px;
+}
+
+.model-picker:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: 1px;
+}

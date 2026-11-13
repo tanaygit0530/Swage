@@ -7,6 +7,7 @@ import {
   isBusy,
   mentionQuery,
   reduce,
+  type PanelState,
   type TimelineItem,
 } from './state';
 
@@ -115,6 +116,37 @@ function Item({ item }: { item: TimelineItem }) {
     case 'notice':
       return <div class={`notice notice-${item.tone}`}>{item.text}</div>;
   }
+}
+
+const MORE_MODELS = '__more__';
+
+/** The model picker in the panel header: switch profile for the next request, or add another. */
+function ModelPicker({ models, busy }: { models: PanelState['models']; busy: boolean }) {
+  return (
+    <select
+      class="model-picker"
+      aria-label="Model for the next request"
+      title="Model for the next request (Swage: Switch Model)"
+      value={models.active}
+      disabled={busy}
+      onChange={(e) => {
+        const select = e.currentTarget;
+        const value = select.value;
+        if (value === MORE_MODELS) {
+          select.value = models.active;
+          send({ type: 'moreModels' });
+        } else send({ type: 'selectModel', name: value });
+      }}
+    >
+      {models.items.map((m) => (
+        <option key={m.name} value={m.name}>
+          {m.label} · {m.model}
+          {m.note ? ` (${m.note})` : ''}
+        </option>
+      ))}
+      <option value={MORE_MODELS}>Other models…</option>
+    </select>
+  );
 }
 
 function BudgetMeter({
@@ -240,7 +272,12 @@ function App() {
     <div class="panel">
       <header>
         <div class="title">
-          Swage agent <span class="model">{state.model}</span>
+          Swage agent{' '}
+          {state.models.items.length > 0 ? (
+            <ModelPicker models={state.models} busy={busy} />
+          ) : (
+            <span class="model">{state.model}</span>
+          )}
         </div>
         {state.budget && <BudgetMeter {...state.budget} />}
       </header>

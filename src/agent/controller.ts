@@ -80,6 +80,8 @@ export class AgentController implements vscode.WebviewViewProvider, vscode.Dispo
     private readonly review?: ReviewController,
     private readonly models?: ModelsController,
   ) {
+    // Keep the panel's model picker in step with Switch Model, the status bar and fallbacks.
+    models?.onDidChange(() => this.postModels());
     this.logger = redactingLogger({
       info: (m) => output.appendLine(m),
       warn: (m) => output.appendLine(`warn: ${m}`),
@@ -112,6 +114,25 @@ export class AgentController implements vscode.WebviewViewProvider, vscode.Dispo
         return;
       }
       void this.onMessage(msg);
+    });
+  }
+
+  /** The model picker's list: every profile, the active one, and recent failures. */
+  private postModels(): void {
+    const router = this.models?.router;
+    if (!router) return;
+    this.post({
+      type: 'models',
+      active: router.active.name,
+      items: router.profiles.map((p) => {
+        const failed = router.lastFailure(p.name)?.failure.reason;
+        return {
+          name: p.name,
+          label: p.label,
+          model: p.trueforgeModel,
+          ...(failed ? { note: failed } : {}),
+        };
+      }),
     });
   }
 
@@ -157,8 +178,23 @@ export class AgentController implements vscode.WebviewViewProvider, vscode.Dispo
             ? `${this.models.router.active.label} (${this.models.router.active.trueforgeModel})`
             : (s.profiles[0]?.trueforgeModel ?? 'no model configured'),
         });
+        this.postModels();
         return;
       }
+      case 'selectModel': {
+        const router = this.models?.router;
+        if (router?.setActive(msg.name))
+          void vscode.window.setStatusBarMessage(
+            `Swage will use ${router.active.label} for the next request.`,
+            4000,
+          );
+        this.postModels();
+        return;
+      }
+      case 'moreModels':
+        await vscode.commands.executeCommand('swage.switchModel');
+        this.postModels();
+        return;
       case 'submit':
         await this.start(msg.text);
         return;

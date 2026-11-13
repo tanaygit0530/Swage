@@ -114,5 +114,15 @@ suite('Swage fallback (Task C)', () => {
     assert.strictEqual(again.kind, 'review', again.message);
     assert.strictEqual(api.models.router?.active.name, 'primary');
     assert.ok(await vscode.commands.executeCommand('swage.review.discard'));
+
+    // The model picker's "Add a model from TrueForge…": any TrueForge model becomes a profile and
+    // is used next (for example Ollama when Gemini is out of quota).
+    const added = await api.models.addModel('ollama/qwen-2-5-coder-7b');
+    assert.strictEqual(added, 'added-1');
+    assert.strictEqual(api.models.router?.active.name, 'added-1');
+    assert.strictEqual(api.models.router?.active.kind, 'local');
+    assert.strictEqual(api.models.router?.profiles.length, 3);
+    // Adding a model that is already a profile just selects it.
+    assert.strictEqual(await api.models.addModel('swage-fake/inline-logic-docstring'), 'primary');
   });
 });

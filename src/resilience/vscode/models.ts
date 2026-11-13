@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import type { SwageClient } from '../../client/client';
 import { type Decision, ModelRouter, RecoveryMonitor } from '../fallback';
 import { probeProfile } from '../probe';
-import { profilesFrom, type ResolvedProfile } from '../profiles';
+import { profileForModel, profilesFrom, type ResolvedProfile } from '../profiles';
 
 /**
  * Model profiles in VS Code (blueprint sections 3 and 8, F6 and F9): the router shared by agent
@@ -64,7 +64,16 @@ export class ModelsController implements vscode.Disposable {
     this.refresh();
   }
 
+  private readonly changeListeners = new Set<() => void>();
+
+  /** Fires when the profiles or the active profile change (the panel's model picker listens). */
+  onDidChange(listener: () => void): vscode.Disposable {
+    this.changeListeners.add(listener);
+    return new vscode.Disposable(() => this.changeListeners.delete(listener));
+  }
+
   private refresh(): void {
+    for (const l of [...this.changeListeners]) l();
     const router = this.routerValue;
     if (!router) {
       this.item.text = '$(error) Swage: no model';
@@ -146,6 +155,12 @@ export class ModelsController implements vscode.Disposable {
     items.push(
       { action: '', label: '', kind: vscode.QuickPickItemKind.Separator },
       {
+        action: 'add',
+        label: '$(add) Add a model from TrueForge…',
+        detail:
+          'Try any model TrueForge has (Gemini, Groq, Ollama, …): added as a profile and used next',
+      },
+      {
         action: 'primary',
         label: '$(edit) Change the primary model…',
         detail:
@@ -171,39 +186,41 @@ export class ModelsController implements vscode.Disposable {
       await vscode.commands.executeCommand('workbench.action.openSettings', 'swage.models');
       return undefined;
     }
-    return this.changePrimary();
+    return picked.action === 'add' ? this.addModel() : this.changePrimary();
   }
 
-  /** Writes a new primary model into swage.models (where it is defined), keeping the fallbacks. */
-  private async changePrimary(): Promise<string | undefined> {
-    const router = this.routerValue;
-    if (!router) return undefined;
+  /** A TrueForge model, picked from TrueForge's list (or typed when TrueForge is not running yet). */
+  private async chooseModel(title: string, current?: string): Promise<string | undefined> {
     const models = await this.client?.listModels().catch(() => undefined);
-    const model = models
-      ? (
-          await vscode.window.showQuickPick(
-            models.map((m) => ({
-              label: m,
-              description: m === router.primary.trueforgeModel ? 'current primary' : '',
-            })),
-            { title: 'Primary model (from TrueForge)' },
-          )
-        )?.label
-      : await vscode.window.showInputBox({
-          title: 'Primary model',
-          prompt:
-            'TrueForge model, as provider/model (TrueForge is not started yet, so it cannot be listed)',
-          value: router.primary.trueforgeModel,
-          validateInput: (v) => (/^[^/\s]+\/\S+$/.test(v) ? undefined : 'Use provider/model'),
-        });
-    if (!model) return undefined;
+    if (models) {
+      const picked = await vscode.window.showQuickPick(
+        models.map((m) => ({ label: m, description: m === current ? 'current' : '' })),
+        { title, placeHolder: 'Models configured in TrueForge (Settings, Models)' },
+      );
+      return picked?.label;
+    }
+    return vscode.window.showInputBox({
+      title,
+      prompt:
+        'TrueForge model, as provider/model (TrueForge is not started yet, so it cannot be listed)',
+      ...(current ? { value: current } : {}),
+      validateInput: (v) => (/^[^/\s]+\/\S+$/.test(v) ? undefined : 'Use provider/model'),
+    });
+  }
+
+  /** Writes the profile list to swage.models where it is defined (workspace, else user). */
+  private async writeProfiles(list: readonly Record<string, unknown>[]): Promise<void> {
     const config = vscode.workspace.getConfiguration('swage');
     const inspect = config.inspect<unknown[]>('models');
     const target =
       inspect?.workspaceValue && inspect.workspaceValue.length > 0
         ? vscode.ConfigurationTarget.Workspace
         : vscode.ConfigurationTarget.Global;
-    const list = router.profiles.map((p) => ({
+    await config.update('models', list, target);
+  }
+
+  private currentProfiles(): Record<string, unknown>[] {
+    return (this.routerValue?.profiles ?? []).map((p) => ({
       name: p.name,
       kind: p.kind,
       trueforgeModel: p.trueforgeModel,
@@ -211,16 +228,47 @@ export class ModelsController implements vscode.Disposable {
       timeouts: p.timeouts,
       label: p.label,
     }));
-    const [first, ...rest] = list;
+  }
+
+  /**
+   * "Add a model from TrueForge…": appends a profile for any TrueForge model (a Groq or Ollama
+   * model when Gemini is out of quota, say) and makes it the model for the next request.
+   */
+  async addModel(model?: string): Promise<string | undefined> {
+    const router = this.routerValue;
+    if (!router) return undefined;
+    const chosen = model ?? (await this.chooseModel('Add a model to try'));
+    if (!chosen) return undefined;
+    const existing = router.profiles.find((p) => p.trueforgeModel === chosen);
+    if (existing) {
+      router.setActive(existing.name);
+      return existing.name;
+    }
+    const profile = profileForModel(
+      chosen,
+      router.profiles.map((p) => p.name),
+    );
+    await this.writeProfiles([...this.currentProfiles(), profile]);
+    this.load();
+    router.setActive(profile.name);
+    void vscode.window.showInformationMessage(
+      `Added ${chosen} as profile ${profile.name}; Swage uses it for the next request.`,
+    );
+    return profile.name;
+  }
+
+  /** Writes a new primary model into swage.models (where it is defined), keeping the fallbacks. */
+  private async changePrimary(): Promise<string | undefined> {
+    const router = this.routerValue;
+    if (!router) return undefined;
+    const model = await this.chooseModel('Primary model', router.primary.trueforgeModel);
+    if (!model) return undefined;
+    const [first, ...rest] = this.currentProfiles();
     if (!first) return undefined;
     // A new model gets its own label, from its provider.
     const { label: _old, ...firstWithoutLabel } = first;
     void _old;
-    await config.update(
-      'models',
-      [{ ...firstWithoutLabel, trueforgeModel: model }, ...rest],
-      target,
-    );
+    await this.writeProfiles([{ ...firstWithoutLabel, trueforgeModel: model }, ...rest]);
     router.setActive(router.primary.name);
     void vscode.window.showInformationMessage(`Swage's primary model is now ${model}.`);
     return model;
