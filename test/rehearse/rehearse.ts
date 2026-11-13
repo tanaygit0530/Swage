@@ -2,7 +2,7 @@ import * as assert from 'node:assert';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { TrueForge } from '@truefoundry/trueforge-sdk';
 import * as vscode from 'vscode';
@@ -44,7 +44,7 @@ let api: SwageTestApi;
 // Helpers
 
 const clean = (s: string): string =>
-  redactText(s).replaceAll(DIR, '<flask>').replaceAll(tmpdir(), '<tmp>');
+  redactText(s).replaceAll(DIR, '<flask>').replaceAll(tmpdir(), '<tmp>').replaceAll(homedir(), '~');
 
 function git(...args: string[]): string {
   return execFileSync('git', args, { cwd: DIR, encoding: 'utf8' }).trim();

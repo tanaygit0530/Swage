@@ -8,11 +8,11 @@
 //   node scripts/rehearse.mjs run [--tasks cancel,a,toggle,undo,b,c] [--runs-a 5 --runs-b 3 --runs-c 3]
 //   node scripts/rehearse.mjs report             docs/EVIDENCE.md from docs/evidence/*
 //
-// Options: --dir <flask clone> (default: <tmp>/swage-rehearsal/flask-3.1.3), --profiles <yaml>
+// Options: --dir <flask clone> (default: ~/.swage/rehearsal/flask-3.1.3), --profiles <yaml>
 // TrueForge must be running (trueforge/start.sh) for `run`. No key is read or printed.
 import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { homedir } from 'node:os';
 import * as path from 'node:path';
 
 const FLASK_URL = 'https://github.com/pallets/flask.git';
@@ -41,7 +41,8 @@ const flag = (name, fallback) => {
   return i >= 0 && args[i + 1] !== undefined ? args[i + 1] : fallback;
 };
 const dir = path.resolve(
-  flag('--dir', path.join(tmpdir(), 'swage-rehearsal', `flask-${FLASK_TAG}`)),
+  // Outside the repository and outside the system temp folder, which macOS clears on restart.
+  flag('--dir', path.join(homedir(), '.swage', 'rehearsal', `flask-${FLASK_TAG}`)),
 );
 const python = path.join(
   dir,
@@ -177,7 +178,7 @@ function setup() {
   const out = path.join(repo, 'docs', 'evidence', 'baseline');
   mkdirSync(out, { recursive: true });
   const baseline = {
-    flask: { tag: FLASK_TAG, commit: head, dir: '<tmp>/swage-rehearsal/flask-3.1.3' },
+    flask: { tag: FLASK_TAG, commit: head, dir: '~/.swage/rehearsal/flask-3.1.3' },
     python: versions[0],
     flaskVersion: versions[1],
     pytest: versions[2],
