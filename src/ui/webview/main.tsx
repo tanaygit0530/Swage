@@ -5,12 +5,14 @@ import { parseInline } from './markdown';
 import { FileChip, Inlines, Markdown } from './richText';
 import { formatDuration, toolLabel } from './tools';
 import { EditCard, WalkthroughCard } from './cards';
+import { barModel } from './changes';
+import { FilesBar, Toast } from './filesBar';
 import {
   applyCompletion,
   initialState,
   isBusy,
   mentionQuery,
-  reduce,
+  reducePanel,
   type PanelState,
   type TimelineItem,
 } from './state';
@@ -284,7 +286,7 @@ function BudgetMeter({
 }
 
 function App() {
-  const [state, dispatch] = useReducer(reduce, initialState);
+  const [state, dispatch] = useReducer(reducePanel, initialState);
   const [text, setText] = useState('');
   const [selected, setSelected] = useState(0);
   const input = useRef<HTMLTextAreaElement>(null);
@@ -303,6 +305,14 @@ function App() {
   }, []);
 
   useEffect(() => bottom.current?.scrollIntoView({ block: 'end' }), [state.timeline]);
+
+  // The "Applied N files. Undo" toast stays 10 s.
+  const toastId = state.toast?.id;
+  useEffect(() => {
+    if (toastId === undefined) return undefined;
+    const t = setTimeout(() => dispatch({ type: 'local.dismissToast', id: toastId }), 10_000);
+    return () => clearTimeout(t);
+  }, [toastId]);
 
   const busy = isBusy(state.status);
   const items: CompletionItem[] = showCompletions ? state.completions.items : [];
@@ -404,6 +414,18 @@ function App() {
         <div ref={bottom} />
       </main>
       <footer>
+        <FilesBar model={barModel(state)} send={send} />
+        {state.toast && (
+          <Toast
+            text={state.toast.text}
+            undo={state.toast.undo}
+            onUndo={() => {
+              send({ type: 'undo' });
+              dispatch({ type: 'local.dismissToast', id: state.toast?.id ?? -1 });
+            }}
+            onClose={() => dispatch({ type: 'local.dismissToast', id: state.toast?.id ?? -1 })}
+          />
+        )}
         <div class="status">
           <span class={`dot dot-${state.status}`} aria-hidden="true" />
           {state.statusMessage || state.status}

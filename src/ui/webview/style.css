@@ -864,3 +864,251 @@ pre {
 .walk-files .file-glyph {
   vertical-align: -2px;
 }
+
+/* ---- Files-changed bar and toast (redesign step 4) ---- */
+
+.files-bar {
+  margin: 0 0 8px;
+  border: 1px solid var(--swage-border);
+  border-radius: var(--swage-radius);
+  background: var(--vscode-editorWidget-background, var(--vscode-sideBar-background));
+  overflow: hidden;
+}
+
+.files-bar:focus {
+  outline: 1px solid var(--vscode-focusBorder);
+}
+
+.fb-rows {
+  list-style: none;
+  margin: 0;
+  padding: 4px 0;
+  max-height: 40vh;
+  overflow-y: auto;
+  border-bottom: 1px solid var(--swage-border);
+}
+
+.fb-line {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 6px;
+}
+
+.fb-row:hover > .fb-line,
+.fb-row:focus-within > .fb-line {
+  background: var(--vscode-list-hoverBackground);
+}
+
+.fb-expand {
+  color: var(--vscode-gitDecoration-addedResourceForeground, #3fb950);
+}
+
+.fb-main {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+  padding: 3px 2px;
+  border: none;
+  background: none;
+  color: var(--vscode-foreground);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.fb-name {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.fb-dir,
+.fb-kind {
+  color: var(--vscode-descriptionForeground);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.fb-kind {
+  font-size: 0.85em;
+  padding: 0 4px;
+  border: 1px solid var(--swage-border);
+  border-radius: 4px;
+}
+
+.fb-row-actions {
+  display: flex;
+  visibility: hidden;
+}
+
+.fb-row:hover .fb-row-actions,
+.fb-row:focus-within .fb-row-actions {
+  visibility: visible;
+}
+
+.fb-state.ok {
+  display: inline-flex;
+  color: var(--vscode-testing-iconPassed, #3fb950);
+}
+
+.fb-row.decision-accepted > .fb-line .fb-main {
+  opacity: 0.6;
+}
+
+.fb-row.decision-rejected > .fb-line .fb-name,
+.fb-row.decision-rejected > .fb-line .fb-dir {
+  text-decoration: line-through;
+  opacity: 0.7;
+}
+
+.fb-blocks {
+  list-style: none;
+  margin: 0 0 4px 30px;
+  padding: 0;
+}
+
+.fb-block {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 6px 1px 0;
+  font-size: 0.92em;
+}
+
+.fb-block-main {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+  padding: 2px 0;
+  border: none;
+  background: none;
+  color: var(--vscode-foreground);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.fb-block-line {
+  font-family: var(--vscode-editor-font-family);
+  color: var(--vscode-descriptionForeground);
+  min-width: 3.2em;
+}
+
+.fb-block-summary {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--vscode-editor-font-family);
+  color: var(--vscode-descriptionForeground);
+}
+
+.fb-block.state-rejected .fb-block-summary {
+  text-decoration: line-through;
+}
+
+.fb-block-actions {
+  display: flex;
+  gap: 2px;
+}
+
+.mini {
+  padding: 0 6px;
+  border: 1px solid var(--swage-border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--vscode-foreground);
+  font: inherit;
+  font-size: 0.9em;
+  line-height: 1.6;
+  cursor: pointer;
+}
+
+.mini:hover {
+  background: var(--vscode-toolbar-hoverBackground, rgba(128, 128, 128, 0.2));
+}
+
+.mini.on {
+  border-color: var(--vscode-focusBorder);
+  background: color-mix(in srgb, var(--vscode-focusBorder) 20%, transparent);
+}
+
+.fb-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px 4px 10px;
+  font-size: 0.95em;
+}
+
+.fb-title {
+  white-space: nowrap;
+}
+
+.fb-hint {
+  color: var(--vscode-descriptionForeground);
+  font-style: italic;
+  white-space: nowrap;
+}
+
+.text-button {
+  padding: 2px 6px;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: var(--vscode-foreground);
+  font: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.text-button:hover:not(:disabled) {
+  background: var(--vscode-toolbar-hoverBackground, rgba(128, 128, 128, 0.2));
+}
+
+button.primary {
+  padding: 2px 10px;
+  border: 1px solid var(--vscode-button-border, transparent);
+  border-radius: 4px;
+  background: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+  font: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+button.primary:hover:not(:disabled) {
+  background: var(--vscode-button-hoverBackground);
+}
+
+button.primary:disabled,
+.text-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.chevron-v {
+  transform: rotate(180deg);
+  transition: transform 0.12s ease;
+}
+
+.chevron-v.open {
+  transform: none;
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 8px;
+  padding: 4px 6px 4px 10px;
+  border: 1px solid var(--swage-border);
+  border-left: 3px solid var(--vscode-testing-iconPassed, #3fb950);
+  border-radius: var(--swage-radius);
+  background: var(--vscode-editorWidget-background, transparent);
+}

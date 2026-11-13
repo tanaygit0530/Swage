@@ -103,6 +103,15 @@ export function dismissToast(state: PanelState, id: number): PanelState {
   return state.toast?.id === id ? { ...state, toast: undefined } : state;
 }
 
+/** Actions the webview dispatches itself, besides host messages. */
+export type LocalAction = { readonly type: 'local.dismissToast'; readonly id: number };
+
+export function reducePanel(state: PanelState, action: HostToWebview | LocalAction): PanelState {
+  return action.type === 'local.dismissToast'
+    ? dismissToast(state, action.id)
+    : reduce(state, action);
+}
+
 export function isBusy(state: RunState): boolean {
   return state === 'starting' || state === 'running' || state === 'cancelling';
 }
