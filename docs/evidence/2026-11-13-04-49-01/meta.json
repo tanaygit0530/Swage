@@ -1,0 +1,39 @@
+{
+  "startedAt": "2026-11-13T04:49:07.406Z",
+  "flaskHead": "22d924701a6ae2e4cd01e9a15bbaf3946094af65",
+  "profiles": [
+    {
+      "name": "primary",
+      "model": "google-gemini/gemini-flash-lite-latest",
+      "kind": "hosted"
+    },
+    {
+      "name": "fallback-1",
+      "model": "google-gemini/gemini-3-5-flash-lite",
+      "kind": "hosted"
+    },
+    {
+      "name": "fallback-2",
+      "model": "google-gemini/gemini-3-1-flash-lite",
+      "kind": "hosted"
+    },
+    {
+      "name": "fallback-3",
+      "model": "ollama/qwen-2-5-coder-7b",
+      "kind": "local"
+    }
+  ],
+  "tasks": [
+    "cancel",
+    "a",
+    "toggle",
+    "undo",
+    "b",
+    "c"
+  ],
+  "runs": {
+    "a": 5,
+    "b": 3,
+    "c": 3
+  }
+}

@@ -56,3 +56,55 @@ Written by hand during the rehearsal; `node scripts/rehearse.mjs report` appends
 - **Passed:** cancel (Stop to UI 1 ms, workspace clean) and Task A runs 1 to 4 (instruction to diff 6.0 s, 14.6 s, 32.4 s and 5.2 s; 2 blocks each; `FLASK_DEBUG=off` gave `False`; all 490 Flask tests passed after Apply).
 - **Failed:** Task B run 1 ended with a run error. Not investigated yet.
 - **Still to run:** Task B, the double undo and Task C on this commit. Testing is deferred until the build is complete; the full rehearsal is `node scripts/rehearse.mjs run`.
+
+### 5. Strict-judge audit and the final rehearsals (12 and 13 November)
+
+**Fixes found by the audit and these rehearsals,** each in its own commit:
+
+- `run_tests` uses the workspace venv for a bare `pytest`.
+- `run_tests` copies tracked test fixtures: Flask's `tests/test_apps/.env` was missing, so `test_load_dotenv` failed on unchanged Flask.
+- A change set reaches review only after it passed `run_tests` once.
+- An agent that stops with staged edits, or gives up, opens them for review.
+- A free tier's per-minute quota is waited out; switches are capped at 6 per task.
+- A model that writes tool calls as text hands the task on.
+- New tasks return to a profile once its rate limit is over.
+- Undo after a reload is proven in VS Code.
+- CI runs on Linux and macOS.
+- The rehearsal set-up was fixed: Python 3.10+, `.venv/.gitignore`, and the clone kept outside the temp folder.
+
+**Lost evidence (12 November):** the 12 November final rehearsal ran from a fresh clone in the system temp folder, which macOS cleared on restart, so its files are gone. Results from the session transcript:
+- cancel passed (20 ms);
+- Task A 5 of 5 (5.8, 5.4, 4.2, 3.9 and 40.5 s);
+- Task C 3 of 3, including run C1 as the statement words it (unreachable endpoint configured), with lag of 137, 10 and 19 ms;
+- every Task B run failed on Gemini's input-tokens-per-minute quota.
+
+**13 November, from this repository** (`docs/evidence/2026-11-13-*`):
+
+- **`04-49-01`:**
+  - Cancel passed (13 ms).
+  - Task A runs 1 to 4 passed (4.1 to 4.6 s).
+  - Task C 3 of 3.
+  - Task B run 1 found all three files (`cli.py`, `test_cli.py`, `docs/cli.rst`); `flask --help` listed `config` and the JSON was masked, but the model's own `test_config_command` failed. The run finished on Ollama after all three Gemini buckets hit their per-minute limit.
+  - Task B runs 2 and 3, and Task A run 5, ran on Ollama, which wrote its tool calls as text, and did nothing (now handled: the next profile takes over).
+- **`05-02-15`:**
+  - Double undo passed (Task A applied, undone twice, `git status` clean).
+  - Task B runs 1 to 3 reached review with 2, 2 and 3 files, but each one hit the 6-switch cap between rate-limited Gemini buckets. They were give-up reviews of unfinished work: tests failed and masking was missing.
+- **`05-24-13` (Ollama Qwen 7B alone):** the first answer was a tool call written as text, so the run ended with one clear error after 45 s and the workspace was unchanged.
+
+**Conclusion.** Every Swage behaviour Task B depends on works with real models:
+- discovering files without being told;
+- the plan with reasons;
+- staging, the test gate and review;
+- fallback and the give-up review;
+- undo.
+
+What failed is model capacity, not Swage. No model available to this team today can finish Task B reliably:
+- **Gemini free tier:** 250,000 input tokens per minute per model, and each agent turn resends the whole conversation.
+- **Ollama Qwen 7B:** no native tool calls through TrueForge.
+- **Groq:** the key has no access to the configured model.
+
+**For the recording:**
+- a paid Gemini key, or Groq with a model the key can use (for example `openai/gpt-oss-120b`, configured in TrueForge);
+- or an Ollama model with tool support (for example `qwen2.5:7b` or `llama3.1:8b`), added in the panel with **Other models… → Add a model from TrueForge…**.
+
+The statement scores behaviour, not the model, and the organisers may repeat tasks with their own model.

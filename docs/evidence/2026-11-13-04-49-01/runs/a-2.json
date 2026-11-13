@@ -1,0 +1,82 @@
+{
+  "id": "a-2",
+  "at": "2026-11-13T04:49:46.242Z",
+  "task": "A",
+  "instruction": "Treat the values 'off' and 'n' as false as well, case-insensitively, and update the docstring to list every value that is treated as false.",
+  "selection": "src/flask/helpers.py lines 28-33",
+  "model": "google-gemini/gemini-flash-lite-latest",
+  "outcome": "review",
+  "instructionToDiffMs": 4146,
+  "wallToReviewMs": 4168,
+  "ok": true,
+  "summary": "2 block(s), diff in 4.1 s, FLASK_DEBUG=off -> False, suite 490 passed in 0.55s",
+  "blocks": 2,
+  "diffInEditor": true,
+  "lenses": [
+    "Block 1/2 · +2 -1  ✓ Accept",
+    "✗ Reject",
+    "⇅ Split",
+    "Accept all",
+    "Reject all",
+    "$(check-all) Apply",
+    "Discard",
+    "Block 2/2 · +1 -1  ✓ Accept",
+    "✗ Reject"
+  ],
+  "toggle": {},
+  "applied": true,
+  "verification": {
+    "command": "FLASK_DEBUG=off python -c \"from flask.helpers import get_debug_flag; print(get_debug_flag())\"",
+    "output": "False",
+    "values": {
+      "0": "False",
+      "1": "True",
+      "off": "False",
+      "OFF": "False",
+      "n": "False",
+      "N": "False",
+      "no": "False",
+      "false": "False",
+      "on": "True",
+      "yes": "True"
+    }
+  },
+  "docstring": "Get whether debug mode should be enabled for the app, indicated by the\n:envvar:`FLASK_DEBUG` environment variable. The default is ``False``\n(any value except \"0\", \"false\", \"no\", \"off\", or \"n\" is considered True).",
+  "docListsAll": true,
+  "testsHelpers": {
+    "ok": true,
+    "summary": "35 passed in 0.05s",
+    "failed": []
+  },
+  "testsSuite": {
+    "ok": true,
+    "summary": "490 passed in 0.55s",
+    "failed": []
+  },
+  "diff": "diff --git a/src/flask/helpers.py b/src/flask/helpers.py\nindex 5d412c9..63be123 100644\n--- a/src/flask/helpers.py\n+++ b/src/flask/helpers.py\n@@ -27,10 +27,11 @@ if t.TYPE_CHECKING:  # pragma: no cover\n \n def get_debug_flag() -> bool:\n     \"\"\"Get whether debug mode should be enabled for the app, indicated by the\n-    :envvar:`FLASK_DEBUG` environment variable. The default is ``False``.\n+    :envvar:`FLASK_DEBUG` environment variable. The default is ``False``\n+    (any value except \"0\", \"false\", \"no\", \"off\", or \"n\" is considered True).\n     \"\"\"\n     val = os.environ.get(\"FLASK_DEBUG\")\n-    return bool(val and val.lower() not in {\"0\", \"false\", \"no\"})\n+    return bool(val and val.lower() not in {\"0\", \"false\", \"no\", \"off\", \"n\"})\n \n \n def get_load_dotenv(default: bool = True) -> bool:",
+  "undo": "restored",
+  "gitStatusAfter": "",
+  "tools": [
+    {
+      "name": "declare_context",
+      "ms": 19,
+      "error": false,
+      "args": "{\"plan\":[\"Update get_debug_flag to treat off and n as false case-insensitively and update docstring.\"],\"files\":[{\"reason\":\"inline edit of lines 28-33\",\"path\":\"src/flask/helpers.py\"}]}"
+    },
+    {
+      "name": "stage_edit",
+      "ms": 35,
+      "error": false,
+      "args": "{\"edits\":[{\"occurrence\":1,\"find\":\"def get_debug_flag() -> bool:\\n    \\\"\\\"\\\"Get whether debug mode should be enabled for the app, indicated by the\\n    :envvar:`FLASK_DEBUG` environment variable. The default is ``False``.\\n    \\\"\\\"\\\"\\n    val = os.environ.get(\\\"FLASK_DEBUG\\\")\\n    return bool(val and val.lower() not in {\\\"0\\\", \\\"false\\\", \\\"no\\\"})\",\"replace\":\"def get_debug_flag() -> bool:\\n    \\\"\\\"\\\"Get whether debug mode should be enabled for the app, indicated by the\\n    :envvar:`FLASK_DEBUG` environment variable. The default is ``False``\\n    (any value except \\\"0\\\", \\\"false\\\", \\\"no\\\", \\\"off\\\", or \\\"n\\\" is considered True).\\n    \\\"\\\"\\\"\\n    val = os.environ.get(\\\"FLASK_DEBUG\\\")\\n    return bool(val and val.lower() not in {\\\"0\\\", \\\"false\\\", \\\"no\\\", \\\"off\\\", \\\"n\\\"})\"}],\"kind\":\"edit\",\"path\":\"src/flask/helpers.py\"}"
+    }
+  ],
+  "toolSequence": [
+    "declare_context",
+    "stage_edit"
+  ],
+  "tokens": 7845,
+  "turns": 0,
+  "switches": [],
+  "modelErrors": [],
+  "firstEventMs": 1061
+}

@@ -1,0 +1,19 @@
+{
+  "runId": "2026-11-13-05-24-13",
+  "swageCommit": "6a60214fe861f26b81c4726895d88f0984db1718",
+  "swageDirty": false,
+  "trueforge": "0.184.2",
+  "profiles": [
+    {
+      "name": "primary",
+      "label": "Ollama Qwen 7B",
+      "kind": "local",
+      "trueforgeModel": "ollama/qwen-2-5-coder-7b",
+      "params": {
+        "temperature": 0,
+        "max_tokens": 4096
+      }
+    }
+  ],
+  "tasks": "b"
+}

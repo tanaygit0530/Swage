@@ -1,0 +1,11 @@
+{
+  "id": "undo-1",
+  "at": "2026-11-13T05:23:49.769Z",
+  "task": "undo",
+  "ok": true,
+  "summary": "A applied: true, B applied: false; undo 1 ok, undo 2 ok, git status after: clean; third undo: nothing_to_undo",
+  "statusBefore": "M docs/cli.rst\n M src/flask/cli.py\n M src/flask/helpers.py\n M tests/test_cli.py",
+  "statusAfterFirstUndo": "M src/flask/helpers.py",
+  "statusAfterSecondUndo": "",
+  "thirdUndo": "nothing_to_undo"
+}

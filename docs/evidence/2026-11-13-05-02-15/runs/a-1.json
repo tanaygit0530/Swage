@@ -1,0 +1,80 @@
+{
+  "id": "a-1",
+  "at": "2026-11-13T05:16:39.783Z",
+  "task": "A",
+  "instruction": "Treat the values 'off' and 'n' as false as well, case-insensitively, and update the docstring to list every value that is treated as false.",
+  "selection": "src/flask/helpers.py lines 28-33",
+  "model": "google-gemini/gemini-3-1-flash-lite",
+  "outcome": "review",
+  "instructionToDiffMs": 54522,
+  "wallToReviewMs": 54533,
+  "ok": true,
+  "summary": "2 block(s), diff in 54.5 s, FLASK_DEBUG=off -> False, suite 490 passed in 0.59s",
+  "blocks": 2,
+  "diffInEditor": true,
+  "lenses": [
+    "Block 1/2 · +1 -0  ✓ Accept",
+    "✗ Reject",
+    "Accept all",
+    "Reject all",
+    "$(check-all) Apply",
+    "Discard",
+    "Block 2/2 · +1 -1  ✓ Accept",
+    "✗ Reject"
+  ],
+  "toggle": {},
+  "applied": true,
+  "verification": {
+    "command": "FLASK_DEBUG=off python -c \"from flask.helpers import get_debug_flag; print(get_debug_flag())\"",
+    "output": "False",
+    "values": {
+      "0": "False",
+      "1": "True",
+      "off": "False",
+      "OFF": "False",
+      "n": "False",
+      "N": "False",
+      "no": "False",
+      "false": "False",
+      "on": "True",
+      "yes": "True"
+    }
+  },
+  "docstring": "Get whether debug mode should be enabled for the app, indicated by the\n:envvar:`FLASK_DEBUG` environment variable. The default is ``False``.\nValues \"0\", \"false\", \"no\", \"off\", and \"n\" are treated as false.",
+  "docListsAll": true,
+  "testsHelpers": {
+    "ok": true,
+    "summary": "35 passed in 0.06s",
+    "failed": []
+  },
+  "testsSuite": {
+    "ok": true,
+    "summary": "490 passed in 0.59s",
+    "failed": []
+  },
+  "diff": "diff --git a/src/flask/helpers.py b/src/flask/helpers.py\nindex 5d412c9..e8426cf 100644\n--- a/src/flask/helpers.py\n+++ b/src/flask/helpers.py\n@@ -28,9 +28,10 @@ if t.TYPE_CHECKING:  # pragma: no cover\n def get_debug_flag() -> bool:\n     \"\"\"Get whether debug mode should be enabled for the app, indicated by the\n     :envvar:`FLASK_DEBUG` environment variable. The default is ``False``.\n+    Values \"0\", \"false\", \"no\", \"off\", and \"n\" are treated as false.\n     \"\"\"\n     val = os.environ.get(\"FLASK_DEBUG\")\n-    return bool(val and val.lower() not in {\"0\", \"false\", \"no\"})\n+    return bool(val and val.lower() not in {\"0\", \"false\", \"no\", \"off\", \"n\"})\n \n \n def get_load_dotenv(default: bool = True) -> bool:",
+  "gitStatusAfter": "(kept for the double undo)",
+  "tools": [
+    {
+      "name": "declare_context",
+      "ms": 40,
+      "error": false,
+      "args": "{\"files\":[{\"path\":\"src/flask/helpers.py\",\"reason\":\"inline edit of lines 28-33 to update falsey values and docstring\"}],\"plan\":[\"Update get_debug_flag to treat 'off' and 'n' as false and update docstring.\"]}"
+    },
+    {
+      "name": "stage_edit",
+      "ms": 38,
+      "error": false,
+      "args": "{\"path\":\"src/flask/helpers.py\",\"edits\":[{\"find\":\"    \\\"\\\"\\\"Get whether debug mode should be enabled for the app, indicated by the\\n    :envvar:`FLASK_DEBUG` environment variable. The default is ``False``.\\n    \\\"\\\"\\\"\\n    val = os.environ.get(\\\"FLASK_DEBUG\\\")\\n    return bool(val and val.lower() not in {\\\"0\\\", \\\"false\\\", \\\"no\\\"})\",\"replace\":\"    \\\"\\\"\\\"Get whether debug mode should be enabled for the app, indicated by the\\n    :envvar:`FLASK_DEBUG` environment variable. The default is ``False``.\\n    Values \\\"0\\\", \\\"false\\\", \\\"no\\\", \\\"off\\\", and \\\"n\\\" are treated as false.\\n    \\\"\\\"\\\"\\n    val = os.environ.get(\\\"FLASK_DEBUG\\\")\\n    return bool(val and val.lower() not in {\\\"0\\\", \\\"false\\\", \\\"no\\\", \\\"off\\\", \\\"n\\\"})\"}],\"kind\":\"edit\"}"
+    }
+  ],
+  "toolSequence": [
+    "declare_context",
+    "stage_edit"
+  ],
+  "tokens": 7456,
+  "turns": 0,
+  "switches": [],
+  "modelErrors": [],
+  "firstEventMs": 32403
+}

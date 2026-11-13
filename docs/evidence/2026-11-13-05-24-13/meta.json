@@ -1,0 +1,19 @@
+{
+  "startedAt": "2026-11-13T05:24:18.565Z",
+  "flaskHead": "22d924701a6ae2e4cd01e9a15bbaf3946094af65",
+  "profiles": [
+    {
+      "name": "primary",
+      "model": "ollama/qwen-2-5-coder-7b",
+      "kind": "local"
+    }
+  ],
+  "tasks": [
+    "b"
+  ],
+  "runs": {
+    "a": 5,
+    "b": 1,
+    "c": 3
+  }
+}
