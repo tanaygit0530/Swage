@@ -108,6 +108,9 @@ export const HostToWebview = z.discriminatedUnion('type', [
     type: z.literal('plan'),
     steps: z.array(Short).max(30),
     files: z.array(z.object({ path: Short, reason: Short })).max(50),
+    /** Planning mode: the paused declare_context call this card approves or sends back. */
+    toolCallId: Short.optional(),
+    awaiting: z.boolean().optional(),
   }),
   z.object({
     type: z.literal('budget'),
@@ -188,6 +191,13 @@ export const WebviewToHost = z.discriminatedUnion('type', [
   }),
   /** A file chip or edited-file card: open the workspace file, optionally at a 1-based line. */
   z.object({ type: z.literal('openFile'), path: Short, line: z.number().int().min(1).optional() }),
+  /** The Plan card: Approve, or Edit with feedback (the plan goes back to the agent). */
+  z.object({
+    type: z.literal('planDecision'),
+    toolCallId: Short,
+    approve: z.boolean(),
+    feedback: z.string().max(4_000).optional(),
+  }),
   /** The mode dropdown: Planning waits for plan approval, Fast runs straight through. */
   z.object({ type: z.literal('setMode'), mode: z.enum(['planning', 'fast']) }),
   /** "+": attach the selection (or the active file when nothing is selected). */

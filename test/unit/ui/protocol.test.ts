@@ -329,3 +329,42 @@ describe('message validation: redesign steps 3 and 4', () => {
     ).toBeUndefined();
   });
 });
+
+describe('message validation: redesign steps 5 and 6', () => {
+  it('accepts mode, composer, recovery and plan messages', () => {
+    for (const msg of [
+      { type: 'init', workspace: 'w', model: 'm', mode: 'fast' },
+      { type: 'mode', mode: 'planning' },
+      { type: 'drained' },
+      { type: 'focusComposer' },
+      { type: 'attachment', text: '@file:a.py ' },
+      { type: 'recovered', name: 'primary', label: 'Gemini' },
+      { type: 'notice', tone: 'warning', message: 'Switched', switchedFrom: 'primary' },
+      { type: 'models', active: 'a', items: [], autoFallback: true },
+      { type: 'plan', steps: ['s'], files: [], toolCallId: 'c', awaiting: true },
+    ])
+      expect(parseHostMessage(msg), msg.type).toBeDefined();
+    for (const msg of [
+      { type: 'setMode', mode: 'fast' },
+      { type: 'attach', what: 'selection' },
+      { type: 'planDecision', toolCallId: 'c', approve: false, feedback: 'more tests' },
+      { type: 'planDecision', toolCallId: 'c', approve: true },
+    ])
+      expect(parseWebviewMessage(msg), msg.type).toBeDefined();
+  });
+
+  it('rejects malformed ones', () => {
+    expect(parseHostMessage({ type: 'mode', mode: 'slow' })).toBeUndefined();
+    expect(parseWebviewMessage({ type: 'setMode', mode: 'yolo' })).toBeUndefined();
+    expect(parseWebviewMessage({ type: 'attach', what: 'everything' })).toBeUndefined();
+    expect(
+      parseWebviewMessage({
+        type: 'planDecision',
+        toolCallId: 'c',
+        approve: false,
+        feedback: 'x'.repeat(4001),
+      }),
+    ).toBeUndefined();
+    expect(parseWebviewMessage({ type: 'planDecision', toolCallId: 'c' })).toBeUndefined();
+  });
+});

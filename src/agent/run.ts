@@ -96,6 +96,31 @@ interface PendingApproval extends PendingToolCall {
   decision?: ApprovalDecision;
 }
 
+/** The Plan card for a declare_context call waiting for approval, from its arguments. */
+function planCard(call: PendingToolCall): HostToWebview {
+  const args = parseToolArgs(call.arguments) ?? {};
+  const steps = Array.isArray(args['plan'])
+    ? args['plan'].filter((s): s is string => typeof s === 'string')
+    : [];
+  const files = Array.isArray(args['files'])
+    ? args['files'].flatMap((f: unknown) => {
+        const o = f as { path?: unknown; reason?: unknown } | null;
+        return o && typeof o.path === 'string'
+          ? [{ path: o.path, reason: typeof o.reason === 'string' ? o.reason : '' }]
+          : [];
+      })
+    : [];
+  return {
+    type: 'plan',
+    steps: steps.slice(0, 30).map((s) => s.slice(0, 2_000)),
+    files: files
+      .slice(0, 50)
+      .map((f) => ({ path: f.path.slice(0, 2_000), reason: f.reason.slice(0, 2_000) })),
+    toolCallId: call.toolCallId,
+    awaiting: true,
+  };
+}
+
 /** A string argument from a tool call's raw JSON arguments, or '' if absent or unparseable. */
 function argString(rawArgs: string, key: string): string {
   const value = parseToolArgs(rawArgs)?.[key];
@@ -132,6 +157,10 @@ export class AgentRun {
   private readonly sleeps = new Set<() => void>();
   /** The summary the agent gave with submit_change_set, for the walkthrough. */
   private submitSummary: string | undefined;
+  /** Planning mode: the user approved a plan, so later declare_context calls pass on their own. */
+  private planApproved = false;
+  /** The approved declare_context is about to run: its card already shows the plan. */
+  private skipNextPlanPost = false;
 
   constructor(private readonly opts: AgentRunOptions) {
     this.logger = opts.logger ?? silent;
@@ -182,8 +211,12 @@ export class AgentRun {
     if (this.opts.editableRange) task.editableRange = this.opts.editableRange;
     this.relaySubscription = this.opts.relay.attach({
       onDeclare: (taskId, plan, files) => {
-        if (taskId === this.taskId && !this.cancelRequested)
-          this.post({ type: 'plan', steps: [...plan], files: [...files] });
+        if (taskId !== this.taskId || this.cancelRequested) return;
+        if (this.skipNextPlanPost) {
+          this.skipNextPlanPost = false;
+          return;
+        }
+        this.post({ type: 'plan', steps: [...plan], files: [...files] });
       },
       onStage: (taskId, path) => {
         if (taskId === this.taskId && !this.cancelRequested) this.staged(path);
@@ -624,15 +657,32 @@ export class AgentRun {
           return;
         }
       }
-      this.post({
-        type: 'approval',
-        calls: this.pending.map((p) => ({
-          toolCallId: p.toolCallId,
-          threadId: p.threadId,
-          name: p.name,
-          summary: this.approvalSummary(p, task?.changeSet.review() ?? []),
-        })),
-      });
+      // Planning mode (redesign step 6): a paused declare_context is the plan, shown as the Plan
+      // card with Approve and Edit. Once a plan is approved, later declarations pass on their own.
+      const declares = this.pending.filter((p) => p.name === 'declare_context');
+      if (declares.length > 0 && this.planApproved && declares.length === this.pending.length) {
+        this.resumeInternally(
+          declares.map((d) => ({ threadId: d.threadId, toolCallId: d.toolCallId, allow: true })),
+          'Running…',
+        );
+        return;
+      }
+      for (const d of declares) this.post(planCard(d));
+      const others = this.pending.filter((p) => p.name !== 'declare_context');
+      if (others.length > 0)
+        this.post({
+          type: 'approval',
+          calls: others.map((p) => ({
+            toolCallId: p.toolCallId,
+            threadId: p.threadId,
+            name: p.name,
+            summary: this.approvalSummary(p, task?.changeSet.review() ?? []),
+          })),
+        });
+      if (declares.length > 0) {
+        this.setState('paused', 'Review the plan: Approve it, or Edit it to send it back');
+        return;
+      }
       if (submit && this.opts.review && task) {
         this.walkthrough(task.changeSet, summarizeArgs(submit.name, submit.arguments));
         this.setState(
@@ -735,11 +785,41 @@ export class AgentRun {
    * run stays running: no approval card is shown and start()'s outcome is not resolved early.
    */
   private declineInternally(call: PendingApproval, reason: string): void {
+    this.resumeInternally(
+      [{ threadId: call.threadId, toolCallId: call.toolCallId, allow: false, reason }],
+      'Asking the agent to pass run_tests before review…',
+    );
+  }
+
+  /** Answers pending calls without a card and resumes the turn. */
+  private resumeInternally(decisions: ApprovalDecision[], message: string): void {
     this.pending = [];
-    this.setState('running', 'Asking the agent to pass run_tests before review…');
-    void this.runTurnWithApprovals([
-      { threadId: call.threadId, toolCallId: call.toolCallId, allow: false, reason },
-    ]);
+    this.setState('running', message);
+    void this.runTurnWithApprovals(decisions);
+  }
+
+  /**
+   * The Plan card (Planning mode): Approve lets declare_context run, so edits can follow; Edit
+   * sends the plan back with the user's feedback, and the agent declares a revised plan.
+   */
+  decidePlan(
+    toolCallId: string,
+    approve: boolean,
+    feedback?: string,
+  ): Promise<RunOutcome | undefined> {
+    const call = this.pending.find((p) => p.toolCallId === toolCallId);
+    if (call?.name !== 'declare_context') return Promise.resolve(undefined);
+    if (approve) {
+      this.planApproved = true;
+      this.skipNextPlanPost = true;
+      return this.decide(toolCallId, true);
+    }
+    const note = feedback?.trim();
+    return this.decide(
+      toolCallId,
+      false,
+      `The user asked to revise the plan${note ? `: ${note}` : '.'} Call declare_context again with the revised plan before staging any edit.`,
+    );
   }
 
   private async runTurnWithApprovals(decisions: ApprovalDecision[]): Promise<void> {

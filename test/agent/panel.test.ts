@@ -62,3 +62,53 @@ describe('panel messages from an agent run', () => {
     expect(dropped).toEqual([h.run.taskId]);
   });
 });
+
+describe('Planning mode (declare_context needs approval)', () => {
+  it('pauses on the plan, stages nothing until Approve, then runs on', async () => {
+    h = await startAgent('three-file-edit', {
+      gated: ['submit_change_set', 'run_command', 'declare_context'],
+    });
+    expect(await h.run.start('Add a config command; test and document it.')).toBe('paused');
+    const card = of(h.posts, 'plan')[0];
+    expect(card).toMatchObject({ awaiting: true });
+    expect(card?.files.map((f) => f.path)).toEqual([
+      'app/cli.py',
+      'tests/test_cli.py',
+      'docs/cli.md',
+    ]);
+    expect(h.run.pendingCalls.map((c) => c.name)).toEqual(['declare_context']);
+    // No approval card for the plan, and nothing staged yet.
+    expect(of(h.posts, 'approval')).toEqual([]);
+    expect(h.ctx.tasks.get(h.run.taskId)?.changeSet.stagedPaths()).toEqual([]);
+    expect(of(h.posts, 'status').at(-1)?.message).toMatch(/Review the plan/);
+
+    const outcome = await h.run.decidePlan(card?.toolCallId ?? '', true);
+    expect(outcome).toBe('paused');
+    // The approved declaration does not post a second plan card.
+    expect(of(h.posts, 'plan')).toHaveLength(1);
+    expect(h.ctx.tasks.get(h.run.taskId)?.changeSet.stagedPaths().length).toBeGreaterThan(0);
+    expect(h.run.pendingCalls.map((c) => c.name)).toEqual(['submit_change_set']);
+  });
+
+  it('sends the plan back with the user feedback on Edit', async () => {
+    h = await startAgent('three-file-edit', {
+      gated: ['submit_change_set', 'run_command', 'declare_context'],
+    });
+    await h.run.start('Add a config command.');
+    const id = of(h.posts, 'plan')[0]?.toolCallId ?? '';
+    expect(await h.run.decidePlan('not-a-plan', true)).toBeUndefined();
+    void h.run.decidePlan(id, false, 'also update the README');
+    await new Promise((r) => setTimeout(r, 300));
+    expect(of(h.posts, 'approval_resolved')[0]).toEqual({
+      type: 'approval_resolved',
+      toolCallId: id,
+      allowed: false,
+    });
+    // The agent sees the denial with the user's words as the tool result.
+    expect(
+      of(h.posts, 'tool_end').some((e) =>
+        e.result?.includes('revise the plan: also update the README'),
+      ),
+    ).toBe(true);
+  });
+});

@@ -16,7 +16,10 @@ let doctor: DoctorController | undefined;
 /** Returned by activate() only when SWAGE_TEST_API=1 (set by the integration test config). */
 export interface SwageTestApi {
   setSdkFactory(factory: (mcp: { url: string; token: string }) => SdkLike): void;
-  startRun(prompt: string): Promise<void>;
+  /** Starts an agent run; Fast unless a mode is given (the scripted tests run straight through). */
+  startRun(prompt: string, mode?: 'planning' | 'fast'): Promise<void>;
+  /** Planning mode: the pending Plan card's decision. */
+  decidePlan(approve: boolean, feedback?: string): Promise<boolean>;
   runState(): string | undefined;
   runTaskId(): string | undefined;
   decidePending(allow: boolean, reason?: string): Promise<string[]>;
@@ -85,7 +88,8 @@ export function activate(context: vscode.ExtensionContext): SwageTestApi | undef
     setSdkFactory: (factory) => {
       agent.sdkFactory = factory;
     },
-    startRun: (prompt) => agent.start(prompt),
+    startRun: (prompt, mode) => agent.start(prompt, mode ?? 'fast'),
+    decidePlan: (approve, feedback) => agent.decidePlan(approve, feedback),
     runState: () => agent.runState,
     runTaskId: () => agent.runTaskId,
     decidePending: (allow, reason) => agent.decidePending(allow, reason),

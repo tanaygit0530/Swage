@@ -160,19 +160,47 @@ export function formatReport(report: SetupReport): string[] {
  * (fallback profiles are prepared on first use). Cached per agent name and model, so a changed
  * primary model is pushed again; a failure is not cached, so the next attempt retries.
  */
+/** Planning mode's agent: the main agent, with declare_context added to the approval list. */
+export const PLAN_AGENT_BASE = 'swage-plan';
+const PLAN_AGENT_DESCRIPTION =
+  'Swage agent mode, Planning: the plan (declare_context) is approved in VS Code before any edit.';
+
+/**
+ * The Planning variant of the main agent (redesign step 6). TrueForge pauses declare_context for
+ * approval before it runs, and the change set refuses stage_edit on undeclared files, so no edit
+ * can be staged before the user approves the plan. The wait lives in the extension, not in the
+ * prompt.
+ */
+export function planningSpec(main: AgentSpec): AgentSpec {
+  return {
+    ...main,
+    mcpServers: (main.mcpServers ?? []).map((server) => ({
+      ...server,
+      requireApprovalForTools: [
+        ...new Set([...(server.requireApprovalForTools ?? []), 'declare_context']),
+      ],
+    })),
+  };
+}
+
 export function agentPreparer(
   client: SwageClient,
   manifests: Manifests,
 ): (profile: ModelProfile, agentName: string) => Promise<void> {
   const done = new Map<string, Promise<void>>();
   return (profile, agentName) => {
-    const agent = AGENTS.find((a) => agentName.startsWith(`${a.base}-`));
+    const planning = agentName.startsWith(`${PLAN_AGENT_BASE}-`);
+    const agent = planning
+      ? { description: PLAN_AGENT_DESCRIPTION, spec: planningSpec(manifests['swage-main']) }
+      : AGENTS.map((a) => ({ ...a, spec: manifests[a.base] })).find((a) =>
+          agentName.startsWith(`${a.base}-`),
+        );
     if (!agent) return Promise.reject(new Error(`No manifest for agent ${agentName}`));
     const key = `${agentName}@${profile.trueforgeModel}`;
     let pending = done.get(key);
     if (!pending) {
       pending = client
-        .upsertAgent(agentName, agent.description, withProfile(manifests[agent.base], profile))
+        .upsertAgent(agentName, agent.description, withProfile(agent.spec, profile))
         .then(() => undefined);
       done.set(key, pending);
       pending.catch(() => done.delete(key));

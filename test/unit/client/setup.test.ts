@@ -7,6 +7,7 @@ import {
   loadManifests,
   MCP_SERVER_NAME,
   agentPreparer,
+  planningSpec,
   parseProfiles,
   runSetup,
 } from '../../../src/client/setup';
@@ -225,5 +226,29 @@ describe('agentPreparer', () => {
     await expect(prepare(fb, 'swage-inline-fallback-1')).rejects.toThrow(/422/);
     expect(calls.filter((c) => c === 'agent.create swage-inline-fallback-1')).toHaveLength(2);
     await expect(prepare(fb, 'other-agent')).rejects.toThrow(/No manifest/);
+  });
+});
+
+describe('Planning agent', () => {
+  it('adds declare_context to the approval list and keeps the main agent unchanged', () => {
+    const spec = planningSpec(manifests['swage-main']);
+    const server = spec.mcpServers?.[0];
+    expect(server?.requireApprovalForTools).toEqual([
+      'submit_change_set',
+      'run_command',
+      'declare_context',
+    ]);
+    expect(manifests['swage-main'].mcpServers?.[0]?.requireApprovalForTools).toEqual([
+      'submit_change_set',
+      'run_command',
+    ]);
+    expect(planningSpec(spec).mcpServers?.[0]?.requireApprovalForTools).toHaveLength(3);
+  });
+
+  it('is prepared from the main manifest under its own name', async () => {
+    const { client, calls } = fakeClient({});
+    const prepare = agentPreparer(client, manifests);
+    await prepare({ name: 'primary', trueforgeModel: 'google-gemini/x' }, 'swage-plan-primary');
+    expect(calls.some((c) => c.includes('swage-plan-primary'))).toBe(true);
   });
 });

@@ -1,4 +1,5 @@
 import type { ChangeFile, CompletionItem, HostToWebview, RunState } from '../protocol';
+import { planTransition, type PlanEvent, type PlanGate } from './plan';
 
 /**
  * The agent panel's state: a pure reducer over host messages, so the UI logic is testable
@@ -21,7 +22,15 @@ export type TimelineItem =
       outcome?: string;
       result?: string;
     }
-  | { kind: 'plan'; id: string; steps: string[]; files: { path: string; reason: string }[] }
+  | {
+      kind: 'plan';
+      id: string;
+      steps: string[];
+      files: { path: string; reason: string }[];
+      /** Planning mode: the declare_context call the card decides. */
+      toolCallId?: string;
+      gate: PlanGate;
+    }
   | {
       kind: 'approval';
       id: string;
@@ -129,12 +138,22 @@ export function dismissToast(state: PanelState, id: number): PanelState {
 }
 
 /** Actions the webview dispatches itself, besides host messages. */
-export type LocalAction = { readonly type: 'local.dismissToast'; readonly id: number };
+export type LocalAction =
+  | { readonly type: 'local.dismissToast'; readonly id: number }
+  | { readonly type: 'local.plan'; readonly id: string; readonly event: PlanEvent };
 
 export function reducePanel(state: PanelState, action: HostToWebview | LocalAction): PanelState {
-  return action.type === 'local.dismissToast'
-    ? dismissToast(state, action.id)
-    : reduce(state, action);
+  if (action.type === 'local.dismissToast') return dismissToast(state, action.id);
+  if (action.type === 'local.plan')
+    return {
+      ...state,
+      timeline: state.timeline.map((t) =>
+        t.kind === 'plan' && t.id === action.id
+          ? { ...t, gate: planTransition(t.gate, action.event) }
+          : t,
+      ),
+    };
+  return reduce(state, action);
 }
 
 export function isBusy(state: RunState): boolean {
@@ -179,7 +198,11 @@ export function reduce(state: PanelState, msg: HostToWebview): PanelState {
       const stopped = msg.state === 'cancelled' || msg.state === 'error' || msg.state === 'done';
       const timeline = stopped
         ? state.timeline.map((t) =>
-            t.kind === 'tool' && t.status === 'running' ? { ...t, status: 'stopped' as const } : t,
+            t.kind === 'tool' && t.status === 'running'
+              ? { ...t, status: 'stopped' as const }
+              : t.kind === 'plan'
+                ? { ...t, gate: planTransition(t.gate, 'runEnded') }
+                : t,
           )
         : state.timeline;
       const notice: TimelineItem[] =
@@ -263,7 +286,14 @@ export function reduce(state: PanelState, msg: HostToWebview): PanelState {
         ...state,
         timeline: [
           ...state.timeline,
-          { kind: 'plan', id: nextId('p'), steps: msg.steps, files: msg.files },
+          {
+            kind: 'plan',
+            id: msg.toolCallId ? `plan-${msg.toolCallId}` : nextId('p'),
+            steps: msg.steps,
+            files: msg.files,
+            ...(msg.toolCallId ? { toolCallId: msg.toolCallId } : {}),
+            gate: msg.awaiting ? 'awaiting' : 'view',
+          },
         ],
       };
     case 'budget':
@@ -289,7 +319,9 @@ export function reduce(state: PanelState, msg: HostToWebview): PanelState {
         timeline: state.timeline.map((t) =>
           t.kind === 'approval' && t.id === msg.toolCallId
             ? { ...t, decision: msg.allowed ? 'allowed' : 'denied' }
-            : t,
+            : t.kind === 'plan' && t.toolCallId === msg.toolCallId
+              ? { ...t, gate: planTransition(t.gate, msg.allowed ? 'allowed' : 'denied') }
+              : t,
         ),
       };
     case 'completions':

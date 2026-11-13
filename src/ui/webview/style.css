@@ -1275,3 +1275,40 @@ button.primary:disabled,
   flex: 1;
   min-width: 0;
 }
+
+/* ---- Plan approval (redesign step 6) ---- */
+
+.plan-awaiting,
+.plan-editing {
+  border-color: var(--vscode-focusBorder);
+}
+
+.plan-status {
+  font-size: 0.85em;
+  color: var(--vscode-descriptionForeground);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.plan-status.gate-approved {
+  color: var(--vscode-testing-iconPassed, #3fb950);
+}
+
+.plan-status.gate-revising,
+.plan-status.gate-stale {
+  color: var(--vscode-editorWarning-foreground, #cca700);
+}
+
+.plan-edit textarea {
+  width: 100%;
+  margin-top: 4px;
+  padding: 6px;
+  border: 1px solid var(--vscode-input-border, var(--swage-border));
+  border-radius: 6px;
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  font: inherit;
+  resize: vertical;
+}

@@ -1,13 +1,13 @@
 import { Component, render } from 'preact';
 import { useEffect, useReducer, useRef, useState } from 'preact/hooks';
 import { parseHostMessage, type WebviewToHost } from '../protocol';
-import { parseInline } from './markdown';
-import { FileChip, Inlines, Markdown } from './richText';
+import { Markdown } from './richText';
 import { formatDuration, toolLabel } from './tools';
 import { EditCard, WalkthroughCard } from './cards';
 import { barModel } from './changes';
 import { FilesBar, Toast } from './filesBar';
 import { Composer } from './composerView';
+import { PlanCard } from './planCard';
 import { initialState, isBusy, reducePanel, type TimelineItem } from './state';
 import { Logo } from './logo';
 
@@ -19,6 +19,8 @@ import { Logo } from './logo';
 declare function acquireVsCodeApi(): { postMessage(msg: unknown): void };
 const vscode = acquireVsCodeApi();
 const send = (msg: WebviewToHost): void => vscode.postMessage(msg);
+/** The App's dispatch for local actions (set once the App mounts). */
+let dispatchLocal: (action: LocalAction) => void = () => undefined;
 
 function formatChars(n: number): string {
   return n >= 1000 ? `${(n / 1000).toFixed(1)}k chars` : `${n} chars`;
@@ -100,41 +102,6 @@ function ToolRow({ item }: { item: Extract<TimelineItem, { kind: 'tool' }> }) {
         </div>
       )}
     </div>
-  );
-}
-
-function PlanCard({ item }: { item: Extract<TimelineItem, { kind: 'plan' }> }) {
-  const [open, setOpen] = useState(true);
-  return (
-    <section class="card plan" aria-label="Plan">
-      <button type="button" class="card-head" aria-expanded={open} onClick={() => setOpen(!open)}>
-        <Chevron open={open} />
-        <span class="card-title">Plan</span>
-        <span class="card-sub">
-          {item.steps.length} step{item.steps.length === 1 ? '' : 's'} · {item.files.length} file
-          {item.files.length === 1 ? '' : 's'}
-        </span>
-      </button>
-      {open && (
-        <div class="card-body">
-          <ol class="plan-steps">
-            {item.steps.map((s) => (
-              <li>
-                <Inlines nodes={parseInline(s)} send={send} />
-              </li>
-            ))}
-          </ol>
-          <div class="card-subtitle">Files chosen</div>
-          <ul class="plan-files">
-            {item.files.map((f) => (
-              <li>
-                <FileChip path={f.path} send={send} /> <span class="reason">{f.reason}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-    </section>
   );
 }
 
@@ -233,7 +200,13 @@ function Item({ item }: { item: TimelineItem }) {
     case 'tool':
       return <ToolRow item={item} />;
     case 'plan':
-      return <PlanCard item={item} />;
+      return (
+        <PlanCard
+          item={item}
+          send={send}
+          event={(event) => dispatchLocal({ type: 'local.plan', id: item.id, event })}
+        />
+      );
     case 'approval':
       return <ApprovalCard item={item} />;
     case 'notice':
@@ -282,6 +255,7 @@ function BudgetMeter({
 
 function App() {
   const [state, dispatch] = useReducer(reducePanel, initialState);
+  dispatchLocal = dispatch;
   const bottom = useRef<HTMLDivElement>(null);
 
   useEffect(() => {

@@ -6,7 +6,13 @@ import * as vscode from 'vscode';
 import { SwageClient, type SdkLike } from '../client/client';
 import { agentNameFor, type ModelProfile } from '../client/manifest';
 import { profilesFrom, type ResolvedProfile } from '../resilience/profiles';
-import { agentPreparer, formatReport, loadManifests, runSetup } from '../client/setup';
+import {
+  agentPreparer,
+  formatReport,
+  loadManifests,
+  PLAN_AGENT_BASE,
+  runSetup,
+} from '../client/setup';
 import type { ModelsController } from '../resilience/vscode/models';
 import { Bm25Searcher } from '../context/bm25';
 import { resolveBudgets, type Budgets } from '../context/budget';
@@ -147,6 +153,17 @@ export class AgentController implements vscode.WebviewViewProvider, vscode.Dispo
     });
   }
 
+  private modelRestored = false;
+
+  /** The model last picked in this workspace's panel, once per session (if it still exists). */
+  private restoreModel(): void {
+    const router = this.models?.router;
+    if (this.modelRestored || !router) return;
+    this.modelRestored = true;
+    const name = this.context.workspaceState.get<string>(MODEL_KEY);
+    if (name && router.profiles.some((p) => p.name === name)) router.setActive(name);
+  }
+
   /** Planning or Fast, remembered per workspace. */
   get mode(): 'planning' | 'fast' {
     return this.context.workspaceState.get<'planning' | 'fast'>(MODE_KEY) ?? 'planning';
@@ -229,6 +246,7 @@ export class AgentController implements vscode.WebviewViewProvider, vscode.Dispo
   private async onMessage(msg: WebviewToHost): Promise<void> {
     switch (msg.type) {
       case 'ready': {
+        this.restoreModel();
         const s = this.settings();
         this.post({
           type: 'init',
@@ -262,11 +280,13 @@ export class AgentController implements vscode.WebviewViewProvider, vscode.Dispo
       }
       case 'selectModel': {
         const router = this.models?.router;
-        if (router?.setActive(msg.name))
+        if (router?.setActive(msg.name)) {
+          await this.context.workspaceState.update(MODEL_KEY, msg.name);
           void vscode.window.setStatusBarMessage(
             `Swage will use ${router.active.label} for the next request.`,
             4000,
           );
+        }
         this.postModels();
         return;
       }
@@ -282,6 +302,9 @@ export class AgentController implements vscode.WebviewViewProvider, vscode.Dispo
         return;
       case 'stop':
         await this.stop();
+        return;
+      case 'planDecision':
+        await this.trackBusy(this.run?.decidePlan(msg.toolCallId, msg.approve, msg.feedback));
         return;
       case 'approve': {
         // The change-set card is decided in the Review view: Approve applies, Deny discards.
@@ -454,7 +477,7 @@ export class AgentController implements vscode.WebviewViewProvider, vscode.Dispo
   }
 
   /** Starts an agent run for a request. Only one run at a time (blueprint section 8). */
-  async start(prompt: string): Promise<void> {
+  async start(prompt: string, mode: 'planning' | 'fast' = this.mode): Promise<void> {
     if (this.isBusy()) {
       this.post({ type: 'error', message: 'A run is in progress. Stop it first.' });
       return;
@@ -476,16 +499,28 @@ export class AgentController implements vscode.WebviewViewProvider, vscode.Dispo
       });
       return;
     }
+    // Planning mode runs the plan variant of the main agent (declare_context needs approval).
+    const base = mode === 'planning' ? PLAN_AGENT_BASE : 'swage-main';
+    let agentName = rt.agentName;
+    if (base === PLAN_AGENT_BASE && !this.models?.router) {
+      agentName = agentNameFor(PLAN_AGENT_BASE, rt.profile);
+      try {
+        await rt.prepareAgent(rt.profile, agentName);
+      } catch (err) {
+        this.post({ type: 'status', state: 'error', message: (err as Error).message });
+        return;
+      }
+    }
     this.run = new AgentRun({
       client: rt.client,
       ctx: rt.ctx,
       relay: rt.relay,
       approvals: rt.approvals,
-      agentName: rt.agentName,
+      agentName,
       view: { post: (m) => this.post(m) },
       budgets: rt.budgets,
       logger: this.logger,
-      ...this.resilience(rt, 'swage-main'),
+      ...this.resilience(rt, base),
       onStaged: (taskId, changeSet, path) => this.review?.watch(taskId, changeSet, [path]),
       onDropped: (taskId) => this.review?.unwatch(taskId),
       ...(this.review
@@ -515,6 +550,15 @@ export class AgentController implements vscode.WebviewViewProvider, vscode.Dispo
     const calls = run.pendingCalls.filter((c) => !run.isReviewCall(c.toolCallId));
     for (const c of calls) await this.trackBusy(run.decide(c.toolCallId, allow, reason));
     return calls.map((c) => c.name);
+  }
+
+  /** Answers the pending Plan card (tests). Returns false when no plan is waiting. */
+  async decidePlan(approve: boolean, feedback?: string): Promise<boolean> {
+    const run = this.run;
+    const call = run?.pendingCalls.find((c) => c.name === 'declare_context');
+    if (!run || !call) return false;
+    await this.trackBusy(run.decidePlan(call.toolCallId, approve, feedback));
+    return true;
   }
 
   /** State of the current run, for tests and the status bar. */
@@ -547,9 +591,9 @@ export class AgentController implements vscode.WebviewViewProvider, vscode.Dispo
    */
   resilience(
     rt: Runtime,
-    agentBase: 'swage-main' | 'swage-inline',
+    agentBase: 'swage-main' | 'swage-plan' | 'swage-inline',
   ): Pick<AgentRunOptions, 'router' | 'agentBase' | 'prepareAgent' | 'onSwitch' | 'onEvent'> {
-    const kind = agentBase === 'swage-main' ? 'agent' : 'inline';
+    const kind = agentBase === 'swage-inline' ? 'inline' : 'agent';
     const onEvent = (event: SwageEvent): void => {
       for (const l of [...this.eventListeners]) l({ kind, event });
     };
