@@ -645,6 +645,7 @@ pre {
 .card-sub {
   color: var(--vscode-descriptionForeground);
   font-size: 0.9em;
+  white-space: nowrap;
 }
 
 .card-body {
@@ -1284,12 +1285,9 @@ button.primary:disabled,
 }
 
 .plan-status {
-  font-size: 0.85em;
+  margin: 0 0 4px;
+  font-size: 0.9em;
   color: var(--vscode-descriptionForeground);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  min-width: 0;
 }
 
 .plan-status.gate-approved {
@@ -1317,10 +1315,6 @@ button.primary:disabled,
 
 .panel {
   position: relative;
-}
-
-.timeline {
-  scroll-behavior: smooth;
 }
 
 .dots {
@@ -1439,10 +1433,10 @@ button.primary:disabled,
 }
 
 .jump-latest {
-  position: absolute;
-  left: 50%;
-  bottom: 140px;
-  transform: translateX(-50%);
+  position: sticky;
+  bottom: 8px;
+  display: block;
+  margin: 0 auto;
   z-index: 5;
   padding: 3px 12px;
   border: 1px solid var(--swage-border);
@@ -1454,9 +1448,6 @@ button.primary:disabled,
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .timeline {
-    scroll-behavior: auto;
-  }
   .msg.assistant.streaming .md > :last-child::after {
     animation: none;
   }

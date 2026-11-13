@@ -59,11 +59,14 @@ export function PlanCard({
           {item.steps.length} step{item.steps.length === 1 ? '' : 's'} · {item.files.length} file
           {item.files.length === 1 ? '' : 's'}
         </span>
-        <span class="spacer" />
-        {status && <span class={`plan-status gate-${item.gate}`}>{status}</span>}
       </button>
       {open && (
         <div class="card-body">
+          {status && (
+            <div class={`plan-status gate-${item.gate}`} role="status">
+              {status}
+            </div>
+          )}
           <ol class="plan-steps">
             {item.steps.map((s) => (
               <li>

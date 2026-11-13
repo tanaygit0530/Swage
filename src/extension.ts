@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import type { HostToWebview } from './ui/protocol';
 import type { SdkLike } from './client/client';
 import { AGENT_VIEW_ID, AgentController, type RunEventRecord } from './agent/controller';
 import { COMMANDS, RUNNING_CONTEXT_KEY, stubMessage } from './commands';
@@ -18,6 +19,10 @@ export interface SwageTestApi {
   setSdkFactory(factory: (mcp: { url: string; token: string }) => SdkLike): void;
   /** Starts an agent run; Fast unless a mode is given (the scripted tests run straight through). */
   startRun(prompt: string, mode?: 'planning' | 'fast'): Promise<void>;
+  /** Sends a message as the agent panel would (Accept all, Reject all, Undo, …). */
+  panelMessage(msg: unknown): Promise<void>;
+  /** Every message the extension posts to the agent panel. */
+  onPanelPost(listener: (msg: HostToWebview) => void): vscode.Disposable;
   /** Planning mode: the pending Plan card's decision. */
   decidePlan(approve: boolean, feedback?: string): Promise<boolean>;
   runState(): string | undefined;
@@ -90,6 +95,8 @@ export function activate(context: vscode.ExtensionContext): SwageTestApi | undef
     },
     startRun: (prompt, mode) => agent.start(prompt, mode ?? 'fast'),
     decidePlan: (approve, feedback) => agent.decidePlan(approve, feedback),
+    panelMessage: (msg) => agent.panelMessage(msg),
+    onPanelPost: (listener) => agent.onPanelPost(listener),
     runState: () => agent.runState,
     runTaskId: () => agent.runTaskId,
     decidePending: (allow, reason) => agent.decidePending(allow, reason),

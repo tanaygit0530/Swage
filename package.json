@@ -61,7 +61,8 @@
     "check:licences": "node scripts/licence-check.mjs",
     "break-primary": "node scripts/run.mjs scripts/break-primary.ts",
     "restore-primary": "node scripts/run.mjs scripts/restore-primary.ts",
-    "screenshots": "npm run build && node scripts/screenshots.mjs",
+    "screenshots": "npm run build && node scripts/panel-shots/capture.mjs && node scripts/screenshots.mjs",
+    "screenshots:panel": "npm run build && node scripts/panel-shots/capture.mjs",
     "rehearse:task-a": "SWAGE_FLASK_DIR=${SWAGE_FLASK_DIR:-../flask} SWAGE_REHEARSAL_PRINT=1 vitest run test/rehearsal/taskA.flask.test.ts",
     "rehearse:task-a:live": "SWAGE_LIVE=1 SWAGE_FLASK_DIR=${SWAGE_FLASK_DIR:-../flask} vitest run test/rehearsal/taskA.live.test.ts"
   },

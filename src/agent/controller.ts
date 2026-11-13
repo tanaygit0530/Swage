@@ -211,7 +211,22 @@ export class AgentController implements vscode.WebviewViewProvider, vscode.Dispo
     }
   }
 
+  private readonly postListeners = new Set<(msg: HostToWebview) => void>();
+
+  /** Every message posted to the panel (tests). */
+  onPanelPost(listener: (msg: HostToWebview) => void): vscode.Disposable {
+    this.postListeners.add(listener);
+    return new vscode.Disposable(() => this.postListeners.delete(listener));
+  }
+
+  /** Handles a panel message as if the webview had sent it (tests). */
+  async panelMessage(raw: unknown): Promise<void> {
+    const msg = parseWebviewMessage(raw);
+    if (msg) await this.onMessage(msg);
+  }
+
   private post(msg: HostToWebview): void {
+    for (const l of [...this.postListeners]) l(msg);
     if (msg.type === 'changes') this.barPhase = msg.phase;
     void this.view?.webview.postMessage(msg);
   }

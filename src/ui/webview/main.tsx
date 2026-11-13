@@ -277,8 +277,11 @@ function App() {
 
   // Auto-scroll follows the thread until the user scrolls up; "Jump to latest" brings it back.
   useEffect(() => {
-    if (follow) bottom.current?.scrollIntoView({ block: 'end' });
-  }, [state.timeline, follow, state.status]);
+    const el = thread.current;
+    // Instant, not smooth: a smooth scroll's intermediate positions would look like the user
+    // scrolling up and switch following off.
+    if (follow && el) el.scrollTop = el.scrollHeight;
+  }, [state.timeline, follow, state.status, state.changes]);
   const onScroll = (): void => {
     const el = thread.current;
     if (el) setFollow(isNearBottom(el.scrollTop, el.clientHeight, el.scrollHeight));
@@ -330,20 +333,21 @@ function App() {
         ))}
         {isThinking(state) && <Thinking />}
         <div ref={bottom} />
+        {!follow && (
+          <button
+            type="button"
+            class="jump-latest"
+            aria-label="Jump to the latest message"
+            onClick={() => {
+              setFollow(true);
+              const el = thread.current;
+              if (el) el.scrollTop = el.scrollHeight;
+            }}
+          >
+            Jump to latest ↓
+          </button>
+        )}
       </main>
-      {!follow && (
-        <button
-          type="button"
-          class="jump-latest"
-          aria-label="Jump to the latest message"
-          onClick={() => {
-            setFollow(true);
-            bottom.current?.scrollIntoView({ block: 'end' });
-          }}
-        >
-          Jump to latest ↓
-        </button>
-      )}
       <footer>
         <FilesBar model={bar} send={send} />
         {state.toast && (
