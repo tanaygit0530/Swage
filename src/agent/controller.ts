@@ -37,6 +37,12 @@ import { AgentRun, type AgentRunOptions } from './run';
 
 export const AGENT_VIEW_ID = 'swage.agentView';
 
+/** workspaceState keys: the run mode and the model chosen in the panel, per workspace. */
+const MODE_KEY = 'swage.panel.mode';
+export const MODEL_KEY = 'swage.panel.model';
+/** At most this much selected text is attached by "+". */
+const ATTACH_CHARS = 4_000;
+
 export interface Runtime {
   readonly root: string;
   readonly ctx: ToolContext;
@@ -83,6 +89,7 @@ export class AgentController implements vscode.WebviewViewProvider, vscode.Dispo
   ) {
     // Keep the panel's model picker in step with Switch Model, the status bar and fallbacks.
     models?.onDidChange(() => this.postModels());
+    models?.onRecovered((p) => this.post({ type: 'recovered', name: p.name, label: p.label }));
     // Keep the files-changed bar in step with every review decision, wherever it was made.
     review?.onDidChange(() => this.postReviewChanges());
     this.logger = redactingLogger({
@@ -136,7 +143,36 @@ export class AgentController implements vscode.WebviewViewProvider, vscode.Dispo
           ...(failed ? { note: failed } : {}),
         };
       }),
+      autoFallback: router.profiles.length > 1,
     });
+  }
+
+  /** Planning or Fast, remembered per workspace. */
+  get mode(): 'planning' | 'fast' {
+    return this.context.workspaceState.get<'planning' | 'fast'>(MODE_KEY) ?? 'planning';
+  }
+
+  private pendingFocus = false;
+
+  /** Cmd+L / Ctrl+L: show the agent panel and put the cursor in its composer. */
+  async focusComposer(): Promise<void> {
+    await this.focus();
+    if (this.view) this.post({ type: 'focusComposer' });
+    else this.pendingFocus = true;
+  }
+
+  /** "+": the selection as a mention plus a fenced snippet, or the active file as a mention. */
+  private attachment(what: 'auto' | 'file' | 'selection'): string | undefined {
+    const editor = vscode.window.activeTextEditor ?? vscode.window.visibleTextEditors[0];
+    if (!editor || editor.document.uri.scheme !== 'file') return undefined;
+    const rel = vscode.workspace.asRelativePath(editor.document.uri, false);
+    const sel = editor.selection;
+    if (what !== 'file' && !sel.isEmpty) {
+      const text = editor.document.getText(sel);
+      const clipped = text.length > ATTACH_CHARS ? `${text.slice(0, ATTACH_CHARS)}\n…` : text;
+      return `@file:${rel} (lines ${sel.start.line + 1}-${sel.end.line + 1}):\n\`\`\`${editor.document.languageId}\n${clipped}\n\`\`\`\n`;
+    }
+    return `@file:${rel} `;
   }
 
   /** The phase the files-changed bar shows, so a finished review empties it exactly once. */
@@ -200,8 +236,28 @@ export class AgentController implements vscode.WebviewViewProvider, vscode.Dispo
           model: this.models?.router
             ? `${this.models.router.active.label} (${this.models.router.active.trueforgeModel})`
             : (s.profiles[0]?.trueforgeModel ?? 'no model configured'),
+          mode: this.mode,
         });
         this.postModels();
+        if (this.pendingFocus) {
+          this.pendingFocus = false;
+          this.post({ type: 'focusComposer' });
+        }
+        return;
+      }
+      case 'setMode':
+        await this.context.workspaceState.update(MODE_KEY, msg.mode);
+        this.post({ type: 'mode', mode: msg.mode });
+        return;
+      case 'attach': {
+        const text = this.attachment(msg.what);
+        if (text === undefined)
+          this.post({
+            type: 'notice',
+            tone: 'info',
+            message: 'Open a file in the editor first; "+" attaches its selection or the file.',
+          });
+        else this.post({ type: 'attachment', text });
         return;
       }
       case 'selectModel': {

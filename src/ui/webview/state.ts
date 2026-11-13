@@ -30,7 +30,17 @@ export type TimelineItem =
       summary: string;
       decision: 'pending' | 'allowed' | 'denied';
     }
-  | { kind: 'notice'; id: string; text: string; tone: 'info' | 'warning' | 'error' }
+  | {
+      kind: 'notice';
+      id: string;
+      text: string;
+      tone: 'info' | 'warning' | 'error';
+      /** A fallback banner: the profile it switched away from, and once it recovers, Switch back. */
+      switchedFrom?: string;
+      switchBack?: { name: string; label: string };
+      /** An error banner of a failed run: offer Retry. */
+      retry?: boolean;
+    }
   | {
       kind: 'edit';
       id: string;
@@ -77,6 +87,16 @@ export interface PanelState {
     readonly phase: 'none' | 'staging' | 'review';
     readonly files: readonly ChangeFile[];
   };
+  /** Planning waits for plan approval before any edit; Fast runs straight through. */
+  readonly mode: 'planning' | 'fast';
+  /** Stop was pressed and the cancelled turn has not drained yet ("Stopping…"). */
+  readonly stopping: boolean;
+  /** Profiles fall back on their own (shown as a hint in the model menu). */
+  readonly autoFallback: boolean;
+  /** Text for the composer from "+", consumed once by the composer. */
+  readonly attachment: { readonly id: number; readonly text: string } | undefined;
+  /** Bumped by Cmd+L: the composer focuses itself. */
+  readonly focusSeq: number;
   /** The inline toast after Accept all ("Applied N files. Undo"). */
   readonly toast:
     { readonly id: number; readonly text: string; readonly undo: boolean } | undefined;
@@ -93,6 +113,11 @@ export const initialState: PanelState = {
   completions: { requestId: -1, items: [] },
   changes: { phase: 'none', files: [] },
   toast: undefined,
+  mode: 'planning',
+  stopping: false,
+  autoFallback: false,
+  attachment: undefined,
+  focusSeq: 0,
 };
 
 let counter = 0;
@@ -119,7 +144,36 @@ export function isBusy(state: RunState): boolean {
 export function reduce(state: PanelState, msg: HostToWebview): PanelState {
   switch (msg.type) {
     case 'init':
-      return { ...state, workspace: msg.workspace, model: msg.model };
+      return {
+        ...state,
+        workspace: msg.workspace,
+        model: msg.model,
+        ...(msg.mode ? { mode: msg.mode } : {}),
+      };
+    case 'mode':
+      return { ...state, mode: msg.mode };
+    case 'drained':
+      return { ...state, stopping: false };
+    case 'focusComposer':
+      return { ...state, focusSeq: state.focusSeq + 1 };
+    case 'attachment':
+      return {
+        ...state,
+        attachment: { id: (state.attachment?.id ?? 0) + 1, text: msg.text },
+      };
+    case 'recovered': {
+      // Offer "Switch back" on the latest banner that switched away from this profile.
+      let i = -1;
+      state.timeline.forEach((t, k) => {
+        if (t.kind === 'notice' && t.switchedFrom === msg.name) i = k;
+      });
+      if (i < 0) return state;
+      const timeline = [...state.timeline];
+      const item = timeline[i];
+      if (item?.kind === 'notice')
+        timeline[i] = { ...item, switchBack: { name: msg.name, label: msg.label } };
+      return { ...state, timeline };
+    }
     case 'status': {
       // Tools still running when a run stops are marked stopped.
       const stopped = msg.state === 'cancelled' || msg.state === 'error' || msg.state === 'done';
@@ -136,6 +190,7 @@ export function reduce(state: PanelState, msg: HostToWebview): PanelState {
                 id: nextId('n'),
                 text: msg.message,
                 tone: msg.state === 'error' ? 'error' : 'info',
+                ...(msg.state === 'error' ? { retry: true } : {}),
               },
             ]
           : [];
@@ -144,6 +199,13 @@ export function reduce(state: PanelState, msg: HostToWebview): PanelState {
         status: msg.state,
         statusMessage: msg.message ?? '',
         timeline: [...timeline, ...notice],
+        // Stop flips the UI at once; the button says "Stopping…" until the turn has drained.
+        stopping:
+          msg.state === 'cancelled'
+            ? state.status !== 'cancelled' || state.stopping
+            : msg.state === 'starting'
+              ? false
+              : state.stopping,
       };
     }
     case 'user':
@@ -234,14 +296,22 @@ export function reduce(state: PanelState, msg: HostToWebview): PanelState {
       return msg.requestId >= state.completions.requestId
         ? { ...state, completions: { requestId: msg.requestId, items: msg.items } }
         : state;
-    case 'notice':
+    case 'notice': {
+      const from = msg.switchedFrom;
       return {
         ...state,
         timeline: [
           ...state.timeline,
-          { kind: 'notice', id: nextId('n'), text: msg.message, tone: msg.tone },
+          {
+            kind: 'notice',
+            id: nextId('n'),
+            text: msg.message,
+            tone: msg.tone,
+            ...(from ? { switchedFrom: from } : {}),
+          },
         ],
       };
+    }
     case 'model':
       return { ...state, model: msg.model };
     case 'models': {
@@ -249,6 +319,7 @@ export function reduce(state: PanelState, msg: HostToWebview): PanelState {
       return {
         ...state,
         models: { active: msg.active, items: msg.items },
+        autoFallback: msg.autoFallback ?? state.autoFallback,
         model: active ? `${active.label} (${active.model})` : state.model,
       };
     }

@@ -349,7 +349,12 @@ export class AgentRun {
       await this.sleep(decision.delayMs);
       return !this.cancelRequested;
     }
-    this.post({ type: 'notice', tone: 'warning', message: decision.message });
+    this.post({
+      type: 'notice',
+      tone: 'warning',
+      message: decision.message,
+      switchedFrom: decision.from.name,
+    });
     this.post({ type: 'model', model: `${decision.to.label} (${decision.to.trueforgeModel})` });
     this.setState('running', decision.message);
     this.opts.onSwitch?.(decision);
@@ -521,6 +526,7 @@ export class AgentRun {
     } finally {
       watchdog?.stop();
       this.drains.delete(drain);
+      this.postDrained();
     }
     if (failure && seq === this.turnSeq && !this.cancelRequested)
       await this.recover(failure, input);
@@ -771,11 +777,21 @@ export class AgentRun {
     // Safety net: if TrueForge never ends the stream with turn.done, stop draining eventually.
     const open = [...this.drains];
     setTimeout(() => open.forEach((d) => d.abort()), this.opts.drainTimeoutMs ?? 15_000).unref();
+    this.postDrained();
     if (this.sessionId !== undefined) {
       await this.opts.client.cancel(this.sessionId).catch((err: unknown) => {
         this.logger.warn(`TrueForge cancel failed: ${describeError(err)}`);
       });
     }
+  }
+
+  private drainedPosted = false;
+
+  /** After Stop: tell the panel once no cancelled stream is left, so Stop turns back into Send. */
+  private postDrained(): void {
+    if (!this.cancelRequested || this.drainedPosted || this.drains.size > 0) return;
+    this.drainedPosted = true;
+    this.post({ type: 'drained' });
   }
 
   /** True while a stream is still being drained (for tests and the controller). */

@@ -115,7 +115,18 @@ export class ModelsController implements vscode.Disposable {
       router,
       probe: (p) => probeProfile(client, p).then((r) => r.ok),
     });
-    this.recovery.onRecovered((p) => void this.offerSwitchBack(p));
+    this.recovery.onRecovered((p) => {
+      for (const l of [...this.recoveredListeners]) l(p);
+      void this.offerSwitchBack(p);
+    });
+  }
+
+  private readonly recoveredListeners = new Set<(p: ResolvedProfile) => void>();
+
+  /** A failed profile answers again (the panel's fallback banner offers "Switch back"). */
+  onRecovered(listener: (p: ResolvedProfile) => void): vscode.Disposable {
+    this.recoveredListeners.add(listener);
+    return new vscode.Disposable(() => this.recoveredListeners.delete(listener));
   }
 
   private async offerSwitchBack(p: ResolvedProfile): Promise<void> {

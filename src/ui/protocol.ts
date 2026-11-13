@@ -65,7 +65,23 @@ const FileSummary = z.object({
 });
 
 export const HostToWebview = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('init'), workspace: Short, model: Short }),
+  z.object({
+    type: z.literal('init'),
+    workspace: Short,
+    model: Short,
+    /** The run mode remembered for this workspace. */
+    mode: z.enum(['planning', 'fast']).optional(),
+  }),
+  /** The run mode changed (or was restored). */
+  z.object({ type: z.literal('mode'), mode: z.enum(['planning', 'fast']) }),
+  /** The cancelled turn has drained (turn.done arrived): Stop can turn back into Send. */
+  z.object({ type: z.literal('drained') }),
+  /** Cmd+L / Ctrl+L: focus the composer. */
+  z.object({ type: z.literal('focusComposer') }),
+  /** Text for the composer from "+" (the selection or the active file as a mention). */
+  z.object({ type: z.literal('attachment'), text: Text }),
+  /** A failed profile answers again: the fallback banner offers "Switch back". */
+  z.object({ type: z.literal('recovered'), name: Short, label: Short }),
   z.object({ type: z.literal('status'), state: RunState, message: Short.optional() }),
   z.object({ type: z.literal('user'), text: Text }),
   z.object({ type: z.literal('text'), messageId: Short, delta: Text }),
@@ -118,6 +134,8 @@ export const HostToWebview = z.discriminatedUnion('type', [
     type: z.literal('notice'),
     tone: z.enum(['info', 'warning', 'error']),
     message: Short,
+    /** A fallback banner: the profile name it switched away from (for "Switch back"). */
+    switchedFrom: Short.optional(),
   }),
   /** stage_edit added or changed a file: an edited-file card in the thread. */
   z.object({ type: z.literal('edit'), taskId: Short, ...FileSummary.shape }),
@@ -147,6 +165,8 @@ export const HostToWebview = z.discriminatedUnion('type', [
     items: z
       .array(z.object({ name: Short, label: Short, model: Short, note: Short.optional() }))
       .max(50),
+    /** True when a failure moves the task to the next profile on its own. */
+    autoFallback: z.boolean().optional(),
   }),
 ]);
 export type HostToWebview = z.infer<typeof HostToWebview>;
@@ -168,6 +188,10 @@ export const WebviewToHost = z.discriminatedUnion('type', [
   }),
   /** A file chip or edited-file card: open the workspace file, optionally at a 1-based line. */
   z.object({ type: z.literal('openFile'), path: Short, line: z.number().int().min(1).optional() }),
+  /** The mode dropdown: Planning waits for plan approval, Fast runs straight through. */
+  z.object({ type: z.literal('setMode'), mode: z.enum(['planning', 'fast']) }),
+  /** "+": attach the selection (or the active file when nothing is selected). */
+  z.object({ type: z.literal('attach'), what: z.enum(['auto', 'file', 'selection']) }),
   /** "Open diff" on a card or a bar row: the native diff, optionally at a block. */
   z.object({ type: z.literal('openDiff'), path: Short, blockId: Short.optional() }),
   /** A per-block or per-file decision in the files-changed bar. */

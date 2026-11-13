@@ -54,6 +54,7 @@ export function activate(context: vscode.ExtensionContext): SwageTestApi | undef
   // swage.inlineEdit to the InlineController, swage.switchModel to the ModelsController, swage.doctor to the DoctorController.
   const handlers: Partial<Record<(typeof COMMANDS)[number]['id'], () => unknown>> = {
     'swage.openAgent': () => controller?.focus(),
+    'swage.focusComposer': () => controller?.focusComposer(),
     // Escape stops whichever run is active: the inline edit first, then the agent run.
     'swage.stop': async () => {
       if (!(await inline?.stop())) await controller?.stop();

@@ -17,6 +17,7 @@ export const COMMANDS = [
   { id: 'swage.undoLastChangeSet', title: 'Undo Last Change Set' },
   { id: 'swage.switchModel', title: 'Switch Model' },
   { id: 'swage.doctor', title: 'Doctor' },
+  { id: 'swage.focusComposer', title: 'Focus Agent Composer' },
 ] as const satisfies readonly CommandSpec[];
 
 export type CommandId = (typeof COMMANDS)[number]['id'];

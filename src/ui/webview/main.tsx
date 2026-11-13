@@ -1,21 +1,14 @@
 import { Component, render } from 'preact';
 import { useEffect, useReducer, useRef, useState } from 'preact/hooks';
-import { parseHostMessage, type CompletionItem, type WebviewToHost } from '../protocol';
+import { parseHostMessage, type WebviewToHost } from '../protocol';
 import { parseInline } from './markdown';
 import { FileChip, Inlines, Markdown } from './richText';
 import { formatDuration, toolLabel } from './tools';
 import { EditCard, WalkthroughCard } from './cards';
 import { barModel } from './changes';
 import { FilesBar, Toast } from './filesBar';
-import {
-  applyCompletion,
-  initialState,
-  isBusy,
-  mentionQuery,
-  reducePanel,
-  type PanelState,
-  type TimelineItem,
-} from './state';
+import { Composer } from './composerView';
+import { initialState, isBusy, reducePanel, type TimelineItem } from './state';
 import { Logo } from './logo';
 
 /**
@@ -154,7 +147,11 @@ function ApprovalCard({ item }: { item: Extract<TimelineItem, { kind: 'approval'
       <pre class="approval-summary">{item.summary}</pre>
       {item.decision === 'pending' ? (
         <div class="actions">
-          <button onClick={() => send({ type: 'approve', toolCallId: item.id, allow: true })}>
+          <button
+            type="button"
+            class="primary"
+            onClick={() => send({ type: 'approve', toolCallId: item.id, allow: true })}
+          >
             Approve
           </button>
           <button
@@ -173,6 +170,35 @@ function ApprovalCard({ item }: { item: Extract<TimelineItem, { kind: 'approval'
         </div>
       ) : (
         <div class="decision">{item.decision === 'allowed' ? 'Approved' : 'Denied'}</div>
+      )}
+    </div>
+  );
+}
+
+function Notice({ item }: { item: Extract<TimelineItem, { kind: 'notice' }> }) {
+  const back = item.switchBack;
+  return (
+    <div class={`notice notice-${item.tone}`} role={item.tone === 'error' ? 'alert' : undefined}>
+      <span class="notice-text">{item.text}</span>
+      {back && (
+        <button
+          type="button"
+          class="link"
+          aria-label={`Switch back to ${back.label}`}
+          onClick={() => send({ type: 'selectModel', name: back.name })}
+        >
+          Switch back
+        </button>
+      )}
+      {item.retry && (
+        <button
+          type="button"
+          class="mini"
+          aria-label="Retry the request"
+          onClick={() => send({ type: 'retry' })}
+        >
+          Retry
+        </button>
       )}
     </div>
   );
@@ -211,7 +237,7 @@ function Item({ item }: { item: TimelineItem }) {
     case 'approval':
       return <ApprovalCard item={item} />;
     case 'notice':
-      return <div class={`notice notice-${item.tone}`}>{item.text}</div>;
+      return <Notice item={item} />;
     case 'edit':
       return <EditCard item={item} send={send} />;
     case 'walkthrough':
@@ -224,37 +250,6 @@ function viewFilesBar(): void {
   const bar = document.getElementById('files-bar');
   bar?.scrollIntoView({ block: 'nearest' });
   bar?.focus();
-}
-
-const MORE_MODELS = '__more__';
-
-/** The model picker in the panel header: switch profile for the next request, or add another. */
-function ModelPicker({ models, busy }: { models: PanelState['models']; busy: boolean }) {
-  return (
-    <select
-      class="model-picker"
-      aria-label="Model for the next request"
-      title="Model for the next request (Swage: Switch Model)"
-      value={models.active}
-      disabled={busy}
-      onChange={(e) => {
-        const select = e.currentTarget;
-        const value = select.value;
-        if (value === MORE_MODELS) {
-          select.value = models.active;
-          send({ type: 'moreModels' });
-        } else send({ type: 'selectModel', name: value });
-      }}
-    >
-      {models.items.map((m) => (
-        <option key={m.name} value={m.name}>
-          {m.label} · {m.model}
-          {m.note ? ` (${m.note})` : ''}
-        </option>
-      ))}
-      <option value={MORE_MODELS}>Other models…</option>
-    </select>
-  );
 }
 
 function BudgetMeter({
@@ -287,12 +282,7 @@ function BudgetMeter({
 
 function App() {
   const [state, dispatch] = useReducer(reducePanel, initialState);
-  const [text, setText] = useState('');
-  const [selected, setSelected] = useState(0);
-  const input = useRef<HTMLTextAreaElement>(null);
   const bottom = useRef<HTMLDivElement>(null);
-  const requestId = useRef(0);
-  const [showCompletions, setShowCompletions] = useState(false);
 
   useEffect(() => {
     const onMessage = (e: MessageEvent): void => {
@@ -314,89 +304,13 @@ function App() {
     return () => clearTimeout(t);
   }, [toastId]);
 
-  const busy = isBusy(state.status);
-  const items: CompletionItem[] = showCompletions ? state.completions.items : [];
-
-  const onInput = (value: string, cursor: number): void => {
-    setText(value);
-    const q = mentionQuery(value, cursor);
-    if (q) {
-      requestId.current++;
-      send({ type: 'complete', requestId: requestId.current, query: q.query });
-      setShowCompletions(true);
-      setSelected(0);
-    } else {
-      setShowCompletions(false);
-    }
-  };
-
-  const choose = (item: CompletionItem): void => {
-    const el = input.current;
-    const cursor = el?.selectionStart ?? text.length;
-    const next = applyCompletion(text, cursor, item.insertText);
-    setText(next.text);
-    setShowCompletions(false);
-    requestAnimationFrame(() => {
-      el?.focus();
-      el?.setSelectionRange(next.cursor, next.cursor);
-    });
-  };
-
-  const submit = (): void => {
-    if (busy || text.trim() === '') return;
-    send({ type: 'submit', text: text.trim() });
-    setText('');
-    setShowCompletions(false);
-  };
-
-  const onKeyDown = (e: KeyboardEvent): void => {
-    if (items.length > 0) {
-      if (e.key === 'ArrowDown') {
-        setSelected((s) => (s + 1) % items.length);
-        e.preventDefault();
-        return;
-      }
-      if (e.key === 'ArrowUp') {
-        setSelected((s) => (s - 1 + items.length) % items.length);
-        e.preventDefault();
-        return;
-      }
-      if (e.key === 'Enter' || e.key === 'Tab') {
-        const item = items[selected];
-        if (item) choose(item);
-        e.preventDefault();
-        return;
-      }
-      if (e.key === 'Escape') {
-        setShowCompletions(false);
-        e.preventDefault();
-        return;
-      }
-    }
-    if (e.key === 'Escape' && busy) {
-      send({ type: 'stop' });
-      e.preventDefault();
-    } else if (e.key === 'Enter' && !e.shiftKey) {
-      submit();
-      e.preventDefault();
-    }
-  };
-
-  const canRetry =
-    state.status === 'cancelled' || state.status === 'error' || state.status === 'done';
   return (
     <div class="panel">
-      <header>
-        <div class="title">
-          Swage agent{' '}
-          {state.models.items.length > 0 ? (
-            <ModelPicker models={state.models} busy={busy} />
-          ) : (
-            <span class="model">{state.model}</span>
-          )}
-        </div>
-        {state.budget && <BudgetMeter {...state.budget} />}
-      </header>
+      {state.budget && (
+        <header>
+          <BudgetMeter {...state.budget} />
+        </header>
+      )}
       <main class="timeline" aria-live="polite">
         {state.timeline.length === 0 && (
           <div class="empty">
@@ -426,64 +340,12 @@ function App() {
             onClose={() => dispatch({ type: 'local.dismissToast', id: state.toast?.id ?? -1 })}
           />
         )}
-        <div class="status">
-          <span class={`dot dot-${state.status}`} aria-hidden="true" />
-          {state.statusMessage || state.status}
-        </div>
-        {items.length > 0 && (
-          <ul class="completions" role="listbox">
-            {items.map((c, i) => (
-              <li
-                role="option"
-                aria-selected={i === selected}
-                class={i === selected ? 'selected' : ''}
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  choose(c);
-                }}
-              >
-                <span class="kind">{c.kind === 'file' ? 'file' : 'sym'}</span> {c.label}{' '}
-                <span class="detail">{c.detail}</span>
-              </li>
-            ))}
-          </ul>
+        {state.statusMessage && isBusy(state.status) && (
+          <div class="status" role="status">
+            {state.statusMessage}
+          </div>
         )}
-        <textarea
-          ref={input}
-          rows={3}
-          value={text}
-          placeholder={
-            busy
-              ? 'Running… press Stop or Escape to cancel'
-              : 'Ask Swage to change the code (Enter to send, Shift+Enter for a new line)'
-          }
-          disabled={busy}
-          onInput={(e) => {
-            const el = e.currentTarget;
-            onInput(el.value, el.selectionStart);
-          }}
-          onKeyDown={onKeyDown}
-        />
-        <div class="buttons">
-          {busy ? (
-            <button
-              class="stop"
-              onClick={() => send({ type: 'stop' })}
-              disabled={state.status === 'cancelling'}
-            >
-              Stop
-            </button>
-          ) : (
-            <button onClick={submit} disabled={text.trim() === ''}>
-              Send
-            </button>
-          )}
-          {canRetry && (
-            <button class="secondary" onClick={() => send({ type: 'retry' })}>
-              Retry
-            </button>
-          )}
-        </div>
+        <Composer state={state} send={send} />
       </footer>
     </div>
   );

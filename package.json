@@ -103,6 +103,11 @@
         "category": "Swage"
       },
       {
+        "command": "swage.focusComposer",
+        "title": "Focus Agent Composer",
+        "category": "Swage"
+      },
+      {
         "command": "swage.review.openFile",
         "title": "Open Diff",
         "category": "Swage",
@@ -306,6 +311,11 @@
       }
     ],
     "keybindings": [
+      {
+        "command": "swage.focusComposer",
+        "key": "ctrl+l",
+        "mac": "cmd+l"
+      },
       {
         "command": "swage.inlineEdit",
         "key": "ctrl+alt+k",
