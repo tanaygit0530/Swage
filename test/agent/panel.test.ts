@@ -221,3 +221,54 @@ describe('a tool call with missing arguments', () => {
     expect(of(h.posts, 'tool_start')[0]?.summary).toBe('""');
   });
 });
+
+describe('test guard: staged edits that lose existing tests', () => {
+  it('warns in stage_edit and sends the first submit back naming the lost test', async () => {
+    const submit = { toolCalls: [{ name: 'submit_change_set', arguments: { summary: 'Rename' } }] };
+    h = await startAgent(
+      {
+        name: 'lost-test',
+        description: 'renames an existing test away',
+        steps: [
+          {
+            toolCalls: [
+              {
+                name: 'declare_context',
+                arguments: {
+                  plan: ['Change the test'],
+                  files: [{ path: 'tests/test_cli.py', reason: 'the CLI test' }],
+                },
+              },
+            ],
+          },
+          {
+            toolCalls: [
+              {
+                name: 'stage_edit',
+                arguments: {
+                  path: 'tests/test_cli.py',
+                  kind: 'edit',
+                  edits: [{ find: 'def test_routes():', replace: 'def check_routes():' }],
+                },
+              },
+            ],
+          },
+          submit,
+          submit,
+          submit,
+          { text: ['Done.'] },
+        ],
+      } as never,
+      {},
+      { review: () => new Promise(() => undefined) },
+    );
+    expect(await h.run.start('Change the CLI test.')).toBe('paused');
+    const staged = of(h.posts, 'tool_end').find((e) => e.result?.startsWith('Staged'));
+    expect(staged?.result).toContain(
+      'Warning: this edit loses 1 existing test(s) in tests/test_cli.py: test_routes',
+    );
+    expect(of(h.posts, 'notice')[0]?.message).toMatch(/loses 1 existing test/);
+    const declined = of(h.posts, 'tool_end').find((e) => e.result?.startsWith('Tool call denied'));
+    expect(declined?.result).toContain('tests/test_cli.py::test_routes');
+  });
+});

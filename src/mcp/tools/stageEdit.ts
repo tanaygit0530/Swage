@@ -4,6 +4,7 @@ import { runTool, textResult, ToolError, type ToolContext } from '../context';
 import type { ToolRegistration } from '../server';
 import { rangeWarning } from '../../inline/rangeLock';
 import { symbolWarnings } from './symbolCheck';
+import { lostTests } from '../../changeset/testGuard';
 
 /**
  * stage_edit (blueprint section 6): edit, create or delete a file inside the in-memory change
@@ -98,11 +99,22 @@ export const stageEdit: ToolRegistration = (server, ctx: ToolContext) => {
       const s = result.value;
       const staged = call.task.changeSet.review().find((f) => f.path === s.path);
       const outside = rangeWarning(s.path, staged?.blocks ?? [], call.task.editableRange);
+      const view = call.task.changeSet.staged(s.path);
+      const lost = lostTests(
+        s.path,
+        call.task.changeSet.base(s.path),
+        view?.deleted ? undefined : view?.content,
+      );
       const lines = [
         s.blockCount === 0
           ? `No change: the staged content of ${s.path} equals the file on disk.`
           : `Staged ${s.kind} of ${s.path}: ${s.blockCount} block(s), +${s.linesAdded} -${s.linesRemoved} lines. Nothing is written to disk until the user reviews and accepts.`,
         ...(outside === undefined ? [] : [`Warning: ${outside}`]),
+        ...(lost.length === 0
+          ? []
+          : [
+              `Warning: this edit loses ${lost.length} existing test(s) in ${s.path}: ${lost.slice(0, 8).join(', ')}. An edit must not delete, rename or nest existing tests. Restore them (stage the file again), and add a new test after the end of a class or at the end of the file.`,
+            ]),
         ...warnings.map((w) => `Warning: ${w.message}`),
         `Staged so far: ${call.task.changeSet.stagedPaths().join(', ') || 'nothing'}.`,
       ];

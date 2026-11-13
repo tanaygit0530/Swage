@@ -18,6 +18,7 @@ import { DEFAULT_BUDGETS, type Budgets } from '../context/budget';
 import type { ChangeSet } from '../changeset/changeSet';
 import type { ApprovalList, ToolContext } from '../mcp/context';
 import { stagedFingerprint } from '../mcp/tasks';
+import { lostTests } from '../changeset/testGuard';
 import type { Logger } from '../supervisor/supervisor';
 import { parseToolArgs, summarizeArgs, type HostToWebview, type RunState } from '../ui/protocol';
 import { argsPreview, effectiveToolName, resultPreview, toolOutcome } from '../ui/toolDetail';
@@ -649,6 +650,28 @@ export class AgentRun {
         const fingerprint = stagedFingerprint(task);
         const staged = new Set(task.changeSet.stagedPaths());
         const missing = task.changeSet.declaredContext.files.filter((f) => !staged.has(f.path));
+        const lost = [...staged].flatMap((p) => {
+          const view = task.changeSet.staged(p);
+          return lostTests(
+            p,
+            task.changeSet.base(p),
+            view?.deleted ? undefined : view?.content,
+          ).map((t) => `${p}::${t}`);
+        });
+        if (lost.length > 0 && task.coverageGate !== fingerprint) {
+          task.coverageGate = fingerprint;
+          this.post({
+            type: 'notice',
+            tone: 'info',
+            message: `Swage sent the change set back: it loses ${lost.length} existing test(s).`,
+          });
+          this.declineInternally(
+            submit,
+            `Not submitted: the staged edits lose existing tests: ${lost.slice(0, 8).join(', ')}. An edit must not delete, rename or nest existing tests. Restore them (stage the file again with the original tests intact), put the new test after the end of a class or at the end of the file, run the tests, then call submit_change_set.`,
+            'Asking the agent to restore the existing tests before review…',
+          );
+          return;
+        }
         if (staged.size > 0 && missing.length > 0 && task.coverageGate !== fingerprint) {
           task.coverageGate = fingerprint;
           const list = missing.map((f) => `${f.path} (${f.reason})`).join('; ');

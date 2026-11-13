@@ -1,6 +1,6 @@
 import * as assert from 'node:assert';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
 import { homedir, tmpdir } from 'node:os';
 import * as path from 'node:path';
@@ -8,6 +8,7 @@ import { TrueForge } from '@truefoundry/trueforge-sdk';
 import * as vscode from 'vscode';
 import type { RunEventRecord } from '../../src/agent/controller';
 import type { UndoResult } from '../../src/changeset/apply';
+import { lostTests } from '../../src/changeset/testGuard';
 import type { SwageTestApi } from '../../src/extension';
 import type { InlineCommandResult } from '../../src/inline/vscode/controller';
 import type { ApplyCommandResult } from '../../src/review/vscode/controller';
@@ -532,6 +533,13 @@ async function taskB(id: string, opts: { keep?: boolean } = {}): Promise<boolean
   const untracked = git('ls-files', '--others', '--exclude-standard');
   const diff = `${git('diff')}${untracked ? `\n\nNew files:\n${untracked}` : ''}`;
   const testCli = pytest('tests/test_cli.py');
+  // No existing test may be lost (deleted, renamed or nested): a run that "passes" with fewer
+  // tests is a failure, as a judge reading the diff would see.
+  const lost = lostTests(
+    'tests/test_cli.py',
+    git('show', 'HEAD:tests/test_cli.py'),
+    readFileSync(path.join(DIR, 'tests/test_cli.py'), 'utf8'),
+  );
   const suite = pytest();
   const help = py(['-m', 'flask', '--help']).out;
   const appDir = mkdtempSync(path.join(tmpdir(), 'swage-b-app-'));
@@ -550,7 +558,13 @@ async function taskB(id: string, opts: { keep?: boolean } = {}): Promise<boolean
     ) &&
     parsed['GREETING'] === 'hello';
   const touched = files.length;
-  const ok = applied.ok && touched >= 3 && testCli.ok && /\bconfig\b/.test(help) && masked;
+  const ok =
+    applied.ok &&
+    touched >= 3 &&
+    testCli.ok &&
+    lost.length === 0 &&
+    /\bconfig\b/.test(help) &&
+    masked;
   let undo: string | undefined;
   if (!opts.keep) {
     const u = await vscode.commands.executeCommand<UndoResult>('swage.undoLastChangeSet', {
@@ -564,7 +578,7 @@ async function taskB(id: string, opts: { keep?: boolean } = {}): Promise<boolean
     {
       ...base,
       ok,
-      summary: `${touched} file(s) [${files.map((f) => f.path).join(', ')}], test_cli ${testCli.summary}, help lists config: ${/\bconfig\b/.test(help)}, masked: ${masked}`,
+      summary: `${touched} file(s) [${files.map((f) => f.path).join(', ')}], test_cli ${testCli.summary}, existing tests lost: ${lost.length === 0 ? 'none' : lost.join(', ')}, help lists config: ${/\bconfig\b/.test(help)}, masked: ${masked}`,
       files,
       filesNamedInInstruction: false,
       declared,
@@ -576,6 +590,7 @@ async function taskB(id: string, opts: { keep?: boolean } = {}): Promise<boolean
       testCli,
       testsSuite: suite,
       helpListsConfig: /\bconfig\b/.test(help),
+      lostTests: lost,
       commandOutput: cmd.out.slice(0, 3000),
       masked,
       maxEventLoopLagMs: maxLag,
