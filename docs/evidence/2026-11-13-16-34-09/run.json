@@ -1,0 +1,46 @@
+{
+  "runId": "2026-11-13-16-34-09",
+  "swageCommit": "f6129f52d322057213a2df05e8110749501d8e52",
+  "swageDirty": false,
+  "trueforge": "0.184.2",
+  "profiles": [
+    {
+      "name": "primary",
+      "label": "Gemini Flash Lite (latest)",
+      "kind": "hosted",
+      "trueforgeModel": "google-gemini/gemini-flash-lite-latest"
+    },
+    {
+      "name": "fallback-1",
+      "label": "Gemini 3.5 Flash Lite",
+      "kind": "hosted",
+      "trueforgeModel": "google-gemini/gemini-3-5-flash-lite"
+    },
+    {
+      "name": "fallback-2",
+      "label": "Gemini 3.5 Flash",
+      "kind": "hosted",
+      "trueforgeModel": "google-gemini/gemini-3-5-flash",
+      "params": {
+        "max_tokens": 8192
+      },
+      "timeouts": {
+        "firstTokenMs": 90000
+      }
+    },
+    {
+      "name": "fallback-3",
+      "label": "Gemini 3.1 Flash Lite",
+      "kind": "hosted",
+      "trueforgeModel": "google-gemini/gemini-3-1-flash-lite"
+    },
+    {
+      "name": "fallback-4",
+      "label": "Ollama Qwen Coder 3B",
+      "inlineOnly": true,
+      "kind": "local",
+      "trueforgeModel": "ollama/qwen-2-5-coder-3b"
+    }
+  ],
+  "tasks": "b"
+}

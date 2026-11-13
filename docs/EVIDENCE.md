@@ -264,6 +264,82 @@ Swage commit `4f2010b6ae862168e1cda87b6b3305410ed235c0`; TrueForge 0.184.2; prof
 
 - **b-1**: files `src/flask/cli.py` (modify, 3 block(s)), `tests/test_cli.py` (modify, 1 block(s)); retrieval hits: `src/flask/cli.py`, `src/flask/app.py`, `tests/test_cli.py`, `docs/cli.rst`, `src/flask/testing.py`, `src/flask/json/provider.py`, `src/flask/json/__init__.py`, `tests/test_json.py`, `src/flask/json/tag.py`, `src/flask/typing.py`, `src/flask/config.py`, `src/flask/sansio/app.py`, `tests/test_config.py`, `docs/config.rst`, `src/flask/__init__.py`, `tests/test_testing.py`, `tests/test_async.py`, `tests/test_basic.py`, `tests/test_blueprints.py`, `docs/shell.rst`, `src/flask/blueprints.py`; `tests/test_cli.py` after Apply: E   SyntaxError: invalid syntax; full suite: E   SyntaxError: invalid syntax.
 
+## Rehearsal 2026-11-13-16-06-11
+
+Swage commit `530cc3418e06324659bd99dea8f06cd3391bcce4`; TrueForge 0.184.2; profiles: primary `google-gemini/gemini-flash-lite-latest`, fallback-1 `google-gemini/gemini-3-5-flash-lite`, fallback-2 `google-gemini/gemini-3-5-flash`, fallback-3 `google-gemini/gemini-3-1-flash-lite`, fallback-4 `ollama/qwen-2-5-coder-7b`.
+
+| Task | Runs passed | Median time (passed runs) | Median tokens (passed runs) | Notes |
+| --- | --- | --- | --- | --- |
+| B agent mode | 1 of 1 | instruction to review 342.4 s | 245184 | files: 3 |
+
+### Runs
+
+| Run | Result | Time | Tokens | Tool calls | Summary |
+| --- | --- | --- | --- | --- | --- |
+| b-1 | pass | 342.4 s | 245184 | find_relevant_code → read_files → find_relevant_code → read_files → find_relevant_code → find_relevant_code → find_relevant_code → find_relevant_code → read_files → find_relevant_code → find_relevant_code → find_relevant_code → find_relevant_code → find_relevant_code → find_relevant_code → read_files → find_relevant_code → list_tools → get_tool_info → declare_context → stage_edit → stage_edit → stage_edit → call_tool → find_relevant_code → read_files → read_files → declare_context → stage_edit → read_files → read_files → stage_edit → stage_edit → read_files → read_files → read_files → list_tools → get_tool_info → call_tool → read_files → find_relevant_code → read_files → call_tool → find_relevant_code → read_files → find_relevant_code → read_files → declare_context → stage_edit → call_tool → call_tool → submit_change_set | 3 file(s) [src/flask/cli.py, docs/cli.rst, tests/test_cli.py], test_cli 59 passed in 0.10s, help lists config: true, masked: true |
+
+### Task B: files found and retrieval
+
+- **b-1**: files `src/flask/cli.py` (modify, 2 block(s)), `docs/cli.rst` (modify, 1 block(s)), `tests/test_cli.py` (modify, 1 block(s)); retrieval hits: `src/flask/cli.py`, `tests/test_cli.py`, `examples/tutorial/flaskr/db.py`, `examples/tutorial/tests/test_db.py`, `docs/cli.rst`, `src/flask/app.py`, `src/flask/testing.py`, `src/flask/blueprints.py`, `src/flask/json/provider.py`, `src/flask/json/__init__.py`, `tests/test_json.py`, `src/flask/json/tag.py`, `tests/test_json_tag.py`, `src/flask/config.py`, `docs/patterns/singlepageapplications.rst`, `docs/patterns/viewdecorators.rst`, `docs/patterns/urlprocessors.rst`, `docs/quickstart.rst`, `docs/design.rst`, `docs/debugging.rst`, `docs/server.rst`, `docs/tutorial/tests.rst`, `docs/deploying/gunicorn.rst`, `docs/patterns/celery.rst`, `docs/testing.rst`, `docs/api.rst`, `docs/shell.rst`, `docs/patterns/sqlite3.rst`, `docs/index.rst`, `docs/reqcontext.rst`, `src/flask/typing.py`, `tests/test_testing.py`, `src/flask/__init__.py`, `tests/test_async.py`, `tests/test_basic.py`, `tests/test_blueprints.py`; `tests/test_cli.py` after Apply: 59 passed in 0.10s; full suite: 491 passed in 0.57s.
+
+## Rehearsal 2026-11-13-16-16-06
+
+Swage commit `b426ca94edac3ec6d52c0effcfb2ec60562ee373`; TrueForge 0.184.2; profiles: primary `google-gemini/gemini-flash-lite-latest`, fallback-1 `google-gemini/gemini-3-5-flash-lite`, fallback-2 `google-gemini/gemini-3-5-flash`, fallback-3 `google-gemini/gemini-3-1-flash-lite`, fallback-4 `ollama/qwen-2-5-coder-3b`.
+
+| Task | Runs passed | Median time (passed runs) | Median tokens (passed runs) | Notes |
+| --- | --- | --- | --- | --- |
+| B agent mode | 1 of 1 | instruction to review 127.9 s | 316417 | files: 3 |
+
+### Runs
+
+| Run | Result | Time | Tokens | Tool calls | Summary |
+| --- | --- | --- | --- | --- | --- |
+| b-1 | pass | 127.9 s | 316417 | find_relevant_code → find_relevant_code → find_relevant_code → read_files → find_relevant_code → find_relevant_code → read_files → find_relevant_code → find_relevant_code → find_relevant_code → list_tools → get_tool_info → declare_context → stage_edit → stage_edit → find_relevant_code → read_files → stage_edit → call_tool → read_files → stage_edit → call_tool → read_files → stage_edit → call_tool → submit_change_set | 3 file(s) [src/flask/cli.py, tests/test_cli.py, docs/cli.rst], test_cli 55 passed in 0.09s, help lists config: true, masked: true |
+
+### Task B: files found and retrieval
+
+- **b-1**: files `src/flask/cli.py` (modify, 2 block(s)), `tests/test_cli.py` (modify, 3 block(s)), `docs/cli.rst` (modify, 1 block(s)); retrieval hits: `src/flask/cli.py`, `src/flask/app.py`, `tests/test_cli.py`, `docs/cli.rst`, `src/flask/testing.py`, `src/flask/blueprints.py`, `src/flask/json/provider.py`, `src/flask/json/__init__.py`, `tests/test_json.py`, `src/flask/json/tag.py`, `tests/test_json_tag.py`, `tests/test_testing.py`, `docs/shell.rst`, `src/flask/sansio/app.py`, `src/flask/__init__.py`, `tests/test_basic.py`, `tests/test_templating.py`, `examples/tutorial/tests/test_db.py`, `tests/test_async.py`, `tests/test_blueprints.py`, `src/flask/typing.py`; `tests/test_cli.py` after Apply: 55 passed in 0.09s; full suite: 487 passed in 0.56s.
+
+## Rehearsal 2026-11-13-16-22-02
+
+Swage commit `6e0d6f64f30f23defe9be98a656ee176299c67cb`; TrueForge 0.184.2; profiles: primary `google-gemini/gemini-flash-lite-latest`, fallback-1 `google-gemini/gemini-3-5-flash-lite`, fallback-2 `google-gemini/gemini-3-5-flash`, fallback-3 `google-gemini/gemini-3-1-flash-lite`, fallback-4 `ollama/qwen-2-5-coder-3b`.
+
+| Task | Runs passed | Median time (passed runs) | Median tokens (passed runs) | Notes |
+| --- | --- | --- | --- | --- |
+| B agent mode | 0 of 2 | instruction to review – | – | files: 3, 2 |
+
+### Runs
+
+| Run | Result | Time | Tokens | Tool calls | Summary |
+| --- | --- | --- | --- | --- | --- |
+| b-1 | **fail** | 296.9 s | 262846 | find_relevant_code → find_relevant_code → read_files → find_relevant_code → find_relevant_code → find_relevant_code → read_files → find_relevant_code → find_relevant_code → find_relevant_code → find_relevant_code → read_files → declare_context → declare_context → stage_edit → stage_edit → stage_edit → list_tools → get_tool_info → call_tool → call_tool → call_tool → call_tool → call_tool → call_tool → call_tool → stage_edit → call_tool → read_files → read_files → list_tools → get_tool_info → call_tool → read_files → read_files → read_files → read_files → read_files → declare_context → stage_edit → call_tool → read_files → declare_context → stage_edit → call_tool → read_files → declare_context → stage_edit → call_tool → read_files → read_files | 3 file(s) [src/flask/cli.py, tests/test_cli.py, docs/cli.rst], test_cli 14 failed, 45 passed in 0.19s, existing tests lost: none, help lists config: true, masked: true |
+| b-2 | **fail** | 123.0 s | 2111 | list_tools → read_files → read_files → read_files → declare_context → stage_edit → stage_edit → list_tools → call_tool → get_tool_info → call_tool → stage_edit → call_tool → call_tool | 2 file(s) [src/flask/cli.py, tests/test_cli.py], test_cli 1 failed, 58 passed in 0.12s, existing tests lost: none, help lists config: true, masked: false |
+
+### Task B: files found and retrieval
+
+- **b-1**: files `src/flask/cli.py` (modify, 3 block(s)), `tests/test_cli.py` (modify, 1 block(s)), `docs/cli.rst` (modify, 1 block(s)); retrieval hits: `src/flask/cli.py`, `tests/test_cli.py`, `tests/test_testing.py`, `docs/cli.rst`, `src/flask/testing.py`, `src/flask/app.py`, `src/flask/json/provider.py`, `src/flask/json/__init__.py`, `tests/test_json.py`, `src/flask/json/tag.py`, `src/flask/typing.py`, `docs/shell.rst`, `src/flask/__init__.py`, `tests/test_async.py`, `tests/test_basic.py`, `tests/test_blueprints.py`; `tests/test_cli.py` after Apply: 14 failed, 45 passed in 0.19s; full suite: 14 failed, 477 passed in 0.92s.
+- **b-2**: files `src/flask/cli.py` (modify, 2 block(s)), `tests/test_cli.py` (modify, 1 block(s)); retrieval hits: none; `tests/test_cli.py` after Apply: 1 failed, 58 passed in 0.12s; full suite: 1 failed, 490 passed in 0.68s.
+
+## Rehearsal 2026-11-13-16-34-09
+
+Swage commit `f6129f52d322057213a2df05e8110749501d8e52`; TrueForge 0.184.2; profiles: primary `google-gemini/gemini-flash-lite-latest`, fallback-1 `google-gemini/gemini-3-5-flash-lite`, fallback-2 `google-gemini/gemini-3-5-flash`, fallback-3 `google-gemini/gemini-3-1-flash-lite`, fallback-4 `ollama/qwen-2-5-coder-3b`.
+
+| Task | Runs passed | Median time (passed runs) | Median tokens (passed runs) | Notes |
+| --- | --- | --- | --- | --- |
+| B agent mode | 0 of 2 | instruction to review – | – | files: 3, 3 |
+
+### Runs
+
+| Run | Result | Time | Tokens | Tool calls | Summary |
+| --- | --- | --- | --- | --- | --- |
+| b-1 | **fail** | 265.3 s | 0 | find_relevant_code → find_relevant_code → read_files → find_relevant_code → read_files → find_relevant_code → read_files → find_relevant_code → find_relevant_code → read_files → find_relevant_code → find_relevant_code → find_relevant_code → read_files → declare_context → stage_edit → stage_edit → stage_edit → list_tools → get_tool_info → call_tool → call_tool → call_tool → call_tool → call_tool → stage_edit → call_tool → read_files → stage_edit → call_tool → find_relevant_code → read_files → list_tools → get_tool_info → read_files → declare_context → stage_edit → read_files → read_files → read_files → read_files → read_files → read_files → read_files → read_files → read_files → read_files → read_files → read_files → read_files → read_files → read_files → read_files → read_files → read_files → read_files → read_files → read_files → read_files → read_files → read_files → read_files → read_files → read_files | 3 file(s) [src/flask/cli.py, tests/test_cli.py, docs/cli.rst], test_cli 2 failed, 58 passed in 0.12s, existing tests lost: none, help lists config: true, masked: false |
+| b-2 | **fail** | 302.7 s | 0 | list_tools → read_files → read_files → read_files → declare_context → stage_edit → stage_edit → list_tools → call_tool → get_tool_info → call_tool → stage_edit → call_tool → call_tool → stage_edit → find_relevant_code → read_files → find_relevant_code → read_files → find_relevant_code → find_relevant_code → read_files → find_relevant_code → read_files → find_relevant_code → declare_context → stage_edit → stage_edit → stage_edit → list_tools → get_tool_info → read_files → read_files → read_files → list_tools → get_tool_info → call_tool → read_files → read_files → declare_context → stage_edit → stage_edit → call_tool → read_files → stage_edit → call_tool → stage_edit → call_tool → stage_edit → call_tool → stage_edit → call_tool → stage_edit → call_tool → list_tools → get_tool_info → call_tool → read_files → read_files → declare_context → stage_edit → call_tool → read_files → declare_context → stage_edit → call_tool → read_files → find_relevant_code → read_files → declare_context → stage_edit → call_tool → find_relevant_code → find_relevant_code → read_files → declare_context → stage_edit → call_tool → declare_context → stage_edit → call_tool → call_tool → find_relevant_code → read_files | 3 file(s) [src/flask/cli.py, tests/test_cli.py, docs/cli.rst], test_cli 1 failed, 59 passed in 0.12s, existing tests lost: none, help lists config: true, masked: false |
+
+### Task B: files found and retrieval
+
+- **b-1**: files `src/flask/cli.py` (modify, 2 block(s)), `tests/test_cli.py` (modify, 2 block(s)), `docs/cli.rst` (modify, 1 block(s)); retrieval hits: `src/flask/cli.py`, `src/flask/app.py`, `tests/test_cli.py`, `docs/cli.rst`, `src/flask/testing.py`, `tests/test_testing.py`, `src/flask/testing.p`, `docs/shell.rst`, `src/flask/json/__init__.py`, `src/flask/json/provider.py`, `tests/test_config.py`, `src/flask/config.py`, `tests/test_json.py`, `src/flask/__init__.py`, `tests/test_async.py`, `tests/test_basic.py`, `tests/test_blueprints.py`; `tests/test_cli.py` after Apply: 2 failed, 58 passed in 0.12s; full suite: 2 failed, 490 passed in 0.62s.
+- **b-2**: files `src/flask/cli.py` (modify, 4 block(s)), `tests/test_cli.py` (modify, 2 block(s)), `docs/cli.rst` (modify, 1 block(s)); retrieval hits: `tests/test_cli.py`, `src/flask/cli.py`, `src/flask/testing.py`, `docs/cli.rst`, `tests/test_testing.py`, `docs/shell.rst`, `src/flask/app.py`, `src/flask/__init__.py`, `tests/test_async.py`, `tests/test_basic.py`, `tests/test_blueprints.py`, `tests/test_request.py`, `tests/test_templating.py`; `tests/test_cli.py` after Apply: 1 failed, 59 passed in 0.12s; full suite: 1 failed, 491 passed in 0.70s.
+
 ## Findings, fixes and limitations
 
 Written by hand during the rehearsal; `node scripts/rehearse.mjs report` appends this section to `docs/EVIDENCE.md` as it is.
@@ -374,4 +450,43 @@ What failed is model capacity, not Swage. No model available to this team today 
 - or an Ollama model with tool support (for example `qwen2.5:7b` or `llama3.1:8b`), added in the panel with **Other models… → Add a model from TrueForge…**.
 
 The statement scores behaviour, not the model, and the organisers may repeat tasks with their own model.
+
+### 6. After the panel redesign (13 November, afternoon)
+
+Three rehearsals against the live TrueForge 0.184.2, on the redesigned panel (code at `93c632a`, then `4f2010b`):
+
+- **`2026-11-13-13-39-28`: cancel, Task A ×3, toggle, double undo, Task C ×2. Every one passed.**
+  - **Cancel:** the Stop reached the screen in 17 ms; the workspace was clean.
+  - **Task A:** the diff appeared in 4.3, 5.4 and 4.9 s. `FLASK_DEBUG=off` gave `False`, and all 490 Flask tests passed.
+  - **Task C:** "Switched to Gemini because the primary refused the connection"; Reject all left the workspace clean; the editor lagged at most 24 ms.
+  - **Double undo:** clean afterwards, and a third undo reported `nothing_to_undo`.
+  - **Task B (inside the undo step):** the command was in `flask --help` and the JSON was masked, but it added no test. The agent declared `tests/test_cli.py`, hit the 30,000-token read budget reading it whole, and a free-tier 429 moved the task to a model that submitted without the test. **Fixed in `4f2010b`:** a submit that leaves a declared file without an edit is sent back once, naming the file.
+- **`2026-11-13-13-46-30`: Task B, default profiles.** The test was staged this time, but the agent placed the new command inside `routes_command`, which broke a test. Free-tier 429s (15 requests per minute, 250,000 input tokens per minute) switched models four times. The last model wrote its tool call as text.
+- **`2026-11-13-13-52-30`: Task B, Gemini 3.5 Flash as primary.** Its first request was refused with a 429. The three Gemini models then switched among each other eight times. The final staged test had a syntax error.
+  - This run exposed a **Swage bug**: tool results are redacted, so the agent saw `API_TOKEN = "[REDACTED:…]"` in its own staged test and used that line as an edit anchor, which never matched. **Fixed in `e3b43af`:** a marker inside an anchor matches the hidden value on that line, and the value is put back if the replacement keeps the marker. The secret still never reaches the model.
+- **Groq:** `groq/llama-3-3-70b-versatile` is now configured in TrueForge but still answers 404, so the key has no access to it.
+
+**Conclusion:** the panel redesign broke nothing. The Task B failures come from free-tier rate limits and the strength of the Flash Lite models, and the two Swage defects they exposed are fixed. Recording Task B still needs one capable model with enough quota (`docs/SUBMISSION_CHECKLIST.md`).
+
+### 7. Making Task B fast on free models (13 November, evening)
+
+Recording Task B can't cut between the instruction and the diff, so it has to finish fast. Gemini's free tier allows about 15 requests per minute per model, and Task B was making 40 to 71. Changes, each with tests:
+
+- **`71d4604`:** the first message carries code excerpts of the top four retrieved files, and the agent is asked to batch tool calls. A short rate limit is waited out on the same model and session (`swage.rateLimitWaitSeconds`, now 60 s) instead of switching.
+- **`530cc34`:** a tool call with a missing argument crashed while its row was shown, and the run hung. Fixed.
+- **`b426ca9`:** at most 8 searches per task; past that the tool names the files found and asks for reads, the plan and edits.
+- **`6e0d6f6`:** a test guard. `stage_edit` warns, and the first submit is sent back, when an edit loses existing tests (one run put its test inside `class TestRoutes`, so 3 tests silently stopped running). The rehearsal now fails Task B when any test is lost.
+- **`f6129f5`:** `inlineOnly` profiles. The local qwen2.5-coder:3b ended two runs badly after Gemini's quota ran out; agent mode no longer uses it.
+
+| Rehearsal              | Result                                                                                       | Time to review | Tool calls | 429s | Switches |
+| ---------------------- | -------------------------------------------------------------------------------------------- | -------------- | ---------- | ---- | -------- |
+| `2026-11-13-16-06-11`  | **Pass**: 3 files, tests pass, `config` in `--help`, masked                                    | 5.7 min        | 52         | 7    | 5        |
+| `2026-11-13-16-16-06`  | Pass by the old check, but 3 existing tests silently lost (led to the test guard)             | **2.1 min**    | 26         | 2    | 0        |
+| `2026-11-13-16-22-02`  | Fail: finished by the local 3B model (led to `inlineOnly`)                                    | 4.9 / 2.0 min  | 53 / 16    | 7/6  | 4 / 2    |
+| `2026-11-13-16-34-09`  | Fail: 1 or 2 failing tests, not masked; Gemini's quota was worn down by the day's rehearsals | 4.4 / 5.0 min  | 64 / 86    | 6/9  | 3 / 6    |
+
+**Conclusion:**
+- Swage's part works: retrieval, planning, staging, gates, review, apply.
+- Free Flash Lite models finish Task B correctly only some of the time. The best run took 2.1 minutes, and it came first after a pause, when the per-minute and daily quotas were fresh.
+- For the video: record Task B first, at the start of a session with fresh quota, and keep a take that passes.
 

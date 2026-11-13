@@ -125,3 +125,25 @@ Three rehearsals against the live TrueForge 0.184.2, on the redesigned panel (co
 - **Groq:** `groq/llama-3-3-70b-versatile` is now configured in TrueForge but still answers 404, so the key has no access to it.
 
 **Conclusion:** the panel redesign broke nothing. The Task B failures come from free-tier rate limits and the strength of the Flash Lite models, and the two Swage defects they exposed are fixed. Recording Task B still needs one capable model with enough quota (`docs/SUBMISSION_CHECKLIST.md`).
+
+### 7. Making Task B fast on free models (13 November, evening)
+
+Recording Task B can't cut between the instruction and the diff, so it has to finish fast. Gemini's free tier allows about 15 requests per minute per model, and Task B was making 40 to 71. Changes, each with tests:
+
+- **`71d4604`:** the first message carries code excerpts of the top four retrieved files, and the agent is asked to batch tool calls. A short rate limit is waited out on the same model and session (`swage.rateLimitWaitSeconds`, now 60 s) instead of switching.
+- **`530cc34`:** a tool call with a missing argument crashed while its row was shown, and the run hung. Fixed.
+- **`b426ca9`:** at most 8 searches per task; past that the tool names the files found and asks for reads, the plan and edits.
+- **`6e0d6f6`:** a test guard. `stage_edit` warns, and the first submit is sent back, when an edit loses existing tests (one run put its test inside `class TestRoutes`, so 3 tests silently stopped running). The rehearsal now fails Task B when any test is lost.
+- **`f6129f5`:** `inlineOnly` profiles. The local qwen2.5-coder:3b ended two runs badly after Gemini's quota ran out; agent mode no longer uses it.
+
+| Rehearsal              | Result                                                                                       | Time to review | Tool calls | 429s | Switches |
+| ---------------------- | -------------------------------------------------------------------------------------------- | -------------- | ---------- | ---- | -------- |
+| `2026-11-13-16-06-11`  | **Pass**: 3 files, tests pass, `config` in `--help`, masked                                    | 5.7 min        | 52         | 7    | 5        |
+| `2026-11-13-16-16-06`  | Pass by the old check, but 3 existing tests silently lost (led to the test guard)             | **2.1 min**    | 26         | 2    | 0        |
+| `2026-11-13-16-22-02`  | Fail: finished by the local 3B model (led to `inlineOnly`)                                    | 4.9 / 2.0 min  | 53 / 16    | 7/6  | 4 / 2    |
+| `2026-11-13-16-34-09`  | Fail: 1 or 2 failing tests, not masked; Gemini's quota was worn down by the day's rehearsals | 4.4 / 5.0 min  | 64 / 86    | 6/9  | 3 / 6    |
+
+**Conclusion:**
+- Swage's part works: retrieval, planning, staging, gates, review, apply.
+- Free Flash Lite models finish Task B correctly only some of the time. The best run took 2.1 minutes, and it came first after a pause, when the per-minute and daily quotas were fresh.
+- For the video: record Task B first, at the start of a session with fresh quota, and keep a take that passes.
