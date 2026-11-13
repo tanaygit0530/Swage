@@ -30,6 +30,40 @@ export const CompletionItem = z.object({
 });
 export type CompletionItem = z.infer<typeof CompletionItem>;
 
+const Count = z.number().int().min(0);
+const Kind = z.enum(['create', 'modify', 'delete']);
+
+/** One file in the files-changed bar, with its change blocks (built by src/ui/changes.ts). */
+export const ChangeFile = z.object({
+  path: Short,
+  kind: Kind,
+  added: Count,
+  removed: Count,
+  decision: z.enum(['pending', 'accepted', 'rejected', 'partial']),
+  blocks: z
+    .array(
+      z.object({
+        id: Short,
+        state: z.enum(['pending', 'accepted', 'rejected']),
+        added: Count,
+        removed: Count,
+        line: z.number().int().min(1),
+        summary: Short,
+      }),
+    )
+    .max(500),
+  reason: Short.optional(),
+});
+export type ChangeFile = z.infer<typeof ChangeFile>;
+
+const FileSummary = z.object({
+  path: Short,
+  kind: Kind,
+  added: Count,
+  removed: Count,
+  reason: Short.optional(),
+});
+
 export const HostToWebview = z.discriminatedUnion('type', [
   z.object({ type: z.literal('init'), workspace: Short, model: Short }),
   z.object({ type: z.literal('status'), state: RunState, message: Short.optional() }),
@@ -85,6 +119,25 @@ export const HostToWebview = z.discriminatedUnion('type', [
     tone: z.enum(['info', 'warning', 'error']),
     message: Short,
   }),
+  /** stage_edit added or changed a file: an edited-file card in the thread. */
+  z.object({ type: z.literal('edit'), taskId: Short, ...FileSummary.shape }),
+  /**
+   * The files-changed bar: `staging` while the agent still edits (read-only), `review` once the
+   * change set is submitted (decisions apply), `none` when there is nothing to review.
+   */
+  z.object({
+    type: z.literal('changes'),
+    phase: z.enum(['none', 'staging', 'review']),
+    files: z.array(ChangeFile).max(200),
+  }),
+  /** The end of a task: the model's summary and the changed files. */
+  z.object({
+    type: z.literal('walkthrough'),
+    summary: Text,
+    files: z.array(FileSummary).max(200),
+  }),
+  /** Accept all applied the change set: the inline "Applied N files. Undo" toast. */
+  z.object({ type: z.literal('applied'), files: Count, message: Short }),
   /** The model the run is on now (after a fallback switch). */
   z.object({ type: z.literal('model'), model: Short }),
   /** The model profiles for the panel's model picker, and the active one. */
@@ -115,6 +168,23 @@ export const WebviewToHost = z.discriminatedUnion('type', [
   }),
   /** A file chip or edited-file card: open the workspace file, optionally at a 1-based line. */
   z.object({ type: z.literal('openFile'), path: Short, line: z.number().int().min(1).optional() }),
+  /** "Open diff" on a card or a bar row: the native diff, optionally at a block. */
+  z.object({ type: z.literal('openDiff'), path: Short, blockId: Short.optional() }),
+  /** A per-block or per-file decision in the files-changed bar. */
+  z.object({
+    type: z.literal('reviewAction'),
+    action: z.enum(['acceptBlock', 'rejectBlock', 'splitBlock', 'acceptFile', 'rejectFile']),
+    path: Short,
+    blockId: Short.optional(),
+  }),
+  /** Accept all: accept every block and apply atomically. */
+  z.object({ type: z.literal('acceptAll') }),
+  /** Reject all: discard the change set; the workspace stays unchanged. */
+  z.object({ type: z.literal('rejectAll') }),
+  /** Apply the blocks accepted so far (after per-file or per-block decisions). */
+  z.object({ type: z.literal('applyAccepted') }),
+  /** The toast's Undo: swage.undoLastChangeSet. */
+  z.object({ type: z.literal('undo') }),
   /** A `name()` chip: go to the symbol's definition. */
   z.object({ type: z.literal('openSymbol'), name: Short }),
   /** A code block's "Insert at cursor". */

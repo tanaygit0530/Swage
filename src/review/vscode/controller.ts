@@ -81,9 +81,14 @@ export class ReviewController implements vscode.Disposable {
   private readonly view: vscode.TreeView<ReviewNode>;
   private applierFor: { root: string; applier: Applier } | undefined;
   private modeValue: ReviewMode = { mode: 'agent' };
+  /** A change set still being staged: diffs can open before review (read-only, no decisions). */
+  private watching: ReviewSession | undefined;
+  private readonly changeEmitter = new vscode.EventEmitter<void>();
+  /** Fires whenever the review state changes (start, decisions, apply, discard). */
+  readonly onDidChange = this.changeEmitter.event;
 
   constructor(readonly context: vscode.ExtensionContext) {
-    this.documents = new ReviewDocuments(() => this.session);
+    this.documents = new ReviewDocuments(() => this.session ?? this.watching);
     this.tree = new ReviewTree(() => this.session);
     this.lenses = new ReviewCodeLens(
       () => this.session,
@@ -153,6 +158,7 @@ export class ReviewController implements vscode.Disposable {
     mode: ReviewMode = { mode: 'agent' },
   ): Promise<void> {
     this.sessionSub?.dispose();
+    this.watching = undefined;
     this.session = new ReviewSession(taskId, changeSet);
     this.onFinish = onFinish;
     this.modeValue = mode;
@@ -166,6 +172,21 @@ export class ReviewController implements vscode.Disposable {
     } else {
       await this.show();
     }
+  }
+
+  /**
+   * Follows a change set the agent is still staging, so the panel's "Open diff" works before
+   * the review starts. Refreshes open diffs of the paths just staged.
+   */
+  watch(taskId: string, changeSet: ChangeSet, paths: readonly string[] = []): void {
+    if (this.session) return;
+    if (this.watching?.taskId !== taskId) this.watching = new ReviewSession(taskId, changeSet);
+    this.documents.refresh(taskId, paths);
+  }
+
+  /** Stops following a staging change set (the run was cancelled or failed). */
+  unwatch(taskId: string): void {
+    if (this.watching?.taskId === taskId) this.watching = undefined;
   }
 
   protected changed(paths: readonly string[]): void {
@@ -184,6 +205,7 @@ export class ReviewController implements vscode.Disposable {
       t && t.pending > 0
         ? { value: t.pending, tooltip: `${t.pending} block(s) to review` }
         : undefined;
+    this.changeEmitter.fire();
   }
 
   /** Ends the review and reports the outcome to whoever started it. */
@@ -423,14 +445,16 @@ export class ReviewController implements vscode.Disposable {
 
   async openFile(arg: unknown): Promise<void> {
     const ref = toRef(arg);
-    if (!ref || !this.session) return;
+    const session = this.session ?? this.watching;
+    if (!ref || !session) return;
     const line = ref.blockId
-      ? this.session.preview(ref.path).blocks.find((b) => b.id === ref.blockId)?.start
+      ? session.preview(ref.path).blocks.find((b) => b.id === ref.blockId)?.start
       : undefined;
-    await openDiff(this.session, ref.path, line);
+    await openDiff(session, ref.path, line);
   }
 
   dispose(): void {
+    this.changeEmitter.dispose();
     this.sessionSub?.dispose();
     for (const d of this.disposables) d.dispose();
     this.documents.dispose();

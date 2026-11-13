@@ -273,3 +273,59 @@ describe('message validation: redesign step 2', () => {
     expect(parseWebviewMessage({ type: 'copy', text: 'x'.repeat(200_001) })).toBeUndefined();
   });
 });
+
+describe('message validation: redesign steps 3 and 4', () => {
+  const row = {
+    path: 'a.py',
+    kind: 'modify',
+    added: 1,
+    removed: 0,
+    decision: 'pending',
+    blocks: [{ id: 'b1', state: 'pending', added: 1, removed: 0, line: 1, summary: 'x' }],
+  };
+  it('accepts cards, bar rows, the walkthrough and apply', () => {
+    expect(
+      parseHostMessage({
+        type: 'edit',
+        taskId: 't',
+        path: 'a.py',
+        kind: 'create',
+        added: 1,
+        removed: 0,
+      }),
+    ).toBeDefined();
+    expect(parseHostMessage({ type: 'changes', phase: 'staging', files: [row] })).toBeDefined();
+    expect(parseHostMessage({ type: 'walkthrough', summary: 's', files: [] })).toBeDefined();
+    expect(parseHostMessage({ type: 'applied', files: 2, message: 'm' })).toBeDefined();
+    for (const msg of [
+      { type: 'openDiff', path: 'a.py', blockId: 'b1' },
+      { type: 'reviewAction', action: 'splitBlock', path: 'a.py', blockId: 'b1' },
+      { type: 'reviewAction', action: 'acceptFile', path: 'a.py' },
+      { type: 'acceptAll' },
+      { type: 'rejectAll' },
+      { type: 'applyAccepted' },
+      { type: 'undo' },
+    ])
+      expect(parseWebviewMessage(msg)).toBeDefined();
+  });
+
+  it('rejects malformed ones', () => {
+    expect(parseHostMessage({ type: 'changes', phase: 'later', files: [] })).toBeUndefined();
+    expect(
+      parseHostMessage({ type: 'changes', phase: 'review', files: [{ ...row, added: -1 }] }),
+    ).toBeUndefined();
+    expect(
+      parseHostMessage({
+        type: 'edit',
+        taskId: 't',
+        path: 'a',
+        kind: 'rename',
+        added: 0,
+        removed: 0,
+      }),
+    ).toBeUndefined();
+    expect(
+      parseWebviewMessage({ type: 'reviewAction', action: 'applyAll', path: 'a' }),
+    ).toBeUndefined();
+  });
+});

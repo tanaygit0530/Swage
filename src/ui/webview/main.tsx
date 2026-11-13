@@ -4,6 +4,7 @@ import { parseHostMessage, type CompletionItem, type WebviewToHost } from '../pr
 import { parseInline } from './markdown';
 import { FileChip, Inlines, Markdown } from './richText';
 import { formatDuration, toolLabel } from './tools';
+import { EditCard, WalkthroughCard } from './cards';
 import {
   applyCompletion,
   initialState,
@@ -209,7 +210,18 @@ function Item({ item }: { item: TimelineItem }) {
       return <ApprovalCard item={item} />;
     case 'notice':
       return <div class={`notice notice-${item.tone}`}>{item.text}</div>;
+    case 'edit':
+      return <EditCard item={item} send={send} />;
+    case 'walkthrough':
+      return <WalkthroughCard item={item} send={send} onView={viewFilesBar} />;
   }
+}
+
+/** The Walkthrough's "View": bring the files-changed bar into view and focus it. */
+function viewFilesBar(): void {
+  const bar = document.getElementById('files-bar');
+  bar?.scrollIntoView({ block: 'nearest' });
+  bar?.focus();
 }
 
 const MORE_MODELS = '__more__';

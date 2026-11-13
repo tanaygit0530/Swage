@@ -21,6 +21,8 @@ import { stagedFingerprint } from '../mcp/tasks';
 import type { Logger } from '../supervisor/supervisor';
 import { parseToolArgs, summarizeArgs, type HostToWebview, type RunState } from '../ui/protocol';
 import { argsPreview, effectiveToolName, resultPreview, toolOutcome } from '../ui/toolDetail';
+import { changeRows } from '../ui/changes';
+import { fileStats } from '../review/model';
 import type { EditableRange } from '../inline/context';
 import { buildFirstMessage, type ContextPart, type FirstMessage } from './context';
 import type { EventRelay } from './relay';
@@ -80,6 +82,10 @@ export interface AgentRunOptions {
   readonly clock?: Clock;
   /** Every event of the current turn, as received (logs, evidence, the session export). */
   readonly onEvent?: (event: SwageEvent) => void;
+  /** stage_edit changed a file (the review follows the staging change set for live diffs). */
+  readonly onStaged?: (taskId: string, changeSet: ChangeSet, path: string) => void;
+  /** The run ended without a review: the staging change set is gone. */
+  readonly onDropped?: (taskId: string) => void;
 }
 
 export type RunOutcome = 'done' | 'paused' | 'cancelled' | 'error';
@@ -124,6 +130,8 @@ export class AgentRun {
   /** True once the current attempt produced any model or tool event. */
   private attemptActivity = false;
   private readonly sleeps = new Set<() => void>();
+  /** The summary the agent gave with submit_change_set, for the walkthrough. */
+  private submitSummary: string | undefined;
 
   constructor(private readonly opts: AgentRunOptions) {
     this.logger = opts.logger ?? silent;
@@ -177,6 +185,12 @@ export class AgentRun {
         if (taskId === this.taskId && !this.cancelRequested)
           this.post({ type: 'plan', steps: [...plan], files: [...files] });
       },
+      onStage: (taskId, path) => {
+        if (taskId === this.taskId && !this.cancelRequested) this.staged(path);
+      },
+      onSubmit: (taskId, summary) => {
+        if (taskId === this.taskId) this.submitSummary = summary;
+      },
     });
     try {
       const first = this.opts.firstMessage
@@ -208,6 +222,62 @@ export class AgentRun {
       this.fail(describeError(err));
     }
     return this.finished;
+  }
+
+  /** The agent's declared reason per file. */
+  private reasons(): Map<string, string> {
+    const declared = this.opts.ctx.tasks.get(this.taskId)?.changeSet.declaredContext;
+    return new Map((declared?.files ?? []).map((f) => [f.path, f.reason]));
+  }
+
+  /** A stage_edit landed: the file's card in the thread and the live files-changed bar. */
+  private staged(path: string): void {
+    const changeSet = this.opts.ctx.tasks.get(this.taskId)?.changeSet;
+    if (!changeSet) return;
+    const files = changeSet.review();
+    const file = files.find((f) => f.path === path);
+    const reasons = this.reasons();
+    if (file) {
+      const stats = fileStats(file);
+      const reason = reasons.get(path);
+      this.post({
+        type: 'edit',
+        taskId: this.taskId,
+        path,
+        kind: file.kind,
+        added: stats.added,
+        removed: stats.removed,
+        ...(reason ? { reason } : {}),
+      });
+    }
+    this.post({
+      type: 'changes',
+      phase: 'staging',
+      files: changeRows(files, (p) => changeSet.base(p) ?? '', reasons),
+    });
+    this.opts.onStaged?.(this.taskId, changeSet, path);
+  }
+
+  /** The end of the task: the walkthrough card, just before the review opens. */
+  private walkthrough(changeSet: ChangeSet, fallback: string): void {
+    const reasons = this.reasons();
+    this.post({
+      type: 'walkthrough',
+      summary: this.submitSummary?.trim() || fallback,
+      files: changeRows(changeSet.review(), (p) => changeSet.base(p) ?? '', reasons).map((f) => ({
+        path: f.path,
+        kind: f.kind,
+        added: f.added,
+        removed: f.removed,
+        ...(f.reason ? { reason: f.reason } : {}),
+      })),
+    });
+  }
+
+  /** Nothing staged survives (cancel or failure): the bar empties. */
+  private dropChanges(): void {
+    this.post({ type: 'changes', phase: 'none', files: [] });
+    this.opts.onDropped?.(this.taskId);
   }
 
   /** The profile the run is on (with a router). */
@@ -259,6 +329,10 @@ export class AgentRun {
         this.setState(
           'error',
           `${decision.message.replace(WORKSPACE_UNCHANGED, '').trim()} The ${staged.length} staged file(s) are open for review; nothing is applied unless you apply it.`,
+        );
+        this.walkthrough(
+          task.changeSet,
+          'The model stopped before submitting. These are the edits it staged.',
         );
         void this.opts.review(this.taskId, task.changeSet);
         return false;
@@ -336,6 +410,7 @@ export class AgentRun {
     if (this.cancelRequested) return;
     if (this.stateValue === 'error') return;
     this.opts.ctx.tasks.cancel(this.taskId);
+    this.dropChanges();
     this.relaySubscription?.dispose();
     this.setState('error', message.split('\n')[0] ?? message);
   }
@@ -502,6 +577,7 @@ export class AgentRun {
             : `Stopped by TrueForge (${event.reason}). Nothing was applied.`,
         );
         this.opts.ctx.tasks.cancel(this.taskId);
+        this.dropChanges();
         break;
       case 'error':
         this.fail(event.message);
@@ -552,6 +628,7 @@ export class AgentRun {
         })),
       });
       if (submit && this.opts.review && task) {
+        this.walkthrough(task.changeSet, summarizeArgs(submit.name, submit.arguments));
         this.setState(
           'paused',
           'Review the change set: accept or reject blocks, then Apply or Discard',
@@ -582,6 +659,10 @@ export class AgentRun {
       this.setState(
         'done',
         `The agent stopped without submitting. Review the ${staged.length} staged file(s): apply what you want, or discard.`,
+      );
+      this.walkthrough(
+        task.changeSet,
+        'The agent stopped without submitting. These are the edits it staged.',
       );
       void this.opts.review(this.taskId, task.changeSet);
       return;
@@ -686,6 +767,7 @@ export class AgentRun {
     this.setState('cancelled', CANCELLED_MESSAGE);
     this.relaySubscription?.dispose();
     this.opts.ctx.tasks.cancel(this.taskId);
+    this.dropChanges();
     // Safety net: if TrueForge never ends the stream with turn.done, stop draining eventually.
     const open = [...this.drains];
     setTimeout(() => open.forEach((d) => d.abort()), this.opts.drainTimeoutMs ?? 15_000).unref();

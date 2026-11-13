@@ -35,7 +35,7 @@ export interface AgentHarness {
 export async function startAgent(
   scenario: string | Scenario,
   options: Partial<Omit<FakeTrueForgeOptions, 'scenario' | 'mcp'>> = {},
-  runOptions: Partial<Pick<AgentRunOptions, 'review'>> = {},
+  runOptions: Partial<AgentRunOptions> = {},
 ): Promise<AgentHarness> {
   const script = typeof scenario === 'string' ? scenarios.get(scenario) : scenario;
   if (!script) throw new Error(`unknown scenario ${String(scenario)}`);

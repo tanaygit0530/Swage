@@ -24,6 +24,7 @@ import {
 } from '../supervisor/supervisor';
 import type { ReviewController } from '../review/vscode/controller';
 import { parseWebviewMessage, type HostToWebview, type WebviewToHost } from '../ui/protocol';
+import { changeRows } from '../ui/changes';
 import { EventRelay } from './relay';
 import type { SwageEvent } from '../client/events';
 import { AgentRun, type AgentRunOptions } from './run';
@@ -82,6 +83,8 @@ export class AgentController implements vscode.WebviewViewProvider, vscode.Dispo
   ) {
     // Keep the panel's model picker in step with Switch Model, the status bar and fallbacks.
     models?.onDidChange(() => this.postModels());
+    // Keep the files-changed bar in step with every review decision, wherever it was made.
+    review?.onDidChange(() => this.postReviewChanges());
     this.logger = redactingLogger({
       info: (m) => output.appendLine(m),
       warn: (m) => output.appendLine(`warn: ${m}`),
@@ -136,7 +139,27 @@ export class AgentController implements vscode.WebviewViewProvider, vscode.Dispo
     });
   }
 
+  /** The phase the files-changed bar shows, so a finished review empties it exactly once. */
+  private barPhase: 'none' | 'staging' | 'review' = 'none';
+
+  /** The files-changed bar for the agent-mode review in progress (inline reviews stay in the editor). */
+  private postReviewChanges(): void {
+    const session = this.review?.current;
+    if (session && this.review?.mode.mode === 'agent') {
+      const declared = session.changeSet.declaredContext;
+      const reasons = new Map((declared?.files ?? []).map((f) => [f.path, f.reason]));
+      this.post({
+        type: 'changes',
+        phase: 'review',
+        files: changeRows(session.files(), (p) => session.base(p), reasons),
+      });
+    } else if (this.barPhase === 'review') {
+      this.post({ type: 'changes', phase: 'none', files: [] });
+    }
+  }
+
   private post(msg: HostToWebview): void {
+    if (msg.type === 'changes') this.barPhase = msg.phase;
     void this.view?.webview.postMessage(msg);
   }
 
@@ -218,6 +241,49 @@ export class AgentController implements vscode.WebviewViewProvider, vscode.Dispo
       }
       case 'openFile':
         await this.openWorkspaceFile(msg.path, msg.line);
+        return;
+      case 'openDiff':
+        await vscode.commands.executeCommand('swage.review.openFile', {
+          path: msg.path,
+          ...(msg.blockId === undefined ? {} : { blockId: msg.blockId }),
+        });
+        return;
+      case 'reviewAction':
+        await vscode.commands.executeCommand(`swage.review.${msg.action}`, {
+          path: msg.path,
+          ...(msg.blockId === undefined ? {} : { blockId: msg.blockId }),
+        });
+        return;
+      case 'acceptAll':
+      case 'applyAccepted': {
+        if (!this.review?.current) return;
+        if (msg.type === 'acceptAll') this.review.decideAll('accept');
+        // The existing atomic apply with hash checks; pending blocks are left out on purpose.
+        const r = await this.review.apply({ confirmPending: false });
+        if (r.ok)
+          this.post({
+            type: 'applied',
+            files: r.files.length,
+            message: `Applied ${r.files.length} file(s)`,
+          });
+        else
+          this.post({
+            type: 'notice',
+            tone: r.reason === 'conflict' ? 'warning' : 'info',
+            message: r.message,
+          });
+        return;
+      }
+      case 'rejectAll':
+        if (await this.review?.discard())
+          this.post({
+            type: 'notice',
+            tone: 'info',
+            message: 'Rejected all changes. The workspace is unchanged.',
+          });
+        return;
+      case 'undo':
+        await vscode.commands.executeCommand('swage.undoLastChangeSet');
         return;
       case 'openSymbol':
         await this.openSymbol(msg.name);
@@ -364,6 +430,8 @@ export class AgentController implements vscode.WebviewViewProvider, vscode.Dispo
       budgets: rt.budgets,
       logger: this.logger,
       ...this.resilience(rt, 'swage-main'),
+      onStaged: (taskId, changeSet, path) => this.review?.watch(taskId, changeSet, [path]),
+      onDropped: (taskId) => this.review?.unwatch(taskId),
       ...(this.review
         ? {
             review: (taskId: string, changeSet: Parameters<ReviewController['start']>[1]) =>

@@ -777,3 +777,90 @@ pre {
 .plan-files li {
   margin: 3px 0;
 }
+
+/* ---- Edited-file cards and Walkthrough (redesign step 3) ---- */
+
+.edit-card {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0 4px 28px;
+  padding: 4px 8px;
+  border: 1px solid var(--swage-border);
+  border-radius: var(--swage-radius);
+  font-size: 0.95em;
+}
+
+.edit-verb {
+  color: var(--vscode-descriptionForeground);
+}
+
+.spacer {
+  flex: 1;
+}
+
+.link {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--vscode-textLink-foreground);
+  font: inherit;
+  cursor: pointer;
+}
+
+.link:hover {
+  text-decoration: underline;
+}
+
+.file-link {
+  color: var(--vscode-foreground);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.open-diff {
+  white-space: nowrap;
+  color: var(--vscode-descriptionForeground);
+}
+
+.counts {
+  font-family: var(--vscode-editor-font-family);
+  font-size: 0.9em;
+  white-space: nowrap;
+}
+
+.count-add {
+  color: var(--vscode-gitDecoration-addedResourceForeground, #3fb950);
+}
+
+.count-del {
+  color: var(--vscode-gitDecoration-deletedResourceForeground, #f85149);
+}
+
+.card-head.static {
+  cursor: default;
+}
+
+.created-files,
+.walk-files {
+  margin: 4px 0;
+  padding-left: 22px;
+}
+
+.walk-files {
+  list-style: none;
+  padding-left: 0;
+}
+
+.created-files li,
+.walk-files li {
+  margin: 3px 0;
+}
+
+.created-files .file-glyph,
+.walk-files .file-glyph {
+  vertical-align: -2px;
+}

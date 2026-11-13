@@ -1,4 +1,4 @@
-import type { CompletionItem, HostToWebview, RunState } from '../protocol';
+import type { ChangeFile, CompletionItem, HostToWebview, RunState } from '../protocol';
 
 /**
  * The agent panel's state: a pure reducer over host messages, so the UI logic is testable
@@ -30,7 +30,28 @@ export type TimelineItem =
       summary: string;
       decision: 'pending' | 'allowed' | 'denied';
     }
-  | { kind: 'notice'; id: string; text: string; tone: 'info' | 'warning' | 'error' };
+  | { kind: 'notice'; id: string; text: string; tone: 'info' | 'warning' | 'error' }
+  | {
+      kind: 'edit';
+      id: string;
+      path: string;
+      fileKind: 'create' | 'modify' | 'delete';
+      added: number;
+      removed: number;
+      reason?: string | undefined;
+    }
+  | {
+      kind: 'walkthrough';
+      id: string;
+      summary: string;
+      files: readonly {
+        path: string;
+        kind: 'create' | 'modify' | 'delete';
+        added: number;
+        removed: number;
+        reason?: string | undefined;
+      }[];
+    };
 
 export interface PanelState {
   readonly workspace: string;
@@ -51,6 +72,14 @@ export interface PanelState {
   readonly budget:
     { used: number; total: number; parts: { label: string; tokens: number }[] } | undefined;
   readonly completions: { requestId: number; items: CompletionItem[] };
+  /** The files-changed bar. */
+  readonly changes: {
+    readonly phase: 'none' | 'staging' | 'review';
+    readonly files: readonly ChangeFile[];
+  };
+  /** The inline toast after Accept all ("Applied N files. Undo"). */
+  readonly toast:
+    { readonly id: number; readonly text: string; readonly undo: boolean } | undefined;
 }
 
 export const initialState: PanelState = {
@@ -62,10 +91,17 @@ export const initialState: PanelState = {
   timeline: [],
   budget: undefined,
   completions: { requestId: -1, items: [] },
+  changes: { phase: 'none', files: [] },
+  toast: undefined,
 };
 
 let counter = 0;
 const nextId = (prefix: string): string => `${prefix}-${++counter}`;
+
+/** Hides the inline toast (its timer ran out, or the user pressed Undo). */
+export function dismissToast(state: PanelState, id: number): PanelState {
+  return state.toast?.id === id ? { ...state, toast: undefined } : state;
+}
 
 export function isBusy(state: RunState): boolean {
   return state === 'starting' || state === 'running' || state === 'cancelling';
@@ -207,6 +243,42 @@ export function reduce(state: PanelState, msg: HostToWebview): PanelState {
         model: active ? `${active.label} (${active.model})` : state.model,
       };
     }
+    case 'edit': {
+      const id = `edit-${msg.taskId}-${msg.path}`;
+      const item: TimelineItem = {
+        kind: 'edit',
+        id,
+        path: msg.path,
+        fileKind: msg.kind,
+        added: msg.added,
+        removed: msg.removed,
+        ...(msg.reason === undefined ? {} : { reason: msg.reason }),
+      };
+      // A file staged again in the same task updates its card instead of adding another.
+      return state.timeline.some((t) => t.id === id)
+        ? { ...state, timeline: state.timeline.map((t) => (t.id === id ? item : t)) }
+        : { ...state, timeline: [...state.timeline, item] };
+    }
+    case 'changes':
+      return { ...state, changes: { phase: msg.phase, files: msg.files } };
+    case 'walkthrough':
+      return {
+        ...state,
+        timeline: [
+          ...state.timeline,
+          { kind: 'walkthrough', id: nextId('w'), summary: msg.summary, files: msg.files },
+        ],
+      };
+    case 'applied':
+      return {
+        ...state,
+        changes: { phase: 'none', files: [] },
+        toast: {
+          id: (state.toast?.id ?? 0) + 1,
+          text: `Applied ${msg.files} file${msg.files === 1 ? '' : 's'}.`,
+          undo: true,
+        },
+      };
     case 'error':
       return {
         ...state,
