@@ -236,3 +236,40 @@ describe('deferred tools called through call_tool', () => {
     expect(parseToolArgs('nope')).toBeUndefined();
   });
 });
+
+describe('message validation: redesign step 2', () => {
+  it('accepts the chip, code block and tool detail messages', () => {
+    expect(parseWebviewMessage({ type: 'openFile', path: 'flask/cli.py', line: 3 })).toBeDefined();
+    expect(parseWebviewMessage({ type: 'openFile', path: 'a.py' })).toBeDefined();
+    expect(parseWebviewMessage({ type: 'openSymbol', name: 'get_debug_flag' })).toBeDefined();
+    expect(parseWebviewMessage({ type: 'insertCode', text: 'x = 1' })).toBeDefined();
+    expect(parseWebviewMessage({ type: 'copy', text: 'x' })).toBeDefined();
+    expect(
+      parseHostMessage({
+        type: 'tool_start',
+        toolCallId: 'c1',
+        name: 'read_files',
+        summary: 'a.py',
+        args: '{"files":[]}',
+      }),
+    ).toBeDefined();
+    expect(
+      parseHostMessage({
+        type: 'tool_end',
+        toolCallId: 'c1',
+        durationMs: 5,
+        resultChars: 10,
+        error: false,
+        outcome: '3 passed',
+        result: '3 passed in 0.1s',
+      }),
+    ).toBeDefined();
+  });
+
+  it('rejects malformed ones', () => {
+    expect(parseWebviewMessage({ type: 'openFile', path: 'a.py', line: 0 })).toBeUndefined();
+    expect(parseWebviewMessage({ type: 'openFile' })).toBeUndefined();
+    expect(parseWebviewMessage({ type: 'insertCode', text: 3 })).toBeUndefined();
+    expect(parseWebviewMessage({ type: 'copy', text: 'x'.repeat(200_001) })).toBeUndefined();
+  });
+});

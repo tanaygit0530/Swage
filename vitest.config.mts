@@ -1,9 +1,12 @@
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
+  // Webview components are Preact; without this the test compiler emits React elements.
+  oxc: { jsx: { runtime: 'automatic', importSource: 'preact' } },
   test: {
     include: [
       'test/unit/**/*.test.ts',
+      'test/unit/**/*.test.tsx',
       'test/retrieval-eval/**/*.test.ts',
       'test/mcp/**/*.test.ts',
       'test/fake-model/**/*.test.ts',

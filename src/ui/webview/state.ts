@@ -16,6 +16,10 @@ export type TimelineItem =
       status: 'running' | 'ok' | 'error' | 'stopped';
       durationMs?: number;
       resultChars?: number;
+      /** Redacted, truncated arguments and result for the expanded row. */
+      args?: string;
+      outcome?: string;
+      result?: string;
     }
   | { kind: 'plan'; id: string; steps: string[]; files: { path: string; reason: string }[] }
   | {
@@ -127,6 +131,7 @@ export function reduce(state: PanelState, msg: HostToWebview): PanelState {
             name: msg.name,
             summary: msg.summary,
             status: 'running',
+            ...(msg.args === undefined ? {} : { args: msg.args }),
           },
         ],
       };
@@ -140,6 +145,8 @@ export function reduce(state: PanelState, msg: HostToWebview): PanelState {
                 status: msg.error ? 'error' : 'ok',
                 durationMs: msg.durationMs,
                 resultChars: msg.resultChars,
+                ...(msg.outcome === undefined ? {} : { outcome: msg.outcome }),
+                ...(msg.result === undefined ? {} : { result: msg.result }),
               }
             : t,
         ),

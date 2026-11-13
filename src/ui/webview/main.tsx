@@ -1,6 +1,9 @@
-import { render } from 'preact';
+import { Component, render } from 'preact';
 import { useEffect, useReducer, useRef, useState } from 'preact/hooks';
 import { parseHostMessage, type CompletionItem, type WebviewToHost } from '../protocol';
+import { parseInline } from './markdown';
+import { FileChip, Inlines, Markdown } from './richText';
+import { formatDuration, toolLabel } from './tools';
 import {
   applyCompletion,
   initialState,
@@ -25,47 +28,117 @@ function formatChars(n: number): string {
   return n >= 1000 ? `${(n / 1000).toFixed(1)}k chars` : `${n} chars`;
 }
 
+function StatusIcon({ status }: { status: 'running' | 'ok' | 'error' | 'stopped' }) {
+  const label = { running: 'Running', ok: 'Done', error: 'Failed', stopped: 'Stopped' }[status];
+  if (status === 'running')
+    return <span class="spinner" role="img" aria-label={label} title={label} />;
+  return (
+    <svg
+      class={`status-icon status-${status}`}
+      width="14"
+      height="14"
+      viewBox="0 0 16 16"
+      role="img"
+      aria-label={label}
+    >
+      {status === 'ok' && (
+        <path d="M3 8.5l3 3 7-7" fill="none" stroke="currentColor" stroke-width="1.7" />
+      )}
+      {status === 'error' && (
+        <path d="M4 4l8 8M12 4l-8 8" fill="none" stroke="currentColor" stroke-width="1.7" />
+      )}
+      {status === 'stopped' && <rect x="4" y="4" width="8" height="8" rx="1" fill="currentColor" />}
+    </svg>
+  );
+}
+
+function Chevron({ open }: { open: boolean }) {
+  return (
+    <svg
+      class={`chevron${open ? ' open' : ''}`}
+      width="12"
+      height="12"
+      viewBox="0 0 16 16"
+      aria-hidden="true"
+    >
+      <path d="M6 3.5L10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="1.6" />
+    </svg>
+  );
+}
+
 function ToolRow({ item }: { item: Extract<TimelineItem, { kind: 'tool' }> }) {
-  const icon = { running: '◌', ok: '✓', error: '✗', stopped: '■' }[item.status];
+  const [open, setOpen] = useState(false);
+  const label = toolLabel(item);
+  const detailId = `tool-detail-${item.id}`;
   return (
     <div class={`tool tool-${item.status}`}>
-      <span class="tool-icon" aria-hidden="true">
-        {icon}
-      </span>
-      <span class="tool-name">{item.name}</span>
-      <span class="tool-summary" title={item.summary}>
-        {item.summary}
-      </span>
-      <span class="tool-meta">
-        {item.durationMs !== undefined
-          ? `${item.durationMs} ms`
-          : item.status === 'running'
-            ? 'running…'
-            : ''}
-        {item.resultChars !== undefined ? ` · ${formatChars(item.resultChars)}` : ''}
-      </span>
+      <button
+        type="button"
+        class="tool-row"
+        aria-expanded={open}
+        aria-controls={detailId}
+        aria-label={`${label}. ${open ? 'Hide' : 'Show'} details`}
+        onClick={() => setOpen(!open)}
+      >
+        <StatusIcon status={item.status} />
+        <span class="tool-label" title={label}>
+          {label}
+        </span>
+        <span class="tool-meta">
+          {item.durationMs !== undefined ? formatDuration(item.durationMs) : ''}
+        </span>
+        <Chevron open={open} />
+      </button>
+      {open && (
+        <div class="tool-detail" id={detailId}>
+          <div class="tool-detail-title">{item.name}</div>
+          {item.args && <pre>{item.args}</pre>}
+          {item.result !== undefined && (
+            <>
+              <div class="tool-detail-title">
+                Result{item.resultChars !== undefined ? ` (${formatChars(item.resultChars)})` : ''}
+              </div>
+              <pre>{item.result || '(empty)'}</pre>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }
 
 function PlanCard({ item }: { item: Extract<TimelineItem, { kind: 'plan' }> }) {
+  const [open, setOpen] = useState(true);
   return (
-    <div class="card plan">
-      <div class="card-title">Plan</div>
-      <ol>
-        {item.steps.map((s) => (
-          <li>{s}</li>
-        ))}
-      </ol>
-      <div class="card-title">Files chosen</div>
-      <ul class="files">
-        {item.files.map((f) => (
-          <li>
-            <code>{f.path}</code> <span class="reason">{f.reason}</span>
-          </li>
-        ))}
-      </ul>
-    </div>
+    <section class="card plan" aria-label="Plan">
+      <button type="button" class="card-head" aria-expanded={open} onClick={() => setOpen(!open)}>
+        <Chevron open={open} />
+        <span class="card-title">Plan</span>
+        <span class="card-sub">
+          {item.steps.length} step{item.steps.length === 1 ? '' : 's'} · {item.files.length} file
+          {item.files.length === 1 ? '' : 's'}
+        </span>
+      </button>
+      {open && (
+        <div class="card-body">
+          <ol class="plan-steps">
+            {item.steps.map((s) => (
+              <li>
+                <Inlines nodes={parseInline(s)} send={send} />
+              </li>
+            ))}
+          </ol>
+          <div class="card-subtitle">Files chosen</div>
+          <ul class="plan-files">
+            {item.files.map((f) => (
+              <li>
+                <FileChip path={f.path} send={send} /> <span class="reason">{f.reason}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -102,6 +175,17 @@ function ApprovalCard({ item }: { item: Extract<TimelineItem, { kind: 'approval'
   );
 }
 
+/** One timeline entry. Unchanged entries keep their object, so only the streaming one re-renders. */
+class ItemView extends Component<{ item: TimelineItem }> {
+  override shouldComponentUpdate(next: { item: TimelineItem }): boolean {
+    return next.item !== this.props.item;
+  }
+
+  override render() {
+    return <Item item={this.props.item} />;
+  }
+}
+
 function Item({ item }: { item: TimelineItem }) {
   switch (item.kind) {
     case 'user':
@@ -112,7 +196,9 @@ function Item({ item }: { item: TimelineItem }) {
           <span class="avatar" title="Swage">
             <Logo size={20} />
           </span>
-          <div class="msg assistant">{item.text}</div>
+          <div class="msg assistant">
+            <Markdown text={item.text} send={send} />
+          </div>
         </div>
       );
     case 'tool':
@@ -301,7 +387,7 @@ function App() {
           </div>
         )}
         {state.timeline.map((item) => (
-          <Item key={item.id} item={item} />
+          <ItemView key={item.id} item={item} />
         ))}
         <div ref={bottom} />
       </main>

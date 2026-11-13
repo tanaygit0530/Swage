@@ -40,6 +40,8 @@ export const HostToWebview = z.discriminatedUnion('type', [
     toolCallId: Short,
     name: Short,
     summary: Short,
+    /** Redacted, truncated arguments for the expanded row (never shown by default). */
+    args: Text.optional(),
   }),
   z.object({
     type: z.literal('tool_end'),
@@ -47,6 +49,10 @@ export const HostToWebview = z.discriminatedUnion('type', [
     durationMs: z.number().int().min(0),
     resultChars: z.number().int().min(0),
     error: z.boolean(),
+    /** A short outcome for the row, such as "12 passed". */
+    outcome: Short.optional(),
+    /** The start of the result, redacted, for the expanded row. */
+    result: Text.optional(),
   }),
   z.object({
     type: z.literal('plan'),
@@ -107,6 +113,14 @@ export const WebviewToHost = z.discriminatedUnion('type', [
     allow: z.boolean(),
     reason: Short.optional(),
   }),
+  /** A file chip or edited-file card: open the workspace file, optionally at a 1-based line. */
+  z.object({ type: z.literal('openFile'), path: Short, line: z.number().int().min(1).optional() }),
+  /** A `name()` chip: go to the symbol's definition. */
+  z.object({ type: z.literal('openSymbol'), name: Short }),
+  /** A code block's "Insert at cursor". */
+  z.object({ type: z.literal('insertCode'), text: Text }),
+  /** A code block's "Copy" (the host writes the clipboard; webviews may not). */
+  z.object({ type: z.literal('copy'), text: Text }),
   z.object({
     type: z.literal('complete'),
     requestId: z.number().int(),

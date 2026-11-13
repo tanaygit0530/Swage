@@ -20,6 +20,7 @@ import type { ApprovalList, ToolContext } from '../mcp/context';
 import { stagedFingerprint } from '../mcp/tasks';
 import type { Logger } from '../supervisor/supervisor';
 import { parseToolArgs, summarizeArgs, type HostToWebview, type RunState } from '../ui/protocol';
+import { argsPreview, effectiveToolName, resultPreview, toolOutcome } from '../ui/toolDetail';
 import type { EditableRange } from '../inline/context';
 import { buildFirstMessage, type ContextPart, type FirstMessage } from './context';
 import type { EventRelay } from './relay';
@@ -458,24 +459,30 @@ export class AgentRun {
       case 'text':
         this.post({ type: 'text', messageId: event.messageId, delta: event.delta });
         break;
-      case 'tool_start':
-        this.toolStarts.set(event.toolCallId, { name: event.name, at: Date.now() });
+      case 'tool_start': {
+        const name = effectiveToolName(event.name, event.arguments);
+        this.toolStarts.set(event.toolCallId, { name, at: Date.now() });
         this.post({
           type: 'tool_start',
           toolCallId: event.toolCallId,
-          name: event.name,
-          summary: summarizeArgs(event.name, event.arguments),
+          name,
+          summary: summarizeArgs(name, event.arguments),
+          args: argsPreview(event.arguments),
         });
         break;
+      }
       case 'tool_result': {
         const started = this.toolStarts.get(event.toolCallId);
         const isError = /^\s*\{\s*"error"/.test(event.content);
+        const outcome = toolOutcome(started?.name ?? '', event.content, isError);
         this.post({
           type: 'tool_end',
           toolCallId: event.toolCallId,
           durationMs: started ? Date.now() - started.at : 0,
           resultChars: event.content.length,
           error: isError,
+          ...(outcome === undefined ? {} : { outcome }),
+          result: resultPreview(event.content),
         });
         if (started?.name === 'read_files' || started?.name === 'get_symbol') this.postBudget();
         break;

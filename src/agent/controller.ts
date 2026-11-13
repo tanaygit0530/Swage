@@ -216,6 +216,25 @@ export class AgentController implements vscode.WebviewViewProvider, vscode.Dispo
         await this.trackBusy(pending);
         return;
       }
+      case 'openFile':
+        await this.openWorkspaceFile(msg.path, msg.line);
+        return;
+      case 'openSymbol':
+        await this.openSymbol(msg.name);
+        return;
+      case 'insertCode': {
+        const editor = vscode.window.activeTextEditor ?? vscode.window.visibleTextEditors[0];
+        if (!editor) {
+          void vscode.window.showInformationMessage('Open a file to insert the code into.');
+          return;
+        }
+        await editor.edit((b) => b.replace(editor.selection, msg.text));
+        return;
+      }
+      case 'copy':
+        await vscode.env.clipboard.writeText(msg.text);
+        void vscode.window.setStatusBarMessage('Copied to the clipboard.', 2000);
+        return;
       case 'complete': {
         const rt = await this.runtime?.catch(() => undefined);
         const items = rt ? mentionCompletions(rt.index, msg.query, 12) : [];
@@ -232,6 +251,51 @@ export class AgentController implements vscode.WebviewViewProvider, vscode.Dispo
         return;
       }
     }
+  }
+
+  /**
+   * Opens a workspace file from a chip or card. Only plain relative paths inside the workspace;
+   * a bare name the model shortened (cli.py) is looked up by name.
+   */
+  private async openWorkspaceFile(file: string, line?: number): Promise<void> {
+    const folder = vscode.workspace.workspaceFolders?.[0];
+    const clean = file.replace(/^\.\//, '');
+    if (!folder || !/^[\w./-]+$/.test(clean) || clean.split('/').includes('..')) return;
+    let uri = vscode.Uri.joinPath(folder.uri, clean);
+    try {
+      await vscode.workspace.fs.stat(uri);
+    } catch {
+      const found = await vscode.workspace.findFiles(
+        `**/${clean}`,
+        '**/{node_modules,.git,.venv,venv}/**',
+        1,
+      );
+      if (!found[0]) {
+        void vscode.window.showWarningMessage(`Swage: ${clean} is not in the workspace.`);
+        return;
+      }
+      uri = found[0];
+    }
+    const at = line === undefined ? undefined : new vscode.Range(line - 1, 0, line - 1, 0);
+    await vscode.window.showTextDocument(uri, { preview: true, ...(at ? { selection: at } : {}) });
+  }
+
+  private async openSymbol(name: string): Promise<void> {
+    const short = name.split('.').pop() ?? name;
+    const symbols =
+      (await vscode.commands.executeCommand<vscode.SymbolInformation[]>(
+        'vscode.executeWorkspaceSymbolProvider',
+        short,
+      )) ?? [];
+    const hit = symbols.find((s) => s.name === short) ?? symbols[0];
+    if (!hit) {
+      void vscode.window.showInformationMessage(`Swage: no definition of ${name} found.`);
+      return;
+    }
+    await vscode.window.showTextDocument(hit.location.uri, {
+      preview: true,
+      selection: hit.location.range,
+    });
   }
 
   /** True while an agent run is starting or streaming. */
