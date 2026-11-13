@@ -14,8 +14,8 @@ import { profileForModel, profilesFrom, type ResolvedProfile } from '../profiles
 
 /** swage.rateLimitWaitSeconds in milliseconds (0 to 120 s). */
 function rateLimitWait(): number {
-  const s = vscode.workspace.getConfiguration('swage').get<number>('rateLimitWaitSeconds', 40);
-  return Math.max(0, Math.min(120, Number.isFinite(s) ? s : 40)) * 1000;
+  const s = vscode.workspace.getConfiguration('swage').get<number>('rateLimitWaitSeconds', 60);
+  return Math.max(0, Math.min(120, Number.isFinite(s) ? s : 60)) * 1000;
 }
 
 export class ModelsController implements vscode.Disposable {

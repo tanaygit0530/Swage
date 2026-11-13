@@ -61,6 +61,7 @@
     "check:licences": "node scripts/licence-check.mjs",
     "break-primary": "node scripts/run.mjs scripts/break-primary.ts",
     "restore-primary": "node scripts/run.mjs scripts/restore-primary.ts",
+    "add-ollama-model": "node scripts/run.mjs scripts/add-ollama-model.ts",
     "screenshots": "npm run build && node scripts/panel-shots/capture.mjs && node scripts/screenshots.mjs",
     "screenshots:panel": "npm run build && node scripts/panel-shots/capture.mjs",
     "rehearse:task-a": "SWAGE_FLASK_DIR=${SWAGE_FLASK_DIR:-../flask} SWAGE_REHEARSAL_PRINT=1 vitest run test/rehearsal/taskA.flask.test.ts",
@@ -477,7 +478,7 @@
         },
         "swage.rateLimitWaitSeconds": {
           "type": "number",
-          "default": 40,
+          "default": 60,
           "minimum": 0,
           "maximum": 120,
           "markdownDescription": "When a model is rate-limited and asks to retry within this many seconds (a free tier's per-minute quota), Swage waits on the same model and keeps the agent's context instead of switching models. `0` always switches at once."

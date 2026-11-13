@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { estimateTokens } from '../../src/context/tokens';
-import { findRelevantCode } from '../../src/mcp/tools/findRelevantCode';
+import { findRelevantCode, SEARCHES_PER_TASK } from '../../src/mcp/tools/findRelevantCode';
 import { startHarness, treeHash, type Harness } from './harness';
 
 let h: Harness;
@@ -59,5 +59,20 @@ describe('find_relevant_code', () => {
     expect(h.text(r)).toContain('repo_map');
     const bad = await h.call('find_relevant_code', { query: 'x' });
     expect(bad.isError).toBe(true);
+  });
+});
+
+describe('find_relevant_code: searches per task', () => {
+  it('stops after the budget and names the files found so far', async () => {
+    h.ctx.tasks.start('t-budget', 'turn-b');
+    for (let i = 0; i < SEARCHES_PER_TASK; i++)
+      expect(h.text(await h.call('find_relevant_code', { query: `task priority ${i}` }))).toMatch(
+        /result\(s\)/,
+      );
+    const over = h.text(await h.call('find_relevant_code', { query: 'slugify' }));
+    expect(over).toContain('search_budget');
+    expect(over).toMatch(/You have searched 8 times in this task/);
+    expect(over).toMatch(/Files found so far: \S+/);
+    expect(h.ctx.tasks.get('t-budget')?.searches?.count).toBe(SEARCHES_PER_TASK);
   });
 });

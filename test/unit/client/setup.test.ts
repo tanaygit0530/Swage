@@ -85,7 +85,7 @@ describe('profiles', () => {
     expect(profiles.map((p) => `${p.name}=${p.trueforgeModel}`)).toEqual([
       'primary=google-gemini/gemini-3-5-flash-lite',
       'fallback-1=groq/gpt-oss-120b',
-      'fallback-2=ollama/qwen-2-5-coder-7b',
+      'fallback-2=ollama/qwen-2-5-coder-3b',
       'fallback-3=llamacpp/qwen-2-5-coder-3b',
     ]);
   });

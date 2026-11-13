@@ -8,6 +8,11 @@ import type { ToolRegistration } from '../server';
 const CONTEXT_LINES = 8;
 /** Longest snippet taken from a matching symbol. */
 const MAX_SYMBOL_LINES = 40;
+/**
+ * Searches per task. Each search is a model request, and free tiers allow about 15 a minute;
+ * past this the agent is told which files it found and to read, declare and stage instead.
+ */
+export const SEARCHES_PER_TASK = 8;
 
 function bestLine(text: string, query: string): number {
   const terms = new Set(tokenize(query));
@@ -65,11 +70,22 @@ export const findRelevantCode: ToolRegistration = (server, ctx: ToolContext) => 
     runTool(
       ctx,
       'find_relevant_code',
-      async (args: {
-        query: string;
-        limit?: number | undefined;
-        path_prefix?: string | undefined;
-      }) => {
+      async (
+        args: {
+          query: string;
+          limit?: number | undefined;
+          path_prefix?: string | undefined;
+        },
+        call,
+      ) => {
+        const searches = (call.task.searches ??= { count: 0, files: [] });
+        if (searches.count >= SEARCHES_PER_TASK) {
+          throw new ToolError(
+            'search_budget',
+            `You have searched ${searches.count} times in this task, the most allowed. Files found so far: ${searches.files.slice(0, 12).join(', ') || 'none'}. Read the exact lines you still need with read_files (several files in one call), then call declare_context and stage your edits.`,
+          );
+        }
+        searches.count++;
         const limit = args.limit ?? 5;
         const prefix = args.path_prefix?.replace(/^\.\//, '') ?? '';
         const hits = ctx.searcher
@@ -82,6 +98,7 @@ export const findRelevantCode: ToolRegistration = (server, ctx: ToolContext) => 
             `Nothing matched "${args.query}"${prefix ? ` under ${prefix}` : ''}. Try other words, an identifier, or repo_map to browse.`,
           );
         }
+        for (const h of hits) if (!searches.files.includes(h.path)) searches.files.push(h.path);
         const parts = [`${hits.length} result(s) for "${args.query}". ${DATA_NOTE}`];
         for (const [i, hit] of hits.entries()) {
           const text = (await ctx.readText(hit.path)) ?? '';

@@ -26,6 +26,8 @@ export interface Task {
   lastTests?: { readonly fingerprint: string; readonly ok: boolean; readonly command: string };
   /** The staged state for which submit_change_set already asked for passing tests once. */
   submitGate?: string;
+  /** find_relevant_code calls in this task, and the files they returned (best first). */
+  searches?: { count: number; files: string[] };
   /** The staged state for which submit_change_set was already sent back for unstaged declared files. */
   coverageGate?: string;
 }

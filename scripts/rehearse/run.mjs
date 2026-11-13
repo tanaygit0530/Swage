@@ -39,9 +39,9 @@ const DEFAULT_PROFILES = [
   // Local and free of quotas: the last resort when every free tier is rate-limited.
   {
     name: 'fallback-4',
-    label: 'Ollama Qwen 7B',
+    label: 'Ollama Qwen Coder 3B',
     kind: 'local',
-    trueforgeModel: 'ollama/qwen-2-5-coder-7b',
+    trueforgeModel: 'ollama/qwen-2-5-coder-3b',
   },
 ];
 
