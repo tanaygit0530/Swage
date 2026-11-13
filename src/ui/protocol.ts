@@ -269,20 +269,22 @@ export function parseToolArgs(rawArgs: string): Record<string, unknown> | undefi
 /** One-line summary of tool arguments for the timeline (never the full content). */
 export function summarizeArgs(name: string, rawArgs: string): string {
   const args = parseToolArgs(rawArgs);
-  if (!args) return rawArgs.slice(0, 80);
-  const s = (v: unknown): string => (typeof v === 'string' ? v : JSON.stringify(v));
+  if (!args) return String(rawArgs ?? '').slice(0, 80);
+  // A model may leave an argument out: JSON.stringify(undefined) is undefined, not a string.
+  const s = (v: unknown): string =>
+    typeof v === 'string' ? v : v === undefined ? '' : (JSON.stringify(v) ?? '');
   switch (name) {
     case 'find_relevant_code':
       return `"${s(args['query']).slice(0, 80)}"`;
     case 'read_files':
-      return ((args['files'] as { path?: string }[] | undefined) ?? [])
-        .map((f) => f.path ?? '')
+      return (Array.isArray(args['files']) ? (args['files'] as ({ path?: string } | null)[]) : [])
+        .map((f) => f?.path ?? '')
         .join(', ')
         .slice(0, 120);
     case 'stage_edit':
       return `${s(args['kind'])} ${s(args['path'])}`;
     case 'declare_context':
-      return `${((args['files'] as unknown[] | undefined) ?? []).length} file(s)`;
+      return `${Array.isArray(args['files']) ? args['files'].length : 0} file(s)`;
     case 'run_tests':
     case 'run_command':
       return s(args['command']).slice(0, 120);

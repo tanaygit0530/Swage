@@ -203,3 +203,21 @@ describe('plan gate: declared files left unstaged', () => {
     expect(of(h.posts, 'walkthrough')).toHaveLength(1);
   });
 });
+
+describe('a tool call with missing arguments', () => {
+  it('does not stop the run (it used to throw while showing the row, and the run hung)', async () => {
+    h = await startAgent(
+      {
+        name: 'odd-args',
+        description: 'run_command with no arguments, then an answer',
+        steps: [
+          { toolCalls: [{ name: 'find_relevant_code', arguments: {} }] },
+          { text: ['Done.'] },
+        ],
+      } as never,
+      {},
+    );
+    expect(await h.run.start('Do something.')).toBe('done');
+    expect(of(h.posts, 'tool_start')[0]?.summary).toBe('""');
+  });
+});

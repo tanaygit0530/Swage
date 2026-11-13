@@ -147,3 +147,19 @@ describe('reducer edge cases', () => {
     expect(old.stopping).toBe(false);
   });
 });
+
+describe('summaries of tool calls with missing or odd arguments', () => {
+  it('never throws, whatever the model sent', () => {
+    const j = (o: unknown): string => JSON.stringify(o);
+    expect(summarizeArgs('run_tests', j({}))).toBe('');
+    expect(summarizeArgs('run_command', j({ reason: 'x' }))).toBe('');
+    expect(summarizeArgs('find_relevant_code', j({}))).toBe('""');
+    expect(summarizeArgs('stage_edit', j({ path: 'a.py' }))).toBe(' a.py');
+    expect(summarizeArgs('read_files', j({ files: 'a.py' }))).toBe('');
+    expect(summarizeArgs('read_files', j({ files: [null, { path: 'b.py' }] }))).toBe(', b.py');
+    expect(summarizeArgs('declare_context', j({ files: 'x' }))).toBe('0 file(s)');
+    expect(summarizeArgs('get_symbol', j({}))).toBe('');
+    expect(summarizeArgs('submit_change_set', j({}))).toBe('');
+    expect(summarizeArgs('run_tests', undefined as unknown as string)).toBe('');
+  });
+});

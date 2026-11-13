@@ -555,7 +555,13 @@ export class AgentRun {
           }
           if (event.type === 'done') this.plan?.succeeded();
         }
-        this.handle(event);
+        try {
+          this.handle(event);
+        } catch (err) {
+          // One malformed event (a tool call with odd arguments) must never stop the stream:
+          // the run would hang with no turn.done. Log it and keep draining.
+          this.logger.warn(`could not show a ${event.type} event: ${describeError(err)}`);
+        }
       }
     } finally {
       watchdog?.stop();
