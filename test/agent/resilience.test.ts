@@ -511,6 +511,24 @@ describe('resilience with the scripted model (blueprint section 8)', () => {
     expect(treeHash(w.root)).toBe(before);
   });
 
+  it('a model that writes its tool calls as text is treated as unable to call tools: the next profile takes over', async () => {
+    w = await world([
+      {
+        ...OLLAMA,
+        name: 'primary',
+        scenario: s('ptext', [
+          { text: ['{"name": "find_relevant_code", "arguments": {"query": "config"}}'] },
+        ]),
+      },
+      { ...GROQ, scenario: THREE },
+    ]);
+    expect(await w.run.start(REQUEST)).toBe('paused');
+    expect(notices(w)).toEqual([
+      'Switched to Groq because Ollama wrote its tool call as text instead of calling the tool.',
+    ]);
+    expect(of(w.posts, 'approval')[0]?.calls[0]?.name).toBe('submit_change_set');
+  });
+
   it('Stop during a backoff wait cancels at once', async () => {
     w = await world([
       { ...GEMINI, scenario: s('p429b', [{ error: 429 }]) },

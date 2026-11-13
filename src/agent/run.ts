@@ -11,6 +11,7 @@ import {
   type ModelRouter,
 } from '../resilience/fallback';
 import type { ResolvedProfile } from '../resilience/profiles';
+import { AGENT_TOOL_NAMES, textToolCalls } from '../resilience/textToolCall';
 import { Watchdog, type Clock } from '../resilience/watchdog';
 import type { PendingToolCall, SwageEvent } from '../client/events';
 import { DEFAULT_BUDGETS, type Budgets } from '../context/budget';
@@ -345,6 +346,8 @@ export class AgentRun {
     const seq = ++this.turnSeq;
     let myTurnId: string | undefined;
     let failure: Failure | undefined;
+    let toolsThisAttempt = 0;
+    let textThisAttempt = '';
     const drain = new AbortController();
     this.drains.add(drain);
     this.attemptActivity = false;
@@ -416,6 +419,20 @@ export class AgentRun {
           else if (event.type === 'tool_result') watchdog.toolEnded(event.toolCallId);
           else watchdog.stop();
           if (event.type === 'text' || event.type === 'tool_start') this.attemptActivity = true;
+          if (event.type === 'tool_start') toolsThisAttempt++;
+          if (event.type === 'text') textThisAttempt += event.delta;
+          if (event.type === 'done' && !event.paused && toolsThisAttempt === 0) {
+            // A tool call written out as text: this model cannot call tools here (see textToolCall.ts).
+            const written = textToolCalls(event.output || textThisAttempt, AGENT_TOOL_NAMES);
+            if (written.length > 0) {
+              failure = {
+                kind: 'hard',
+                reason: 'wrote its tool call as text instead of calling the tool',
+                detail: `${profile?.trueforgeModel ?? 'the model'} replied with ${written[0] ?? 'a tool'} as text`,
+              };
+              continue;
+            }
+          }
           if (event.type === 'error') {
             // Decided after the stream ends: retry, switch or fail.
             failure = classifyMessage(event.message);
