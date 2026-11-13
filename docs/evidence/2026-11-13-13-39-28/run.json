@@ -1,0 +1,36 @@
+{
+  "runId": "2026-11-13-13-39-28",
+  "swageCommit": "93c632a50abf2bd0d5ac096b667877e10929413d",
+  "swageDirty": true,
+  "trueforge": "0.184.2",
+  "profiles": [
+    {
+      "name": "primary",
+      "label": "Gemini Flash Lite (latest)",
+      "kind": "hosted",
+      "trueforgeModel": "google-gemini/gemini-flash-lite-latest"
+    },
+    {
+      "name": "fallback-1",
+      "label": "Gemini 3.5 Flash Lite",
+      "kind": "hosted",
+      "trueforgeModel": "google-gemini/gemini-3-5-flash-lite"
+    },
+    {
+      "name": "fallback-2",
+      "label": "Gemini 3.5 Flash",
+      "kind": "hosted",
+      "trueforgeModel": "google-gemini/gemini-3-5-flash",
+      "params": {
+        "max_tokens": 8192
+      }
+    },
+    {
+      "name": "fallback-3",
+      "label": "Gemini 3.1 Flash Lite",
+      "kind": "hosted",
+      "trueforgeModel": "google-gemini/gemini-3-1-flash-lite"
+    }
+  ],
+  "tasks": "cancel,a,toggle,undo,c"
+}

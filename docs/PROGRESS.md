@@ -550,5 +550,11 @@ A modern agent chat with a files-changed bar, in the layout of the two reference
 
 ### Open
 
-- The real-model rehearsal of Tasks A, B and C after the redesign needs TrueForge running (`trueforge/start.sh`); the scripted runs and integration tests cover the same host paths.
+- **Real-model rehearsal after the redesign** (`docs/evidence/notes.md`, section 6):
+  - cancel, Task A ×3, toggle, double undo and Task C ×2 all pass;
+  - Task B fails 0 of 3 on free-tier Gemini: rate limits force repeated model switches, and the Flash Lite models make code mistakes.
+- **Two Swage fixes came out of those runs:**
+  - a submit that leaves declared files unstaged is sent back once (`4f2010b`);
+  - edit anchors copied from redacted tool results now match (`e3b43af`).
+- **Task B still needs a capable model** with enough quota for the recording.
 - **Cmd/Ctrl+L** replaces VS Code's "Expand Line Selection" on that key (noted in the README).

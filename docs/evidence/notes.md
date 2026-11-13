@@ -108,3 +108,20 @@ What failed is model capacity, not Swage. No model available to this team today 
 - or an Ollama model with tool support (for example `qwen2.5:7b` or `llama3.1:8b`), added in the panel with **Other models… → Add a model from TrueForge…**.
 
 The statement scores behaviour, not the model, and the organisers may repeat tasks with their own model.
+
+### 6. After the panel redesign (13 November, afternoon)
+
+Three rehearsals against the live TrueForge 0.184.2, on the redesigned panel (code at `93c632a`, then `4f2010b`):
+
+- **`2026-11-13-13-39-28`: cancel, Task A ×3, toggle, double undo, Task C ×2. Every one passed.**
+  - **Cancel:** the Stop reached the screen in 17 ms; the workspace was clean.
+  - **Task A:** the diff appeared in 4.3, 5.4 and 4.9 s. `FLASK_DEBUG=off` gave `False`, and all 490 Flask tests passed.
+  - **Task C:** "Switched to Gemini because the primary refused the connection"; Reject all left the workspace clean; the editor lagged at most 24 ms.
+  - **Double undo:** clean afterwards, and a third undo reported `nothing_to_undo`.
+  - **Task B (inside the undo step):** the command was in `flask --help` and the JSON was masked, but it added no test. The agent declared `tests/test_cli.py`, hit the 30,000-token read budget reading it whole, and a free-tier 429 moved the task to a model that submitted without the test. **Fixed in `4f2010b`:** a submit that leaves a declared file without an edit is sent back once, naming the file.
+- **`2026-11-13-13-46-30`: Task B, default profiles.** The test was staged this time, but the agent placed the new command inside `routes_command`, which broke a test. Free-tier 429s (15 requests per minute, 250,000 input tokens per minute) switched models four times. The last model wrote its tool call as text.
+- **`2026-11-13-13-52-30`: Task B, Gemini 3.5 Flash as primary.** Its first request was refused with a 429. The three Gemini models then switched among each other eight times. The final staged test had a syntax error.
+  - This run exposed a **Swage bug**: tool results are redacted, so the agent saw `API_TOKEN = "[REDACTED:…]"` in its own staged test and used that line as an edit anchor, which never matched. **Fixed in `e3b43af`:** a marker inside an anchor matches the hidden value on that line, and the value is put back if the replacement keeps the marker. The secret still never reaches the model.
+- **Groq:** `groq/llama-3-3-70b-versatile` is now configured in TrueForge but still answers 404, so the key has no access to it.
+
+**Conclusion:** the panel redesign broke nothing. The Task B failures come from free-tier rate limits and the strength of the Flash Lite models, and the two Swage defects they exposed are fixed. Recording Task B still needs one capable model with enough quota (`docs/SUBMISSION_CHECKLIST.md`).

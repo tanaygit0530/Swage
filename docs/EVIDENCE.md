@@ -194,6 +194,76 @@ Swage commit `6a60214fe861f26b81c4726895d88f0984db1718`; TrueForge 0.184.2; prof
 
 - **b-1**: files none; retrieval hits: none; `tests/test_cli.py` after Apply: –; full suite: –.
 
+## Rehearsal 2026-11-13-13-39-28
+
+Swage commit `93c632a50abf2bd0d5ac096b667877e10929413d` (with uncommitted changes); TrueForge 0.184.2; profiles: primary `google-gemini/gemini-flash-lite-latest`, fallback-1 `google-gemini/gemini-3-5-flash-lite`, fallback-2 `google-gemini/gemini-3-5-flash`, fallback-3 `google-gemini/gemini-3-1-flash-lite`.
+
+| Task | Runs passed | Median time (passed runs) | Median tokens (passed runs) | Notes |
+| --- | --- | --- | --- | --- |
+| Cancel before A | 1 of 1 | Stop to UI 17 ms | – | cancelled: Cancelled. Workspace unchanged.; Stop to UI 17 ms; git status clean |
+| A inline edit | 3 of 3 | instruction to diff 4.9 s | 7504 | blocks: 2, 2, 2 |
+| B agent mode | 0 of 1 | instruction to review – | – | files: 2 |
+| Double undo | 1 of 1 | – | – | A applied: true, B applied: false; undo 1 ok, undo 2 ok, git status after: clean; third undo: nothing_to_undo |
+| C fallback | 2 of 2 | start to diff 29.2 s | 7839 | max event-loop lag 16 ms |
+
+### Runs
+
+| Run | Result | Time | Tokens | Tool calls | Summary |
+| --- | --- | --- | --- | --- | --- |
+| a-1 | pass | 4.3 s | 7494 | declare_context → stage_edit | 2 block(s), diff in 4.3 s, FLASK_DEBUG=off -> False, suite 490 passed in 0.59s |
+| a-2 | pass | 5.4 s | 7504 | declare_context → stage_edit | 2 block(s), diff in 5.4 s, FLASK_DEBUG=off -> False, suite 490 passed in 0.55s |
+| a-3 | pass | 4.9 s | 7833 | declare_context → stage_edit | 2 block(s), diff in 4.9 s, FLASK_DEBUG=off -> False, suite 490 passed in 0.57s |
+| b-1 | **fail** | 192.0 s | 232964 | find_relevant_code → read_files → find_relevant_code → read_files → find_relevant_code → find_relevant_code → find_relevant_code → list_tools → find_relevant_code → read_files → read_files → read_files → read_files → read_files → read_files → declare_context → stage_edit → stage_edit → stage_edit → stage_edit → read_files → read_files → find_relevant_code → read_files → find_relevant_code → find_relevant_code → find_relevant_code → find_relevant_code → find_relevant_code → read_files → find_relevant_code → find_relevant_code → declare_context → stage_edit → list_tools → get_tool_info → call_tool → submit_change_set | 2 file(s) [src/flask/cli.py, docs/cli.rst], test_cli 58 passed in 0.07s, help lists config: true, masked: true |
+| c-1 | pass | 51.6 s | 8051 | declare_context → stage_edit | Switched to Gemini because the primary refused the connection.; review; Reject all; git status clean; max lag 24 ms |
+| c-2 | pass | 6.9 s | 7627 | declare_context → stage_edit | Switched to Gemini because the primary refused the connection.; review; Reject all; git status clean; max lag 7 ms |
+| cancel-1 | pass | 17 ms | 0 | declare_context | cancelled: Cancelled. Workspace unchanged.; Stop to UI 17 ms; git status clean |
+| undo-1 | pass | – | – | – | A applied: true, B applied: false; undo 1 ok, undo 2 ok, git status after: clean; third undo: nothing_to_undo |
+
+### Task B: files found and retrieval
+
+- **b-1**: files `src/flask/cli.py` (modify, 2 block(s)), `docs/cli.rst` (modify, 1 block(s)); retrieval hits: `src/flask/cli.py`, `tests/test_cli.py`, `tests/test_testing.py`, `docs/cli.rst`, `src/flask/testing.py`, `examples/tutorial/tests/test_db.py`, `tests/test_async.py`, `tests/test_basic.py`, `tests/test_blueprints.py`, `docs/patterns/singlepageapplications.rst`, `docs/patterns/viewdecorators.rst`, `docs/patterns/urlprocessors.rst`, `docs/quickstart.rst`, `docs/design.rst`; `tests/test_cli.py` after Apply: 58 passed in 0.07s; full suite: 490 passed in 0.56s.
+
+### Task C: the switch
+
+- **c-1**: Switched to Gemini because the primary refused the connection.; Every model is rate-limited; waiting 40 s for Gemini.; primary failure: hard, refused the connection; the primary got 0 request(s); `git status` after Reject all: clean.
+- **c-2**: Switched to Gemini because the primary refused the connection.; primary failure: hard, refused the connection; the primary got 1 request(s); `git status` after Reject all: clean.
+
+## Rehearsal 2026-11-13-13-46-30
+
+Swage commit `4f2010b6ae862168e1cda87b6b3305410ed235c0`; TrueForge 0.184.2; profiles: primary `google-gemini/gemini-flash-lite-latest`, fallback-1 `google-gemini/gemini-3-5-flash-lite`, fallback-2 `google-gemini/gemini-3-5-flash`, fallback-3 `google-gemini/gemini-3-1-flash-lite`, fallback-4 `ollama/qwen-2-5-coder-7b`.
+
+| Task | Runs passed | Median time (passed runs) | Median tokens (passed runs) | Notes |
+| --- | --- | --- | --- | --- |
+| B agent mode | 0 of 1 | instruction to review – | – | files: 2 |
+
+### Runs
+
+| Run | Result | Time | Tokens | Tool calls | Summary |
+| --- | --- | --- | --- | --- | --- |
+| b-1 | **fail** | 286.9 s | 392452 | find_relevant_code → read_files → find_relevant_code → read_files → find_relevant_code → find_relevant_code → read_files → find_relevant_code → read_files → find_relevant_code → find_relevant_code → read_files → find_relevant_code → read_files → list_tools → find_relevant_code → read_files → read_files → read_files → read_files → read_files → read_files → read_files → declare_context → stage_edit → stage_edit → read_files → find_relevant_code → stage_edit → stage_edit → read_files → read_files → stage_edit → submit_change_set → list_tools → find_relevant_code → read_files → find_relevant_code → find_relevant_code → find_relevant_code → find_relevant_code → read_files → list_tools → get_tool_info → call_tool → read_files → call_tool → call_tool → call_tool → call_tool → call_tool → read_files → declare_context → stage_edit → call_tool → call_tool → call_tool → call_tool → read_files → find_relevant_code → find_relevant_code | 2 file(s) [src/flask/cli.py, tests/test_cli.py], test_cli 1 failed, 58 passed in 0.12s, help lists config: true, masked: false |
+
+### Task B: files found and retrieval
+
+- **b-1**: files `src/flask/cli.py` (modify, 2 block(s)), `tests/test_cli.py` (modify, 1 block(s)); retrieval hits: `src/flask/cli.py`, `tests/test_cli.py`, `tests/test_testing.py`, `docs/cli.rst`, `src/flask/testing.py`, `src/flask/app.py`, `src/flask/typing.py`, `src/flask/json/__init__.py`, `src/flask/json/provider.py`, `tests/test_config.py`, `src/flask/config.py`, `examples/tutorial/tests/test_factory.py`, `src/flask/__init__.py`, `tests/test_request.py`, `tests/test_instance_config.py`, `tests/test_async.py`, `tests/test_basic.py`, `tests/test_blueprints.py`, `tests/test_json.py`, `docs/shell.rst`, `src/flask/blueprints.py`; `tests/test_cli.py` after Apply: 1 failed, 58 passed in 0.12s; full suite: 1 failed, 490 passed in 0.67s.
+
+## Rehearsal 2026-11-13-13-52-30
+
+Swage commit `4f2010b6ae862168e1cda87b6b3305410ed235c0`; TrueForge 0.184.2; profiles: primary `google-gemini/gemini-3-5-flash`, fallback-1 `google-gemini/gemini-flash-lite-latest`, fallback-2 `google-gemini/gemini-3-1-flash-lite`.
+
+| Task | Runs passed | Median time (passed runs) | Median tokens (passed runs) | Notes |
+| --- | --- | --- | --- | --- |
+| B agent mode | 0 of 1 | instruction to review – | – | files: 2 |
+
+### Runs
+
+| Run | Result | Time | Tokens | Tool calls | Summary |
+| --- | --- | --- | --- | --- | --- |
+| b-1 | **fail** | 175.2 s | 231554 | find_relevant_code → find_relevant_code → find_relevant_code → read_files → find_relevant_code → find_relevant_code → read_files → find_relevant_code → find_relevant_code → find_relevant_code → read_files → find_relevant_code → find_relevant_code → list_tools → get_tool_info → call_tool → read_files → read_files → read_files → read_files → read_files → declare_context → stage_edit → stage_edit → read_files → read_files → stage_edit → submit_change_set → list_tools → get_tool_info → call_tool → read_files → stage_edit → call_tool → stage_edit → read_files → stage_edit → read_files → find_relevant_code → find_relevant_code → find_relevant_code → find_relevant_code → read_files → find_relevant_code → find_relevant_code → find_relevant_code → find_relevant_code → find_relevant_code → find_relevant_code → find_relevant_code → find_relevant_code → read_files → find_relevant_code → read_files → read_files → read_files → find_relevant_code → declare_context → read_files → find_relevant_code → stage_edit → stage_edit → stage_edit → list_tools → get_tool_info → call_tool → read_files → read_files → stage_edit → call_tool | 2 file(s) [src/flask/cli.py, tests/test_cli.py], test_cli E   SyntaxError: invalid syntax, help lists config: false, masked: false |
+
+### Task B: files found and retrieval
+
+- **b-1**: files `src/flask/cli.py` (modify, 3 block(s)), `tests/test_cli.py` (modify, 1 block(s)); retrieval hits: `src/flask/cli.py`, `src/flask/app.py`, `tests/test_cli.py`, `docs/cli.rst`, `src/flask/testing.py`, `src/flask/json/provider.py`, `src/flask/json/__init__.py`, `tests/test_json.py`, `src/flask/json/tag.py`, `src/flask/typing.py`, `src/flask/config.py`, `src/flask/sansio/app.py`, `tests/test_config.py`, `docs/config.rst`, `src/flask/__init__.py`, `tests/test_testing.py`, `tests/test_async.py`, `tests/test_basic.py`, `tests/test_blueprints.py`, `docs/shell.rst`, `src/flask/blueprints.py`; `tests/test_cli.py` after Apply: E   SyntaxError: invalid syntax; full suite: E   SyntaxError: invalid syntax.
+
 ## Findings, fixes and limitations
 
 Written by hand during the rehearsal; `node scripts/rehearse.mjs report` appends this section to `docs/EVIDENCE.md` as it is.

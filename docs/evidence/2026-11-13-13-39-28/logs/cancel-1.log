@@ -1,0 +1,2 @@
+   1967 ms  tool declare_context {"plan":["Update get_debug_flag to treat 'off' and 'n' as false case-insensitively and update docstring."],"files":[{"reason":"inline edit of lines 28-33","path":"src/flask/helpers.py"}]}
+   2005 ms  result declare_context (257 chars) Context declared: 1 file(s). You can now stage edits to these files with stage_edit. Plan: 1. Update get_debug_flag to treat 'off' and 'n' as false case-insensitively and update docstring. Files: - src/flask/helpers.py (existing): inline edit of lines 28-33
