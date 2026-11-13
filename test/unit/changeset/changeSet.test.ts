@@ -441,3 +441,46 @@ describe('ChangeSetStore', () => {
     expect(a.status).toBe('discarded');
   });
 });
+
+describe('ChangeSet: anchors copied from redacted tool results', () => {
+  // Built at run time so no key-shaped literal is in the repository.
+  const hidden = ['tok', 'live', 'Zq81vX4mP2'].join('_');
+  const original = `def test_config(app):\n    app.config["API_TOKEN"] = "${hidden}"\n    assert run()\n`;
+
+  async function staged(edits: { find: string; replace: string }[]): Promise<Result<unknown>> {
+    const cs = new ChangeSet('t', memoryReader({ 'tests/test_cli.py': original }));
+    valueOf(
+      cs.declareContext({ plan: ['p'], files: [{ path: 'tests/test_cli.py', reason: 'r' }] }),
+    );
+    const r = await cs.stage({ kind: 'edit', path: 'tests/test_cli.py', edits });
+    return r.ok ? { ok: true, value: cs.staged('tests/test_cli.py')?.content } : r;
+  }
+
+  it('matches a marker against the hidden value and keeps it where the replacement keeps the marker', async () => {
+    const r = await staged([
+      {
+        find: '    app.config["API_TOKEN"] = "[REDACTED:password_assignment]"\n    assert run()',
+        replace:
+          '    app.config["API_TOKEN"] = "[REDACTED:password_assignment]"\n    assert run() == 0',
+      },
+    ]);
+    expect(valueOf(r)).toBe(original.replace('assert run()', 'assert run() == 0'));
+    expect(valueOf(r)).toContain(hidden);
+  });
+
+  it('lets the agent replace the hidden value, and matches a marker at the end of the anchor', async () => {
+    const r = await staged([
+      {
+        find: 'app.config["API_TOKEN"] = [REDACTED:password_assignment]',
+        replace: 'app.config["API_TOKEN"] = "x"',
+      },
+    ]);
+    expect(valueOf(r)).toContain('app.config["API_TOKEN"] = "x"\n');
+    expect(valueOf(r)).not.toContain(hidden);
+  });
+
+  it('never matches a marker across lines', async () => {
+    const r = await staged([{ find: 'def test_config[REDACTED:x]assert run()', replace: 'y' }]);
+    expect(errorOf(r).code).toBe('anchor_not_found');
+  });
+});

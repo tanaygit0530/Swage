@@ -135,6 +135,48 @@ function countMatches(haystack: string, needle: string): number[] {
   }
 }
 
+/** A redaction marker as the model sees it in tool results: `[REDACTED:<kind>]`. */
+const MARKER = /\[REDACTED:[\w-]+\]/g;
+
+interface Anchor {
+  readonly at: number;
+  readonly length: number;
+  /** The real text behind each redaction marker in the find text, in order. */
+  readonly hidden: readonly string[];
+}
+
+/**
+ * Where an edit's find text occurs. Tool results are redacted, so an agent that copies a line
+ * holding a secret sees `[REDACTED:kind]` instead of the value; each marker matches the hidden
+ * text on that line (never across lines), so the anchor still applies.
+ */
+function findAnchors(haystack: string, needle: string): Anchor[] {
+  if (!needle.match(MARKER))
+    return countMatches(haystack, needle).map((at) => ({ at, length: needle.length, hidden: [] }));
+  const parts = needle.split(MARKER);
+  const escape = (t: string): string => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const source = parts
+    .map((part, i) =>
+      i === 0
+        ? escape(part)
+        : `(${i === parts.length - 1 && part === '' ? '[^\\n]+' : '[^\\n]+?'})${escape(part)}`,
+    )
+    .join('');
+  const out: Anchor[] = [];
+  for (const m of haystack.matchAll(new RegExp(source, 'g')))
+    out.push({ at: m.index, length: m[0].length, hidden: m.slice(1) });
+  return out;
+}
+
+/** Puts the hidden values back where the replacement keeps a redaction marker, in order. */
+function restoreHidden(replace: string, hidden: readonly string[]): string {
+  if (hidden.length === 0) return replace;
+  let k = 0;
+  return replace.replace(MARKER, (marker) =>
+    k < hidden.length ? (hidden[k++] ?? marker) : marker,
+  );
+}
+
 function squash(text: string): string {
   return text.replace(/\s+/g, ' ').trim();
 }
@@ -294,7 +336,7 @@ export class ChangeSet {
           message: `Edit ${editIndex}: the find text is empty. Copy an exact, unique snippet from read_files.`,
         });
       }
-      const matches = countMatches(text, find);
+      const matches = findAnchors(text, find);
       if (matches.length === 0) {
         const fuzzy = squash(text).includes(squash(find));
         return fail({
@@ -331,8 +373,12 @@ export class ChangeSet {
           });
         }
       }
-      const at = matches[index] ?? 0;
-      text = text.slice(0, at) + replace + text.slice(at + find.length);
+      const anchor = matches[index];
+      if (anchor)
+        text =
+          text.slice(0, anchor.at) +
+          restoreHidden(replace, anchor.hidden) +
+          text.slice(anchor.at + anchor.length);
     }
 
     return {
