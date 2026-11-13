@@ -180,7 +180,7 @@ export class ModelRouter {
    * of it because of a timed rate limit that is over by now: new tasks go back to the better model
    * instead of staying on a fallback. Hard failures, and a profile the user picked, are kept.
    */
-  begin(): FallbackPlan {
+  begin(options: { agent?: boolean } = {}): FallbackPlan {
     const now = this.clock.now();
     const activeIndex = this.list.findIndex((p) => p.name === this.activeName);
     for (const p of this.list.slice(0, Math.max(0, activeIndex))) {
@@ -198,7 +198,7 @@ export class ModelRouter {
         break;
       }
     }
-    return new FallbackPlan(this);
+    return new FallbackPlan(this, options.agent === true);
   }
 
   /** Internal: a plan switched profiles; later tasks start there too. */
@@ -213,8 +213,20 @@ export class FallbackPlan {
   private retriesUsed = 0;
   private readonly tried: (readonly [ResolvedProfile, Failure])[] = [];
 
-  constructor(private readonly router: ModelRouter) {
-    this.profile = router.active;
+  constructor(
+    private readonly router: ModelRouter,
+    /** Agent mode: inline-only profiles are skipped, as a start and as a fallback. */
+    private readonly agent = false,
+  ) {
+    const active = router.active;
+    this.profile =
+      agent && active.inlineOnly ? (router.next(active, this.inlineOnly()) ?? active) : active;
+  }
+
+  private inlineOnly(): Set<string> {
+    return new Set(
+      this.agent ? this.router.profiles.filter((p) => p.inlineOnly).map((p) => p.name) : [],
+    );
   }
 
   get current(): ResolvedProfile {
@@ -234,7 +246,7 @@ export class FallbackPlan {
 
   /** Tried profiles that cannot be used now: failed for good, or still inside their rate limit. */
   private blocked(now: number): Set<string> {
-    const out = new Set<string>();
+    const out = this.inlineOnly();
     for (const [p] of this.tried) {
       const until = this.quotaUntil.get(p.name);
       if (until === undefined || until > now) out.add(p.name);

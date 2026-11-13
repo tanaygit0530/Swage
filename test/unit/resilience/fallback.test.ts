@@ -486,3 +486,41 @@ describe('waiting out a short rate limit on the same model', () => {
     expect(router.begin().decide({ ...transient, retryAfterMs: 20_000 }).action).toBe('retry');
   });
 });
+
+describe('inline-only profiles', () => {
+  const withLocal = resolveProfiles([
+    { name: 'primary', label: 'Gemini', trueforgeModel: 'g/flash' },
+    {
+      name: 'local',
+      label: 'Qwen 3B',
+      kind: 'local',
+      trueforgeModel: 'ollama/q3',
+      inlineOnly: true,
+    },
+    { name: 'fallback', label: 'Groq', trueforgeModel: 'groq/x' },
+  ]);
+
+  it('are skipped by agent mode as a fallback, and used by inline edits', () => {
+    const agent = new ModelRouter(withLocal, { retries: 0 }).begin({ agent: true });
+    expect(agent.decide(hard)).toMatchObject({ action: 'switch', to: { name: 'fallback' } });
+    expect(agent.decide(hard).action).toBe('fail');
+    const inline = new ModelRouter(withLocal, { retries: 0 }).begin();
+    expect(inline.decide(hard)).toMatchObject({ action: 'switch', to: { name: 'local' } });
+  });
+
+  it('are not where agent mode starts, even when the user picked them', () => {
+    const router = new ModelRouter(withLocal);
+    router.setActive('local');
+    expect(router.begin({ agent: true }).current.name).toBe('fallback');
+    expect(router.begin().current.name).toBe('local');
+    const only = new ModelRouter(
+      resolveProfiles([{ name: 'l', trueforgeModel: 'o/q', inlineOnly: true }]),
+    );
+    expect(only.begin({ agent: true }).current.name).toBe('l');
+  });
+
+  it('keep the flag through profile resolution', () => {
+    expect(withLocal[1]?.inlineOnly).toBe(true);
+    expect(withLocal[0]).not.toHaveProperty('inlineOnly');
+  });
+});

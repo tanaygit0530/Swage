@@ -40,6 +40,7 @@ const DEFAULT_PROFILES = [
   {
     name: 'fallback-4',
     label: 'Ollama Qwen Coder 3B',
+    inlineOnly: true,
     kind: 'local',
     trueforgeModel: 'ollama/qwen-2-5-coder-3b',
   },

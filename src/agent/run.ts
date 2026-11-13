@@ -241,7 +241,9 @@ export class AgentRun {
       this.firstText = first.text;
 
       if (this.opts.router) {
-        this.plan = this.opts.router.begin();
+        this.plan = this.opts.router.begin({
+          agent: (this.opts.agentBase ?? 'swage-main') !== 'swage-inline',
+        });
         if (!(await this.openSession())) return await this.finished;
       } else {
         this.sessionId = await this.opts.client.createSession(this.opts.agentName);

@@ -45,6 +45,7 @@ const ProfileSchema = z
       .string()
       .regex(/^[^/\s]+\/\S+$/, 'must be a TrueForge model FQN like provider/model'),
     label: z.string().min(1).max(40).optional(),
+    inlineOnly: z.boolean().optional(),
     params: z
       .object({
         temperature: z.number().min(0).max(2).optional(),
@@ -104,6 +105,7 @@ export function resolveProfiles(raw: unknown, source = 'profiles'): ResolvedProf
       kind,
       trueforgeModel: p.trueforgeModel,
       label: p.label ?? providerName(p.trueforgeModel),
+      ...(p.inlineOnly ? { inlineOnly: true } : {}),
       ...(p.params
         ? {
             params: {

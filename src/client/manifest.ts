@@ -24,6 +24,11 @@ export interface ModelProfile {
   readonly params?: { readonly temperature?: number; readonly max_tokens?: number };
   /** Layered timers for one attempt; missing values come from the kind's defaults. */
   readonly timeouts?: Partial<ProfileTimeouts>;
+  /**
+   * Inline edits only: agent mode never starts on or falls back to this profile (a small local
+   * model that handles one selection well but not a multi-file task).
+   */
+  readonly inlineOnly?: boolean;
   /** Name shown in banners and the status bar; defaults to the provider, for example "Gemini". */
   readonly label?: string;
 }

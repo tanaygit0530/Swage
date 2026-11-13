@@ -28,6 +28,7 @@ profiles:
     kind: local
     label: Ollama
     trueforgeModel: ollama/qwen-2-5-coder-3b
+    inlineOnly: true # a 3B model: inline edits only; agent mode skips it
     params: { temperature: 0, max_tokens: 4096 }
     timeouts: { connectMs: 10000, firstTokenMs: 120000, stallMs: 60000, totalMs: 900000 }
   - name: fallback-3 # llama.cpp server, optional: delete this entry if you do not run it

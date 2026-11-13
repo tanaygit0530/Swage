@@ -408,6 +408,10 @@
                 "type": "string",
                 "maxLength": 40,
                 "description": "Name shown in banners and the status bar, for example Gemini. Defaults to the provider part of trueforgeModel."
+              },
+              "inlineOnly": {
+                "type": "boolean",
+                "description": "Inline edits only: agent mode never starts on or falls back to this profile. Use it for a small local model (for example Ollama qwen2.5-coder:3b) that handles one selection well but not a multi-file task."
               }
             },
             "additionalProperties": false

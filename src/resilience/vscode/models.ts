@@ -245,6 +245,7 @@ export class ModelsController implements vscode.Disposable {
       kind: p.kind,
       trueforgeModel: p.trueforgeModel,
       ...(p.params ? { params: p.params } : {}),
+      ...(p.inlineOnly ? { inlineOnly: true } : {}),
       timeouts: p.timeouts,
       label: p.label,
     }));
