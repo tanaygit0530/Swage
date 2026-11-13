@@ -526,3 +526,29 @@ Blueprint sections 10, 13, 16 and 17.
 - Make the repository public, create the draft release if wanted, and submit the three links in the Techfest portal before 20 November 2026, 23:59 IST.
 - Testing deferred: the final rehearsal (`node scripts/rehearse.mjs run`), then regenerate `docs/EVIDENCE.md`.
 - CI runs on Ubuntu only (section 13 asks for three operating systems), and the light-theme panel colours were not checked on screen.
+
+## Phase 10: Agent panel redesign (13 November 2026)
+
+A modern agent chat with a files-changed bar, in the layout of the two reference screenshots, with Swage's own mark. One commit per step.
+
+### Built
+
+1. **Logo:** an original swage-block-and-spark mark (`media/swage-logo.svg`, monochrome `media/swage-icon.svg` for the activity bar; the Marketplace icon is re-rendered from it). Large on the empty state, a 20 px avatar on every assistant turn; user turns are a filled bubble.
+2. **Message list:** a small safe Markdown parser renders to Preact elements (raw HTML stays text). Code blocks have a language header with **Insert at cursor** and **Copy**. Paths and `name()` symbols are chips that open the file or definition. Each tool call is one collapsible row ("Searched code: …", "Read 3 files", "Ran tests (12 passed)") with a status icon, duration, and redacted, truncated arguments and result. The Plan card collapses.
+3. **Edited-file cards:** one per staged file (Edited, Created or Deleted, signed counts, **Open diff**), updated in place; a **Walkthrough** card with the agent's submit summary, numbered created files with reasons, and **View**. The review follows the staging change set, so **Open diff** works before submit.
+4. **Files-changed bar:** sticky above the composer, rows by path with signed counts, expandable blocks with Accept, Reject and Split, per-file ✓ and ✗ on hover, accepted rows dim with a tick, rejected rows are struck through. The footer reads "N Files With Changes" with **Reject all**, **Accept all** (atomic apply with hash checks, then an inline "Applied N files. Undo" toast) and a collapse chevron. Live while staging, read-only, with a spinner on the file being edited.
+5. **Composer:** auto-growing textarea, "Ask anything (Cmd+L), @ to mention, / for workflows", **Cmd/Ctrl+L** (`swage.focusComposer`), `@` popup with file icons and fuzzy ranking, `/` popup with five workflows, **+** attach, the mode dropdown, the model dropdown (profiles in order, health dot, "auto-fallback on"), and a round **Send** that turns into a red **Stop** and shows "Stopping…" until the cancelled turn drains. Fallback banners carry the profile they left and offer **Switch back** once it recovers.
+6. **Modes:** Planning runs `swage-plan-<profile>`, the main agent with `declare_context` added to TrueForge's approval list (`planningSpec` in `src/client/setup.ts`). The paused call becomes the Plan card; the change set already refuses edits to undeclared files, so nothing is staged before **Approve**. **Edit** sends the plan back with the user's words as the denial reason. Later declarations pass on their own. Fast runs `swage-main`. Mode and model persist per workspace.
+7. **States:** thinking dots, a streaming caret, an error banner with **Retry**, a **Stopped** chip, `run_command` cards with the exact command and reason (**Allow**, **Deny**), auto-scroll that stops when you scroll up with **Jump to latest**, an aria-live log, focus rings, and reduced motion.
+8. **Evidence:** `npm run screenshots:panel` renders the real bundle in headless Chrome with VS Code theme variables and scripted messages: 9 states × dark and light in `docs/images/panel-*.png`.
+
+### Tested
+
+- `npm run lint`, `npm test` (637 passed, 3 skipped, up from 523: 114 new tests in 13 new files, using jsdom for components), `npm run build`. Coverage 97.3% lines, 90.2% branches.
+- `npm run test:integration`: 11 passing, including two new panel tests (Planning → Approve → Accept all → Undo, and Reject all leaves the workspace unchanged).
+- `npm run scan:secrets`: no secrets in 181 commits. A key-shaped redaction fixture introduced during this phase was rewritten out of the unpushed commits.
+
+### Open
+
+- The real-model rehearsal of Tasks A, B and C after the redesign needs TrueForge running (`trueforge/start.sh`); the scripted runs and integration tests cover the same host paths.
+- **Cmd/Ctrl+L** replaces VS Code's "Expand Line Selection" on that key (noted in the README).
