@@ -149,11 +149,20 @@ const finishedEdits = [
 const review = [
   {
     type: 'walkthrough',
+    taskId: 't',
     summary:
       'Added **`flask config`**, which prints `app.config` as indented JSON. Values whose key looks secret are shown as `***`. A new test covers the masking, and the command is documented in `docs/cli.rst` and `CHANGES.rst`.',
     files: files.map(({ path, kind, added, removed }) => ({ path, kind, added, removed })),
   },
   { type: 'changes', phase: 'review', files },
+  {
+    type: 'turns',
+    current: 't',
+    latest: 't',
+    items: [
+      { taskId: 't', label: 'Add a flask config command', files: files.length, open: files.length },
+    ],
+  },
   {
     type: 'status',
     state: 'paused',
@@ -199,6 +208,71 @@ export const STATES = {
   'bar-expanded': {
     messages: [...intro, ...discovery, ...finishedEdits, ...review],
     click: ['[aria-label="Show the 2 change blocks of src/flask/cli.py"]'],
+  },
+  'turn-review': {
+    messages: [
+      ...intro,
+      ...discovery,
+      ...finishedEdits,
+      {
+        type: 'walkthrough',
+        taskId: 't0',
+        summary: 'Earlier turn: added a `--json` flag to `routes`.',
+        files: [{ path: 'src/flask/cli.py', kind: 'modify', added: 9, removed: 1 }],
+      },
+      ...review,
+      {
+        type: 'turns',
+        current: 't0',
+        latest: 't',
+        items: [
+          { taskId: 't0', label: 'Add a --json flag to flask routes', files: 1, open: 1 },
+          {
+            taskId: 't',
+            label: 'Add a flask config command',
+            files: files.length,
+            open: files.length,
+          },
+        ],
+      },
+      {
+        type: 'changes',
+        phase: 'review',
+        files: [
+          row('src/flask/cli.py', 'modify', 9, 1, 'pending', [
+            block('b1', 'pending', 9, 1, 980, "@click.option('--json', is_flag=True)"),
+          ]),
+        ],
+      },
+    ],
+    scrollTo: '.walkthrough',
+  },
+  'comment-chip': {
+    messages: [
+      ...intro,
+      ...discovery,
+      ...finishedEdits,
+      ...review,
+      {
+        type: 'changes',
+        phase: 'review',
+        files: files.map((f, i) =>
+          i === 3
+            ? { ...f, settled: 'applied', decision: 'accepted' }
+            : i === 1
+              ? { ...f, decision: 'partial' }
+              : f,
+        ),
+      },
+      {
+        type: 'comments',
+        items: [
+          { id: 'c1', path: 'src/flask/cli.py', lines: '1040-1042', text: 'Name it show-config' },
+          { id: 'c2', path: 'tests/test_cli.py', lines: '690', text: 'Also test a nested dict' },
+        ],
+      },
+    ],
+    collapseBar: false,
   },
   approval: {
     messages: [

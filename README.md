@@ -8,9 +8,9 @@ Swage makes inline edits and multi-file changes the way a careful engineer revie
 - **Tools, not logic:** the editor's capabilities (search, read, propose a write, run tests, run a command) are exposed to the agent as **MCP tools**, so the agent decides what to read and change.
 - **Models live in TrueForge:** Swage never calls a model provider directly.
 
-![Review diff with per-block Accept, Reject and Split](docs/images/review-diff.png)
+![Inline red and green diff with file controls and per-change Accept, Reject and Split](docs/images/review-diff-dark.png)
 
-![Blocks decided: one accepted, one rejected, before Apply](docs/images/review-decisions.png)
+![One file accepted: the tree marks it applied and the next file opens](docs/images/review-applied-dark.png)
 
 > **No keys in this repository.** API keys and provider URLs are entered only in TrueForge's own settings, stored in its database outside this folder. Swage's profiles name TrueForge models only. The whole git history is scanned for secrets in CI (`npm run scan:secrets`), and tool output is redacted.
 

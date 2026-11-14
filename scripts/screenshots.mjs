@@ -67,7 +67,12 @@ function capture(wsUrl, file) {
   });
 }
 
-const names = ['review-diff', 'review-decisions'];
+// The states test/screenshots/review.shot.ts drives, in order, for each theme.
+const names = ['dark', 'light'].flatMap((theme) =>
+  ['review-diff', 'review-file-controls', 'review-comment', 'review-applied'].map(
+    (state) => `${state}-${theme}`,
+  ),
+);
 let ws;
 for (const name of names) {
   const ready = path.join(shotDir, `${name}.ready`);

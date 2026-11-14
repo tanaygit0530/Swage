@@ -106,6 +106,8 @@ export class ReviewTree implements vscode.TreeDataProvider<ReviewNode> {
         .join(' · ');
       item.tooltip = `${node.path}\n${status}${settled ? '' : ' · Accept file applies it now; Reject file discards it'}`;
       item.resourceUri = vscode.Uri.file(node.path);
+      // An expandable item with a resource gets a folder icon by default; these are files.
+      item.iconPath = vscode.ThemeIcon.File;
       item.contextValue = settled ? 'swage.review.file.settled' : 'swage.review.file';
       item.command = {
         command: 'swage.review.openFile',

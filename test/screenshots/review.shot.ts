@@ -6,29 +6,28 @@ import { FakeTrueForge } from '../agent/fakeTrueForge';
 import { loadScenarios } from '../fake-model/scenario';
 
 /**
- * Drives the real UI into the states documented in docs/images, and hands each one to
- * scripts/screenshots.mjs, which captures the window over the DevTools protocol.
- * Runs only through `npm run screenshots`.
+ * Drives the real review UI into the states documented in docs/images, in a dark and a light
+ * theme, and hands each one to scripts/screenshots.mjs, which captures the window over the
+ * DevTools protocol. Runs only through `npm run screenshots`. The demo workspace holds no secrets.
  */
 
 const dir = process.env['SWAGE_SHOT_DIR'] ?? '';
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+
+/** The states, in capture order (scripts/screenshots.mjs reads the same list). */
+export const THEMES = [
+  ['dark', 'Default Dark Modern'],
+  ['light', 'Default Light Modern'],
+] as const;
 
 async function tidy(): Promise<void> {
   await vscode.commands.executeCommand('workbench.action.closeAuxiliaryBar');
   await vscode.commands.executeCommand('notifications.clearAll');
 }
 
-/** Widens the Swage sidebar so the tree and panel are readable (the command acts on the focused part). */
-async function widenSidebar(): Promise<void> {
-  await vscode.commands.executeCommand('swage.agentView.focus');
-  for (let i = 0; i < 6; i++)
-    await vscode.commands.executeCommand('workbench.action.increaseViewWidth');
-}
-
 async function shot(name: string): Promise<void> {
   await tidy();
-  await sleep(1500);
+  await sleep(1800);
   writeFileSync(path.join(dir, `${name}.ready`), '');
   const done = path.join(dir, `${name}.done`);
   for (let i = 0; i < 300 && !existsSync(done); i++) await sleep(100);
@@ -44,36 +43,66 @@ suite('screenshots', () => {
     const api = (await ext?.activate()) as SwageTestApi;
     const scenario = loadScenarios(
       path.join(ext?.extensionPath ?? '', 'test', 'fake-model', 'scenarios'),
-    ).find((s) => s.name === 'three-file-edit');
+    ).find((s) => s.name === 'four-file-edit');
     if (!scenario) throw new Error('scenario missing');
-    api.setSdkFactory((mcp) => new FakeTrueForge({ scenario, mcp }).sdk);
 
-    await vscode.commands.executeCommand('workbench.action.closeAllEditors');
-    await vscode.commands.executeCommand('swage.openAgent');
-    void api.startRun(
-      'Add a config command that prints the configuration as JSON, masking secrets. Test and document it.',
-    );
-    await waitFor(() => api.review.current !== undefined);
-    const session = api.review.current;
-    if (!session) throw new Error('no review');
+    for (const [theme, themeName] of THEMES) {
+      await vscode.workspace
+        .getConfiguration('workbench')
+        .update('colorTheme', themeName, vscode.ConfigurationTarget.Global);
+      await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+      await api.resetRuntime();
+      api.setSdkFactory((mcp) => new FakeTrueForge({ scenario, mcp }).sdk);
+      void api.startRun('Add a config command; test, document and mention it in the README.');
+      await waitFor(() => api.review.current !== undefined);
+      const session = api.review.current;
+      if (!session) throw new Error('no review');
+      await vscode.commands.executeCommand('swage.review.focus');
+      await vscode.commands.executeCommand('swage.review.expandAll');
 
-    await vscode.commands.executeCommand('swage.review.focus');
-    await vscode.commands.executeCommand('swage.review.openFile', { path: 'app/cli.py' });
-    await widenSidebar();
-    await shot('review-diff');
+      // 1. The inline red and green diff with the per-change controls, the tree and status bar.
+      await vscode.commands.executeCommand('swage.review.openFile', { path: 'app/cli.py' });
+      await shot(`review-diff-${theme}`);
 
-    const [cli, , docs] = session.files();
-    await vscode.commands.executeCommand('swage.review.acceptBlock', {
-      path: 'app/cli.py',
-      blockId: cli?.blocks[0]?.id,
-    });
-    await vscode.commands.executeCommand('swage.review.rejectBlock', {
-      path: 'docs/cli.md',
-      blockId: docs?.blocks[0]?.id,
-    });
-    await vscode.commands.executeCommand('swage.review.openFile', { path: 'app/cli.py' });
-    await shot('review-decisions');
+      // 2. Per-file controls on a partly reviewed file: one change accepted, one rejected.
+      const [b1, b2] = session.file('README.md')?.blocks ?? [];
+      await vscode.commands.executeCommand('swage.review.openFile', { path: 'README.md' });
+      await vscode.commands.executeCommand('swage.review.acceptBlock', {
+        path: 'README.md',
+        blockId: b1?.id,
+      });
+      await vscode.commands.executeCommand('swage.review.rejectBlock', {
+        path: 'README.md',
+        blockId: b2?.id,
+      });
+      await shot(`review-file-controls-${theme}`);
 
-    await vscode.commands.executeCommand('swage.review.discard');
+      // 3. A comment on diff lines for the agent.
+      await vscode.commands.executeCommand('swage.review.openFile', { path: 'app/cli.py' });
+      await waitFor(() => vscode.window.activeTextEditor?.document.uri.scheme === 'swage-staged');
+      const editor = vscode.window.activeTextEditor;
+      const block = session.preview('app/cli.py').blocks[0];
+      if (editor && block) {
+        editor.selection = new vscode.Selection(block.start, 0, block.start + 1, 0);
+        const thread =
+          await vscode.commands.executeCommand<vscode.CommentThread>('swage.review.addComment');
+        await vscode.commands.executeCommand('swage.review.saveComment', {
+          thread,
+          text: 'Name it show-config, to match the other commands.',
+        });
+      }
+      await shot(`review-comment-${theme}`);
+
+      // 4. One file accepted: the tree shows it applied, the next file opens by itself.
+      await vscode.commands.executeCommand('swage.review.clearComments');
+      await vscode.commands.executeCommand('swage.review.acceptFile', { path: 'app/cli.py' });
+      await shot(`review-applied-${theme}`);
+
+      await vscode.commands.executeCommand('swage.review.discard');
+      await vscode.commands.executeCommand('swage.undoLastChangeSet', { force: true });
+    }
+    await vscode.workspace
+      .getConfiguration('workbench')
+      .update('colorTheme', undefined, vscode.ConfigurationTarget.Global);
   });
 });

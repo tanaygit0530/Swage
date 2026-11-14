@@ -26,7 +26,7 @@ mkdirSync(work, { recursive: true });
 mkdirSync(out, { recursive: true });
 
 const only = process.argv.slice(2);
-const WIDTH = 440;
+const WIDTH = Number(process.env.PANEL_WIDTH ?? 440);
 const HEIGHT = 900;
 
 for (const [name, state] of Object.entries(STATES)) {
