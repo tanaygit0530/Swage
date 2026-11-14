@@ -1,0 +1,160 @@
+{
+  "name": "four-file-edit",
+  "description": "Four files: the three of three-file-edit plus a README edit with two separate changes (for per-file and per-block review).",
+  "steps": [
+    {
+      "text": ["I'll ", "look for ", "the CLI code ", "first."],
+      "chunkDelayMs": 40,
+      "toolCalls": [
+        {
+          "name": "find_relevant_code",
+          "arguments": {
+            "query": "cli commands configuration"
+          }
+        }
+      ]
+    },
+    {
+      "toolCalls": [
+        {
+          "name": "read_files",
+          "arguments": {
+            "files": [
+              {
+                "path": "app/cli.py"
+              },
+              {
+                "path": "tests/test_cli.py"
+              },
+              {
+                "path": "docs/cli.md"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "text": ["Plan: add the command, ", "test it, ", "document it."],
+      "chunkDelayMs": 40,
+      "toolCalls": [
+        {
+          "name": "declare_context",
+          "arguments": {
+            "plan": [
+              "Add a config command that prints the configuration as JSON with secrets masked",
+              "Cover it with a test",
+              "Document it next to the other commands"
+            ],
+            "files": [
+              {
+                "path": "app/cli.py",
+                "reason": "defines the built-in commands; the new config command goes here"
+              },
+              {
+                "path": "tests/test_cli.py",
+                "reason": "paired test file for app/cli.py"
+              },
+              {
+                "path": "docs/cli.md",
+                "reason": "documents the built-in commands"
+              },
+              {
+                "path": "README.md",
+                "reason": "mention the new command in the overview"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "toolCalls": [
+        {
+          "name": "stage_edit",
+          "arguments": {
+            "path": "app/cli.py",
+            "kind": "edit",
+            "edits": [
+              {
+                "find": "    click.echo(\"/ /tasks /users\")\n",
+                "replace": "    click.echo(\"/ /tasks /users\")\n\n\n@cli.command(\"config\")\ndef config_command():\n    \"\"\"Print the configuration as JSON, masking secret values.\"\"\"\n    import json\n\n    config = load_config()\n    masked = {\n        key: \"***\" if any(word in key.upper() for word in (\"SECRET\", \"PASSWORD\", \"TOKEN\", \"KEY\")) else value\n        for key, value in config.items()\n    }\n    click.echo(json.dumps(masked, default=str))\n"
+              }
+            ]
+          }
+        },
+        {
+          "name": "stage_edit",
+          "arguments": {
+            "path": "tests/test_cli.py",
+            "kind": "edit",
+            "edits": [
+              {
+                "find": "    assert \"/tasks\" in result.output\n",
+                "replace": "    assert \"/tasks\" in result.output\n\n\ndef test_config_masks_secrets():\n    result = CliRunner().invoke(cli, [\"config\"])\n    assert '\"SECRET_KEY\": \"***\"' in result.output\n"
+              }
+            ]
+          }
+        },
+        {
+          "name": "stage_edit",
+          "arguments": {
+            "path": "docs/cli.md",
+            "kind": "edit",
+            "edits": [
+              {
+                "find": "Show the registered routes.\n",
+                "replace": "Show the registered routes.\n\n## config\n\nPrint the configuration as JSON with secret values masked.\n"
+              }
+            ]
+          }
+        },
+        {
+          "name": "stage_edit",
+          "arguments": {
+            "path": "README.md",
+            "kind": "edit",
+            "edits": [
+              {
+                "find": "# Swage demo workspace\n",
+                "replace": "# Swage demo workspace (with a config command)\n"
+              },
+              {
+                "find": "`npm test` (which runs `check.js`) and submits the change set for review.\n",
+                "replace": "`npm test` (which runs `check.js`) and submits the change set for review.\n\nRun `config` to print the configuration with secrets masked.\n"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "toolCalls": [
+        {
+          "name": "call_tool",
+          "arguments": {
+            "mcp_server": "editor-tools",
+            "tool_name": "run_tests",
+            "input": {
+              "command": "npm test"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "toolCalls": [
+        {
+          "name": "submit_change_set",
+          "arguments": {
+            "summary": "Added a config command that prints the configuration as JSON with secrets masked, with a test and docs."
+          }
+        }
+      ]
+    },
+    {
+      "text": ["The change set ", "is ready ", "for your review."],
+      "chunkDelayMs": 40
+    }
+  ]
+}

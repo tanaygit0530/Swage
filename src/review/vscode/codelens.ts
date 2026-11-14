@@ -8,6 +8,48 @@ import { pathOf, STAGED_SCHEME } from './documents';
  * sections 3 and 8). Decisions stay toggleable until apply: a decided block shows its state and
  * offers the opposite action. Split appears only when a block has more than one line on a side.
  */
+/**
+ * The file's own controls at the top of its diff in agent mode (review upgrade, step 3):
+ * Accept file, Reject file, "file k of N", Previous and Next. A settled file says how it ended.
+ */
+function fileLenses(session: ReviewSession, path: string): vscode.CodeLens[] {
+  const top = new vscode.Range(0, 0, 0, 0);
+  const ref = { path };
+  const status = session.status(path);
+  if (status === 'applied' || status === 'discarded')
+    return [
+      new vscode.CodeLens(top, {
+        title: status === 'applied' ? '$(pass-filled) Applied' : '$(circle-slash) Discarded',
+        command: '',
+      }),
+    ];
+  const all = session
+    .files()
+    .map((f) => f.path)
+    .sort();
+  const open = session.openFiles();
+  const lens = (title: string, command: string, tooltip: string): vscode.CodeLens =>
+    new vscode.CodeLens(top, { title, command, arguments: [ref], tooltip });
+  return [
+    lens(
+      '$(check-all) Accept file',
+      'swage.review.acceptFile',
+      'Apply this file’s accepted and pending changes now (undoable)',
+    ),
+    lens(
+      '$(close-all) Reject file',
+      'swage.review.rejectFile',
+      'Discard this file’s changes; the file stays as it is',
+    ),
+    new vscode.CodeLens(top, {
+      title: `file ${all.indexOf(path) + 1} of ${all.length}${status === 'partial' ? ' · partial' : ''} · ${open.length} to review`,
+      command: '',
+    }),
+    lens('$(arrow-left) Previous', 'swage.review.previousFile', 'The previous file with changes'),
+    lens('$(arrow-right) Next', 'swage.review.nextFile', 'The next file with changes'),
+  ];
+}
+
 export class ReviewCodeLens implements vscode.CodeLensProvider {
   private readonly emitter = new vscode.EventEmitter<void>();
   readonly onDidChangeCodeLenses = this.emitter.event;
@@ -31,6 +73,7 @@ export class ReviewCodeLens implements vscode.CodeLensProvider {
     const mode = this.mode();
     const inline = mode.mode === 'inline';
     const outside = new Set(mode.outside?.get(path) ?? []);
+    if (!inline) lenses.push(...fileLenses(session, path));
     blocks.forEach((b, i) => {
       const range = new vscode.Range(
         Math.min(b.start, lastLine),
@@ -77,17 +120,17 @@ export class ReviewCodeLens implements vscode.CodeLensProvider {
         );
       }
       // Inline edits always get the bulk actions and Apply, even for one block (blueprint F1, F16).
-      if (i === 0 && (blocks.length > 1 || inline)) {
+      if (i === 0 && inline) {
         lenses.push(
           new vscode.CodeLens(range, {
-            title: inline ? 'Accept all' : 'Accept file',
+            title: 'Accept all',
             command: 'swage.review.acceptFile',
             arguments: [{ path }],
           }),
         );
         lenses.push(
           new vscode.CodeLens(range, {
-            title: inline ? 'Reject all' : 'Reject file',
+            title: 'Reject all',
             command: 'swage.review.rejectFile',
             arguments: [{ path }],
           }),

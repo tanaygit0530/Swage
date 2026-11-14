@@ -58,3 +58,94 @@ describe('ReviewSession', () => {
     expect(s.preview('missing.txt').content).toBe('');
   });
 });
+
+async function four(): Promise<ReviewSession> {
+  const files: Record<string, string> = {
+    'a.py': 'a1\na2\na3\na4\na5\n',
+    'b.py': 'b\n',
+    'c.py': 'c\n',
+    'd.py': 'd\n',
+  };
+  const cs = new ChangeSet('t4', { read: (p) => Promise.resolve(files[p]) });
+  cs.declareContext({
+    plan: [],
+    files: [...Object.keys(files), 'new.py'].map((path) => ({ path, reason: 'r' })),
+  });
+  await cs.stage({ kind: 'write', path: 'd.py', content: 'D\n' });
+  await cs.stage({ kind: 'write', path: 'a.py', content: 'A1\na2\na3\na4\nA5\n' });
+  await cs.stage({ kind: 'write', path: 'c.py', content: 'C\n' });
+  await cs.stage({ kind: 'write', path: 'new.py', content: 'new\n' });
+  return new ReviewSession('t4', cs);
+}
+
+describe('ReviewSession: per-file review', () => {
+  it('orders open files by path and advances through them, wrapping', async () => {
+    const s = await four();
+    expect(s.openFiles()).toEqual(['a.py', 'c.py', 'd.py', 'new.py']);
+    expect(s.nextOpen()).toBe('a.py');
+    expect(s.nextOpen('c.py')).toBe('d.py');
+    expect(s.nextOpen('new.py')).toBe('a.py');
+    expect(s.previousOpen('a.py')).toBe('new.py');
+    expect(s.previousOpen('d.py')).toBe('c.py');
+  });
+
+  it('accepts a whole pending file for apply, and settles it', async () => {
+    const s = await four();
+    const change = s.acceptForApply('c.py');
+    expect(change).toMatchObject({ op: 'modify', path: 'c.py', content: 'C\n' });
+    expect(s.status('c.py')).toBe('accepted');
+    s.settle('c.py', 'applied');
+    expect(s.status('c.py')).toBe('applied');
+    expect(s.openFiles()).toEqual(['a.py', 'd.py', 'new.py']);
+    expect(s.applied).toEqual(['c.py']);
+    // The rest of the change set no longer includes the applied file.
+    expect(s.result().changes.map((c) => c.path)).not.toContain('c.py');
+  });
+
+  it('applies exactly the accepted blocks of a partly reviewed file', async () => {
+    const s = await four();
+    const [first, second] = s.file('a.py')?.blocks ?? [];
+    s.reject('a.py', second?.id ?? '');
+    // One block decided, one still pending: partly reviewed.
+    expect(s.status('a.py')).toBe('partial');
+    s.accept('a.py', first?.id ?? '');
+    expect(s.status('a.py')).toBe('partial');
+    expect(s.acceptForApply('a.py')).toMatchObject({ content: 'A1\na2\na3\na4\na5\n' });
+  });
+
+  it('returns nothing to apply when every block of the file is rejected', async () => {
+    const s = await four();
+    s.rejectFile('d.py');
+    expect(s.acceptForApply('d.py')).toBeUndefined();
+  });
+
+  it('discards a file, reports every combination, and knows when all are settled', async () => {
+    const s = await four();
+    s.settle('d.py', 'discarded');
+    expect(s.status('d.py')).toBe('discarded');
+    expect(s.file('d.py')?.blocks.every((b) => b.state === 'rejected')).toBe(true);
+    expect(s.status('a.py')).toBe('pending');
+    expect(s.allSettled).toBe(false);
+    s.acceptForApply('a.py');
+    s.settle('a.py', 'applied');
+    s.acceptForApply('new.py');
+    s.settle('new.py', 'applied');
+    s.settle('c.py', 'discarded');
+    expect(s.allSettled).toBe(true);
+    expect(s.nextOpen('a.py')).toBeUndefined();
+    expect(s.result()).toEqual({ changes: [], accepted: [], rejected: [], pending: [] });
+    expect(s.applied.sort()).toEqual(['a.py', 'new.py']);
+  });
+
+  it('counts block decisions per open file, with block ids that repeat across files', async () => {
+    const s = await four();
+    s.acceptFile('c.py');
+    s.rejectFile('d.py');
+    const r = s.result();
+    expect(r.accepted).toHaveLength(1);
+    expect(r.rejected).toHaveLength(1);
+    s.settle('c.py', 'applied');
+    expect(s.result().accepted).toHaveLength(0);
+    expect(s.result().rejected).toHaveLength(1);
+  });
+});

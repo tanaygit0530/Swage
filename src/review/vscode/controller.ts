@@ -1,14 +1,14 @@
 import * as vscode from 'vscode';
 import { Applier, type ApplyResult, type UndoResult } from '../../changeset/apply';
 import { checkpointFile, loadCheckpoints, saveCheckpoints } from '../checkpoints';
-import type { ChangeSet } from '../../changeset/changeSet';
+import type { ChangeSet, FileChange } from '../../changeset/changeSet';
 import { ReviewSession } from '../session';
 import { ReviewCodeLens } from './codelens';
 import { ReviewDecorations } from './decorations';
 import { BASE_SCHEME, openDiff, ReviewDocuments, STAGED_SCHEME } from './documents';
 import { ReviewTree, type ReviewNode } from './tree';
 import { VsCodeWorkspaceFs } from './workspaceFs';
-import { DiffViewSettings } from './diffView';
+import { DiffViewSettings, isSwageDiffTab } from './diffView';
 import { blockAtLine, neighbourBlock } from '../marks';
 import { pathOf } from './documents';
 
@@ -18,6 +18,24 @@ import { pathOf } from './documents';
  */
 
 export const REVIEW_VIEW_ID = 'swage.review';
+
+/** Undo depth: every apply (all at once, or one file) is one checkpoint, undone in order. */
+export const MAX_UNDO = 10;
+
+export type FileSettleResult =
+  | {
+      readonly ok: true;
+      readonly path: string;
+      readonly how: 'applied' | 'discarded';
+      /** The file opened next, when there is one. */
+      readonly next?: string;
+    }
+  | {
+      readonly ok: false;
+      readonly path: string;
+      readonly reason: string;
+      readonly message: string;
+    };
 
 /** How a review ended, reported back to the agent run. */
 export interface ReviewOutcome {
@@ -147,6 +165,12 @@ export class ReviewController implements vscode.Disposable {
         this.decideFocused('reject'),
       ),
       vscode.commands.registerCommand('swage.review.nextChange', () => this.moveFocus(1)),
+      vscode.commands.registerCommand('swage.review.nextFile', (arg: unknown) =>
+        this.openNeighbourFile(1, arg),
+      ),
+      vscode.commands.registerCommand('swage.review.previousFile', (arg: unknown) =>
+        this.openNeighbourFile(-1, arg),
+      ),
       vscode.commands.registerCommand('swage.review.previousChange', () => this.moveFocus(-1)),
       vscode.commands.registerCommand('swage.review.rejectAll', () => this.decideAll('reject')),
     );
@@ -297,13 +321,103 @@ export class ReviewController implements vscode.Disposable {
     return this.session.split(ref.path, ref.blockId);
   }
 
-  decideFile(arg: unknown, decision: 'accept' | 'reject'): boolean {
+  /**
+   * Accept file / Reject file. In an inline edit these are decisions (then Apply or Discard). In
+   * agent mode they settle the file at once (review upgrade, step 3): Accept applies only this
+   * file's accepted blocks through the atomic, hash-checked, undoable apply; Reject discards
+   * only this file. Then the next pending file opens, or the review ends.
+   */
+  decideFile(arg: unknown, decision: 'accept' | 'reject'): boolean | Promise<FileSettleResult> {
     // From the diff editor title the argument is the staged URI; with none, use the active editor.
     const ref = toRef(arg) ?? toRef(vscode.window.activeTextEditor?.document.uri);
     if (!this.session || !ref || !this.session.file(ref.path)) return false;
+    if (this.modeValue.mode === 'agent') return this.settleFile(ref.path, decision);
     if (decision === 'accept') this.session.acceptFile(ref.path);
     else this.session.rejectFile(ref.path);
     return true;
+  }
+
+  /** Applies or discards one file of an agent-mode review, then moves on. */
+  async settleFile(path: string, decision: 'accept' | 'reject'): Promise<FileSettleResult> {
+    const session = this.session;
+    if (!session || this.modeValue.mode !== 'agent' || !session.openFiles().includes(path))
+      return { ok: false, path, reason: 'not_open', message: `${path} is not waiting for review.` };
+    if (decision === 'reject') {
+      session.settle(path, 'discarded');
+      return this.afterSettle(path, { ok: true, path, how: 'discarded' });
+    }
+    const change = session.acceptForApply(path);
+    if (!change) {
+      // Every block of the file was rejected: nothing to write.
+      session.settle(path, 'discarded');
+      return this.afterSettle(path, { ok: true, path, how: 'discarded' });
+    }
+    const r = await this.applyChanges(session, [change], { restageOnConflict: false });
+    if (!r.ok) return { ok: false, path, reason: r.reason, message: r.message };
+    session.settle(path, 'applied');
+    return this.afterSettle(path, { ok: true, path, how: 'applied' });
+  }
+
+  private async afterSettle(
+    path: string,
+    result: Extract<FileSettleResult, { ok: true }>,
+  ): Promise<FileSettleResult> {
+    const session = this.session;
+    if (!session) return result;
+    if (session.allSettled) {
+      await this.finishReviewed();
+      return result;
+    }
+    const next = session.nextOpen(path);
+    if (next && vscode.workspace.getConfiguration('swage.review').get<boolean>('autoAdvance', true))
+      await this.openFile({ path: next });
+    return { ...result, ...(next ? { next } : {}) };
+  }
+
+  /** Every file was settled one at a time: the review ends with what was applied. */
+  private async finishReviewed(): Promise<void> {
+    const session = this.session;
+    if (!session) return;
+    const applied = session.applied;
+    const discarded = session.files().length - applied.length;
+    if (applied.length > 0) session.changeSet.markApplied();
+    else session.changeSet.discard();
+    await this.closeSwageDiffs();
+    const message = `All changes reviewed: ${applied.length} file(s) applied, ${discarded} discarded.`;
+    await this.finish({
+      applied: applied.length > 0,
+      accepted: applied,
+      rejected: session
+        .files()
+        .map((f) => f.path)
+        .filter((p) => !applied.includes(p)),
+      message,
+    });
+    void vscode.window
+      .showInformationMessage(message, ...(applied.length > 0 ? ['Undo'] : []))
+      .then((choice) => {
+        if (choice === 'Undo') void vscode.commands.executeCommand('swage.undoLastChangeSet');
+      });
+  }
+
+  /** Closes the Swage diff tabs (the review is over). */
+  private async closeSwageDiffs(): Promise<void> {
+    const tabs = vscode.window.tabGroups.all.flatMap((g) => g.tabs.filter(isSwageDiffTab));
+    if (tabs.length > 0) await vscode.window.tabGroups.close(tabs);
+  }
+
+  /** Previous / Next file in the per-file controls: the neighbouring open file's diff. */
+  async openNeighbourFile(direction: 1 | -1, arg?: unknown): Promise<string | undefined> {
+    const session = this.session;
+    const ref = toRef(arg) ?? toRef(vscode.window.activeTextEditor?.document.uri);
+    if (!session) return undefined;
+    const target = ref
+      ? direction === 1
+        ? session.nextOpen(ref.path)
+        : session.previousOpen(ref.path)
+      : session.nextOpen();
+    if (target) await this.openFile({ path: target });
+    return target;
   }
 
   decideAll(decision: 'accept' | 'reject'): boolean {
@@ -346,7 +460,8 @@ export class ReviewController implements vscode.Disposable {
   protected createApplier(root: vscode.Uri): Applier {
     const file = checkpointFile(this.context.globalStorageUri.fsPath, root.fsPath);
     return new Applier(new VsCodeWorkspaceFs(root), {
-      maxUndo: 2,
+      // One checkpoint per apply; accepting files one at a time makes several (review upgrade).
+      maxUndo: MAX_UNDO,
       history: loadCheckpoints(file, root.fsPath),
     });
   }
@@ -405,6 +520,12 @@ export class ReviewController implements vscode.Disposable {
     if (!session || !applier)
       return { ok: false, reason: 'no_review', message: 'There is no change set to apply.' };
     const result = session.result();
+    if (result.changes.length === 0 && session.applied.length > 0) {
+      // Files were applied one at a time; the rest are rejected or undecided: end the review.
+      for (const p of session.openFiles()) session.settle(p, 'discarded');
+      await this.finishReviewed();
+      return { ok: true, files: session.applied, accepted: 0, rejected: 0 };
+    }
     if (result.changes.length === 0) {
       const message = 'No block is accepted yet. Accept blocks, or Discard the change set.';
       void vscode.window.showInformationMessage(message);
@@ -421,7 +542,45 @@ export class ReviewController implements vscode.Disposable {
     }
 
     const t0 = performance.now();
-    const applied: ApplyResult = await applier.apply(session.taskId, result.changes);
+    const r = await this.applyChanges(session, result.changes, options);
+    if (!r.ok) return r;
+    // Files applied one at a time earlier in this review count too.
+    const files = [...new Set([...session.applied, ...r.files])];
+    const message = `Applied ${files.length} file(s): ${result.accepted.length} block(s) accepted, ${result.rejected.length + result.pending.length} not applied.`;
+    session.changeSet.markApplied();
+    await this.finish({
+      applied: true,
+      accepted: result.accepted,
+      rejected: [...result.rejected, ...result.pending],
+      message,
+    });
+    void vscode.window.showInformationMessage(message, 'Undo').then((choice) => {
+      if (choice === 'Undo') void vscode.commands.executeCommand('swage.undoLastChangeSet');
+    });
+    this.lastApplyMs = Math.round(performance.now() - t0);
+    return {
+      ok: true,
+      files,
+      accepted: result.accepted.length,
+      rejected: result.rejected.length + result.pending.length,
+    };
+  }
+
+  /**
+   * Writes changes through the atomic, hash-checked apply and records one undo checkpoint. A
+   * conflict writes nothing and offers to re-stage from the current files.
+   */
+  private async applyChanges(
+    session: ReviewSession,
+    changes: readonly FileChange[],
+    options: ApplyOptions,
+  ): Promise<
+    | { readonly ok: true; readonly files: readonly string[] }
+    | Extract<ApplyCommandResult, { ok: false }>
+  > {
+    const applier = this.applier();
+    if (!applier) return { ok: false, reason: 'no_review', message: 'Open a folder first.' };
+    const applied: ApplyResult = await applier.apply(session.taskId, changes);
     if (!applied.ok) {
       const error = applied.error;
       if (error.code === 'conflict') {
@@ -452,26 +611,8 @@ export class ReviewController implements vscode.Disposable {
       };
     }
 
-    session.changeSet.markApplied();
     await this.afterApply();
-    const files = applied.checkpoint.entries.map((e) => e.path);
-    const message = `Applied ${files.length} file(s): ${result.accepted.length} block(s) accepted, ${result.rejected.length + result.pending.length} not applied.`;
-    await this.finish({
-      applied: true,
-      accepted: result.accepted,
-      rejected: [...result.rejected, ...result.pending],
-      message,
-    });
-    void vscode.window.showInformationMessage(message, 'Undo').then((choice) => {
-      if (choice === 'Undo') void vscode.commands.executeCommand('swage.undoLastChangeSet');
-    });
-    this.lastApplyMs = Math.round(performance.now() - t0);
-    return {
-      ok: true,
-      files,
-      accepted: result.accepted.length,
-      rejected: result.rejected.length + result.pending.length,
-    };
+    return { ok: true, files: applied.checkpoint.entries.map((e) => e.path) };
   }
 
   /** Time the last apply took, for the performance report. */
@@ -488,6 +629,12 @@ export class ReviewController implements vscode.Disposable {
     const session = this.session;
     if (!session) return false;
     const r = session.result();
+    if (session.applied.length > 0) {
+      // Reject all after some files were accepted one at a time: those stay applied.
+      for (const p of session.openFiles()) session.settle(p, 'discarded');
+      await this.finishReviewed();
+      return true;
+    }
     session.changeSet.discard();
     await this.finish({
       applied: false,
@@ -500,8 +647,14 @@ export class ReviewController implements vscode.Disposable {
 
   async show(): Promise<void> {
     await vscode.commands.executeCommand(`${REVIEW_VIEW_ID}.focus`);
-    const first = this.session?.files()[0];
-    if (first) await this.openFile({ path: first.path });
+    const first = this.session?.nextOpen();
+    if (
+      first &&
+      vscode.workspace
+        .getConfiguration('swage.review')
+        .get<boolean>('openFirstFileAutomatically', true)
+    )
+      await this.openFile({ path: first });
   }
 
   async openFile(arg: unknown): Promise<void> {

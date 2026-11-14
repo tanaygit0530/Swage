@@ -138,14 +138,14 @@
       },
       {
         "command": "swage.review.acceptFile",
-        "title": "Accept All Blocks in File",
+        "title": "Accept File",
         "category": "Swage",
         "icon": "$(check-all)",
         "enablement": "swage.reviewActive"
       },
       {
         "command": "swage.review.rejectFile",
-        "title": "Reject All Blocks in File",
+        "title": "Reject File",
         "category": "Swage",
         "icon": "$(close-all)",
         "enablement": "swage.reviewActive"
@@ -171,6 +171,18 @@
         "command": "swage.review.previousChange",
         "title": "Previous Change",
         "category": "Swage"
+      },
+      {
+        "command": "swage.review.nextFile",
+        "title": "Next File With Changes",
+        "category": "Swage",
+        "icon": "$(arrow-right)"
+      },
+      {
+        "command": "swage.review.previousFile",
+        "title": "Previous File With Changes",
+        "category": "Swage",
+        "icon": "$(arrow-left)"
       },
       {
         "command": "swage.review.acceptAll",
