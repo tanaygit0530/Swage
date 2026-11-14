@@ -220,4 +220,5 @@ New files diff against an empty original, so they are all green. Deleted files d
 
 - **Other diffs are briefly inline:** while a Swage diff tab is open, other diffs the user opens (a git diff, say) are inline too, because the setting is global for that time.
 - **Renames:** Swage stages no renames (an agent rename is a delete plus a create), so there is no old → new title.
+- **No minimap ticks:** minimap decorations are a proposed API, not public, so Swage's ticks are on the overview ruler only. The diff editor's own colours remain.
 - **Per-file colours:** the colours of the native diff come from the theme. Swage adds its own overview-ruler and gutter marks per block (green for additions, red for removals, grey for decided blocks) on the staged side.

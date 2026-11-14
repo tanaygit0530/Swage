@@ -1,34 +1,60 @@
 import * as vscode from 'vscode';
+import { blockMarks, type BlockMark } from '../marks';
 import type { ReviewSession } from '../session';
 import { pathOf, STAGED_SCHEME } from './documents';
 
-/** Gutter and overview-ruler marks for each block's state in the staged side of the diff. */
+/**
+ * Swage's marks on the staged side of a diff (review upgrade, steps 1 and 2). The diff editor
+ * itself draws removed lines red and added lines green with word-level highlights and +/-
+ * indicators; Swage adds overview-ruler and minimap ticks (green for additions, red where lines
+ * were removed) so changes are easy to find in a long file, dims unchanged context, and greys
+ * decided blocks: accepted with a tick, rejected struck through. Colours are theme tokens.
+ * Minimap marks are not in VS Code's public decoration API, so Swage's ticks are on the overview
+ * ruler; the diff editor's own minimap still shows its diff colours.
+ */
+
+const type = (o: vscode.DecorationRenderOptions): vscode.TextEditorDecorationType =>
+  vscode.window.createTextEditorDecorationType(o);
+
 export class ReviewDecorations implements vscode.Disposable {
-  private readonly types = {
-    pending: vscode.window.createTextEditorDecorationType({
+  private readonly types: Record<BlockMark['kind'], vscode.TextEditorDecorationType> = {
+    added: type({
       isWholeLine: true,
-      borderWidth: '0 0 0 3px',
-      borderStyle: 'solid',
-      borderColor: new vscode.ThemeColor('editorInfo.foreground'),
-      overviewRulerColor: new vscode.ThemeColor('editorInfo.foreground'),
+      overviewRulerColor: new vscode.ThemeColor('editorOverviewRuler.addedForeground'),
       overviewRulerLane: vscode.OverviewRulerLane.Left,
     }),
-    accepted: vscode.window.createTextEditorDecorationType({
+    removed: type({
       isWholeLine: true,
-      borderWidth: '0 0 0 3px',
-      borderStyle: 'solid',
-      borderColor: new vscode.ThemeColor('testing.iconPassed'),
-      overviewRulerColor: new vscode.ThemeColor('testing.iconPassed'),
+      overviewRulerColor: new vscode.ThemeColor('editorOverviewRuler.deletedForeground'),
       overviewRulerLane: vscode.OverviewRulerLane.Left,
+      after: {
+        color: new vscode.ThemeColor('editorOverviewRuler.deletedForeground'),
+        margin: '0 0 0 1.5em',
+      },
     }),
-    rejected: vscode.window.createTextEditorDecorationType({
+    context: type({ opacity: '0.62' }),
+    accepted: type({
       isWholeLine: true,
-      borderWidth: '0 0 0 3px',
-      borderStyle: 'dashed',
-      borderColor: new vscode.ThemeColor('editorError.foreground'),
-      opacity: '0.7',
-      overviewRulerColor: new vscode.ThemeColor('editorError.foreground'),
+      opacity: '0.55',
+      overviewRulerColor: new vscode.ThemeColor('descriptionForeground'),
       overviewRulerLane: vscode.OverviewRulerLane.Left,
+      after: {
+        contentText: '  ✓ accepted',
+        color: new vscode.ThemeColor('testing.iconPassed'),
+        margin: '0 0 0 1.5em',
+      },
+    }),
+    rejected: type({
+      isWholeLine: true,
+      opacity: '0.5',
+      textDecoration: 'line-through',
+      overviewRulerColor: new vscode.ThemeColor('descriptionForeground'),
+      overviewRulerLane: vscode.OverviewRulerLane.Left,
+      after: {
+        contentText: '  ✗ rejected',
+        color: new vscode.ThemeColor('descriptionForeground'),
+        margin: '0 0 0 1.5em',
+      },
     }),
   };
 
@@ -42,21 +68,15 @@ export class ReviewDecorations implements vscode.Disposable {
       if (uri.scheme !== STAGED_SCHEME) continue;
       const blocks =
         session && uri.query === session.taskId ? session.preview(pathOf(uri)).blocks : [];
-      const last = Math.max(0, editor.document.lineCount - 1);
-      for (const state of ['pending', 'accepted', 'rejected'] as const) {
-        const ranges = blocks
-          .filter((b) => b.state === state)
-          // A block that shows no lines (an accepted deletion) is marked on the line where it was.
-          .map(
-            (b) =>
-              new vscode.Range(
-                Math.min(b.start, last),
-                0,
-                Math.min(Math.max(b.end - 1, b.start), last),
-                0,
-              ),
-          );
-        editor.setDecorations(this.types[state], ranges);
+      const marks = blockMarks(blocks, editor.document.lineCount);
+      for (const kind of Object.keys(this.types) as BlockMark['kind'][]) {
+        const options: vscode.DecorationOptions[] = marks
+          .filter((m) => m.kind === kind)
+          .map((m) => ({
+            range: new vscode.Range(m.start, 0, m.end, 0),
+            ...(m.note ? { renderOptions: { after: { contentText: `  ${m.note}` } } } : {}),
+          }));
+        editor.setDecorations(this.types[kind], options);
       }
     }
   }
