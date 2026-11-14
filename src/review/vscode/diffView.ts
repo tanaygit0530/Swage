@@ -8,11 +8,13 @@ import { STAGED_SCHEME } from './documents';
  * (inline view, and optionally hidden whitespace and collapsed unchanged regions) only while a
  * Swage diff tab is open, at the level where the user's own value lives, and puts back exactly
  * what was there when the last Swage diff tab closes. The original values are kept in global
- * state, so a crash or reload restores them on the next start. A value the user changes while a
- * Swage diff is open is left alone.
+ * state; if VS Code quits or reloads with a Swage diff open, the next start restores them (a
+ * settings write during shutdown can be lost, so none is attempted then). A value the user
+ * changes while a Swage diff is open is left alone.
  */
 
 const STATE_KEY = 'swage.diffView.saved';
+const RESTORE_DELAY_MS = 1000;
 
 interface Saved {
   readonly key: string;
@@ -60,14 +62,41 @@ export class DiffViewSettings implements vscode.Disposable {
   private saved: Saved[];
   private readonly sub: vscode.Disposable;
   private busy: Promise<void> = Promise.resolve();
+  /**
+   * The user's own value of each setting, captured the first time Swage changes it in this
+   * window and reused after: right after a restore a read can still show Swage's value, which
+   * must never be recorded as the user's.
+   */
+  private readonly baseline = new Map<
+    string,
+    { target: vscode.ConfigurationTarget; previous: unknown }
+  >();
+  private timer: ReturnType<typeof setTimeout> | undefined;
+
+  /**
+   * Restores a moment after the last Swage diff closes: opening the next file closes one tab and
+   * opens another, and VS Code's configuration reads can lag a write by a moment.
+   */
+  private scheduleRestore(): void {
+    if (this.timer) clearTimeout(this.timer);
+    this.timer = setTimeout(() => {
+      this.timer = undefined;
+      if (!this.anySwageDiff()) void this.restore();
+    }, RESTORE_DELAY_MS);
+  }
 
   constructor(private readonly context: vscode.ExtensionContext) {
     this.saved = context.globalState.get<Saved[]>(STATE_KEY, []);
     this.sub = vscode.window.tabGroups.onDidChangeTabs(() => {
-      if (this.saved.length > 0 && !this.anySwageDiff()) void this.restore();
+      if (this.saved.length > 0 && !this.anySwageDiff()) this.scheduleRestore();
     });
     // Left over from a crash or a reload while a Swage diff was open.
     if (this.saved.length > 0 && !this.anySwageDiff()) void this.restore();
+  }
+
+  /** What Swage changed and will put back (tests and diagnostics). */
+  get pending(): readonly { key: string; previous: unknown; applied: unknown }[] {
+    return this.saved;
   }
 
   /** The settings Swage's diff tabs want, from swage.review.* and the review options. */
@@ -88,6 +117,8 @@ export class DiffViewSettings implements vscode.Disposable {
 
   /** Applies the wanted diff settings before a Swage diff opens. */
   enter(): Promise<void> {
+    if (this.timer) clearTimeout(this.timer);
+    this.timer = undefined;
     this.busy = this.busy.then(() => this.doEnter()).catch(() => undefined);
     return this.busy;
   }
@@ -100,11 +131,17 @@ export class DiffViewSettings implements vscode.Disposable {
     for (const [full, value] of Object.entries(wanted)) {
       const { section, key } = split(full);
       const config = vscode.workspace.getConfiguration(section);
-      if (config.get(key) === value) continue;
+      // Already as wanted and recorded: nothing to do. (Without a record, write anyway: the read
+      // may be stale right after a restore.)
+      if (config.get(key) === value && this.saved.some((s) => s.key === full)) continue;
+      if (config.get(key) === value && !this.baseline.has(full)) continue;
       const inspect = config.inspect(key) ?? {};
-      const target = targetOf(inspect);
+      const known = this.baseline.get(full);
+      const target = known?.target ?? targetOf(inspect);
+      const previous = known ? known.previous : valueAt(inspect, target);
+      if (!known) this.baseline.set(full, { target, previous });
       if (!this.saved.some((s) => s.key === full))
-        this.saved.push({ key: full, target, previous: valueAt(inspect, target), applied: value });
+        this.saved.push({ key: full, target, previous, applied: value });
       // The original value is recorded before the setting changes, so a crash in between can
       // never leave an override Swage does not know how to undo.
       await this.context.globalState.update(STATE_KEY, this.saved);
@@ -127,12 +164,15 @@ export class DiffViewSettings implements vscode.Disposable {
   private async restoreOne(s: Saved): Promise<void> {
     const { section, key } = split(s.key);
     const config = vscode.workspace.getConfiguration(section);
-    // The user changed it while the diff was open: theirs wins.
-    if (valueAt(config.inspect(key) ?? {}, s.target) !== s.applied) return;
+    // The user set something else while the diff was open: theirs wins. (A read that still shows
+    // the old value right after Swage's write is not a user change.)
+    const now = valueAt(config.inspect(key) ?? {}, s.target);
+    if (now !== s.applied && now !== s.previous) return;
     await config.update(key, s.previous, s.target);
   }
 
   dispose(): void {
+    if (this.timer) clearTimeout(this.timer);
     this.sub.dispose();
   }
 }

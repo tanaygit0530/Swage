@@ -171,6 +171,11 @@ export const HostToWebview = z.discriminatedUnion('type', [
     latest: Short.optional(),
     items: z.array(z.object({ taskId: Short, label: Short, files: Count, open: Count })).max(100),
   }),
+  /** Review comments waiting to go to the agent with the next request (the chip). */
+  z.object({
+    type: z.literal('comments'),
+    items: z.array(z.object({ id: Short, path: Short, lines: Short, text: Short })).max(200),
+  }),
   /** Accept all applied the change set: the inline "Applied N files. Undo" toast. */
   z.object({ type: z.literal('applied'), files: Count, message: Short }),
   /** The model the run is on now (after a fallback switch). */
@@ -225,6 +230,9 @@ export const WebviewToHost = z.discriminatedUnion('type', [
     path: Short,
     blockId: Short.optional(),
   }),
+  /** The comments chip: remove one comment, or all of them. */
+  z.object({ type: z.literal('removeComment'), id: Short }),
+  z.object({ type: z.literal('clearComments') }),
   /** A turn card's Review, or the bar's Clear filter (back to the newest turn). */
   z.object({ type: z.literal('reviewTurn'), taskId: Short }),
   /** Accept all: accept every block and apply atomically. */

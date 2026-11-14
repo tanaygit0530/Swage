@@ -197,6 +197,28 @@
         "icon": "$(expand-all)"
       },
       {
+        "command": "swage.review.addComment",
+        "title": "Comment on Selection for the Agent",
+        "category": "Swage",
+        "icon": "$(comment)"
+      },
+      {
+        "command": "swage.review.saveComment",
+        "title": "Save Comment",
+        "category": "Swage"
+      },
+      {
+        "command": "swage.review.deleteComment",
+        "title": "Delete Comment",
+        "category": "Swage",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "swage.review.clearComments",
+        "title": "Clear Review Comments",
+        "category": "Swage"
+      },
+      {
         "command": "swage.review.acceptAll",
         "title": "Accept All",
         "category": "Swage",
@@ -266,6 +288,14 @@
         {
           "command": "swage.review.discard",
           "when": "swage.reviewActive"
+        },
+        {
+          "command": "swage.review.saveComment",
+          "when": "false"
+        },
+        {
+          "command": "swage.review.deleteComment",
+          "when": "false"
         }
       ],
       "view/title": [
@@ -333,6 +363,20 @@
           "when": "resourceScheme == swage-staged && swage.reviewActive",
           "group": "navigation@2"
         }
+      ],
+      "comments/commentThread/context": [
+        {
+          "command": "swage.review.saveComment",
+          "group": "inline",
+          "when": "commentController == swage.review"
+        }
+      ],
+      "comments/comment/title": [
+        {
+          "command": "swage.review.deleteComment",
+          "group": "inline",
+          "when": "commentController == swage.review"
+        }
       ]
     },
     "viewsContainers": {
@@ -364,6 +408,12 @@
       }
     ],
     "keybindings": [
+      {
+        "command": "swage.review.addComment",
+        "key": "ctrl+alt+m",
+        "mac": "cmd+alt+m",
+        "when": "resourceScheme == swage-staged && editorTextFocus"
+      },
       {
         "command": "swage.review.acceptChange",
         "key": "alt+enter",

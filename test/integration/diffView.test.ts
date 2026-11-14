@@ -34,7 +34,17 @@ suite('Swage diff view (spike)', () => {
     const api = (await ext.activate()) as SwageTestApi;
     // Earlier tests may have left Swage diffs open: closing them must put the default back.
     await vscode.commands.executeCommand('workbench.action.closeAllEditors');
-    await waitFor(() => sideBySide().global === undefined, 'the default after closing diffs');
+    await waitFor(
+      () => api.review.diffView.pending.length === 0,
+      'the restore after closing diffs',
+    );
+    // The test VS Code keeps extension state in memory, so a value an earlier, killed run left in
+    // the test profile has no record to restore from: clear it before measuring.
+    if (sideBySide().global !== undefined)
+      await vscode.workspace
+        .getConfiguration('diffEditor')
+        .update('renderSideBySide', undefined, vscode.ConfigurationTarget.Global);
+    await waitFor(() => sideBySide().global === undefined, 'a clean test profile');
     const before = sideBySide();
     const scenario = loadScenarios(
       path.join(ext.extensionPath, 'test', 'fake-model', 'scenarios'),

@@ -124,3 +124,31 @@ describe('per-turn review', () => {
     expect(parseWebviewMessage({ type: 'reviewTurn' })).toBeUndefined();
   });
 });
+
+describe('review comments chip', () => {
+  it('shows how many comments go with the next message, and clears them', async () => {
+    const { Composer } = await import('../../../src/ui/webview/composerView');
+    const sent: WebviewToHost[] = [];
+    const state = reduce(initialState, {
+      type: 'comments',
+      items: [
+        { id: 'c1', path: 'a.py', lines: '3-4', text: 'use a constant' },
+        { id: 'c2', path: 'b.py', lines: '9', text: 'why?' },
+      ],
+    });
+    const root = mount(<Composer state={state} send={(m) => sent.push(m)} />);
+    expect(root.querySelector('.comment-chip')?.textContent).toContain('2 Comments');
+    expect(root.querySelector('.comment-chip')?.getAttribute('title')).toBe(
+      'a.py:3-4 use a constant\nb.py:9 why?',
+    );
+    root.querySelector<HTMLButtonElement>('[aria-label="Clear the review comments"]')?.click();
+    expect(sent).toEqual([{ type: 'clearComments' }]);
+    expect(parseHostMessage({ type: 'comments', items: [] })).toBeDefined();
+    expect(parseWebviewMessage({ type: 'removeComment', id: 'c1' })).toBeDefined();
+    expect(
+      mount(<Composer state={initialState} send={() => undefined} />).querySelector(
+        '.comment-chip',
+      ),
+    ).toBeNull();
+  });
+});

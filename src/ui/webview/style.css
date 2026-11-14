@@ -1528,3 +1528,16 @@ button.primary:disabled,
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* ---- Review comments chip (review upgrade, step 6) ---- */
+
+.comment-chips {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 6px;
+}
+
+.comment-chip {
+  cursor: default;
+}

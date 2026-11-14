@@ -100,6 +100,8 @@ export interface PanelState {
     readonly phase: 'none' | 'staging' | 'review';
     readonly files: readonly ChangeFile[];
   };
+  /** Review comments that go to the agent with the next request (step 6). */
+  readonly comments: readonly { id: string; path: string; lines: string; text: string }[];
   /** Each turn with a review, and which one the bar shows (review upgrade, step 5). */
   readonly turns: {
     readonly current: string | undefined;
@@ -133,6 +135,7 @@ export const initialState: PanelState = {
   changes: { phase: 'none', files: [] },
   toast: undefined,
   turns: { current: undefined, latest: undefined, items: [] },
+  comments: [],
   mode: 'planning',
   stopping: false,
   autoFallback: false,
@@ -399,6 +402,8 @@ export function reduce(state: PanelState, msg: HostToWebview): PanelState {
           },
         ],
       };
+    case 'comments':
+      return { ...state, comments: msg.items };
     case 'turns':
       return {
         ...state,

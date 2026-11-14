@@ -356,6 +356,38 @@ export function Composer({ state, send }: { state: PanelState; send: Send }) {
               ))}
         </ul>
       )}
+      {state.comments.length > 0 && (
+        <div class="comment-chips" role="group" aria-label="Review comments for the agent">
+          <span
+            class="chip comment-chip"
+            title={state.comments.map((c) => `${c.path}:${c.lines} ${c.text}`).join('\n')}
+          >
+            <svg width="12" height="12" viewBox="0 0 16 16" aria-hidden="true">
+              <path
+                d="M2.5 3h11v7.5h-6l-3 2.5v-2.5h-2z"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.2"
+              />
+            </svg>
+            <span>
+              {state.comments.length} Comment{state.comments.length === 1 ? '' : 's'}
+            </span>
+          </span>
+          <span class="card-sub">sent with your next message</span>
+          <button
+            type="button"
+            class="icon-button"
+            aria-label="Clear the review comments"
+            title="Clear the review comments"
+            onClick={() => send({ type: 'clearComments' })}
+          >
+            <svg width="12" height="12" viewBox="0 0 16 16" aria-hidden="true">
+              <path d="M4 4l8 8M12 4l-8 8" fill="none" stroke="currentColor" stroke-width="1.6" />
+            </svg>
+          </button>
+        </div>
+      )}
       <div class="composer-box">
         <textarea
           ref={input}

@@ -10,6 +10,7 @@ import { BASE_SCHEME, openDiff, ReviewDocuments, STAGED_SCHEME } from './documen
 import { ReviewTree, type ReviewNode } from './tree';
 import { VsCodeWorkspaceFs } from './workspaceFs';
 import { DiffViewSettings, isSwageDiffTab } from './diffView';
+import { ReviewComments } from './comments';
 import { blockAtLine, neighbourBlock } from '../marks';
 import { statusLetter } from '../../ui/changes';
 import { pathOf } from './documents';
@@ -104,6 +105,8 @@ export class ReviewController implements vscode.Disposable {
   private readonly view: vscode.TreeView<ReviewNode>;
   private applierFor: { root: string; applier: Applier } | undefined;
   private modeValue: ReviewMode = { mode: 'agent' };
+  /** Comments on diff lines, sent to the agent with the next request (step 6). */
+  readonly comments = new ReviewComments();
   /** "Swage: N files with changes" in the status bar; opens a quick pick of those files. */
   private readonly statusItem: vscode.StatusBarItem;
   /** Inline diff view (and the review options) while a Swage diff tab is open. */
@@ -754,8 +757,10 @@ export class ReviewController implements vscode.Disposable {
   }
 
   dispose(): void {
+    this.comments.dispose();
     this.statusItem.dispose();
-    void this.diffView.restore();
+    // No restore here: VS Code can drop a settings write while it shuts down. The record stays in
+    // global state and the next start puts the user's value back.
     this.diffView.dispose();
     this.changeEmitter.dispose();
     this.sessionSub?.dispose();

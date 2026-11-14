@@ -202,7 +202,8 @@ New files diff against an empty original, so they are all green. Deleted files d
 - **Before a Swage diff opens:** it sets `renderSideBySide: false` at the level where the user's value lives (global unless the workspace sets it).
 - **The user's value is saved first:** the original value goes into the extension's global state before the setting is written, so a crash in between can't strand an override.
 - **When the last Swage diff tab closes:** the user's exact previous value comes back, and a removed key is removed again (`tabGroups.onDidChangeTabs`).
-- **On deactivate and at the next start:** if a Swage diff was open, the value is restored then.
+- **When VS Code quits with a Swage diff open:** the value is restored at the next start, from the record in global state. Swage writes no setting during shutdown, because VS Code can drop such a write.
+- **Stale reads are handled:** VS Code's configuration reads can lag a write by a moment. Swage keeps your original value from the first time it changes the setting in a window, and restores a second after the last Swage diff closes, so its own `false` is never mistaken for yours.
 - **A value the user changes while a Swage diff is open** is left as they set it.
 - **Turning it off:** `swage.review.inlineDiff: false` turns the override off.
 - **The review options use the same mechanism:** "Hide whitespace changes" (`diffEditor.ignoreTrimWhitespace`) and "Collapse unchanged regions" (`diffEditor.hideUnchangedRegions.enabled`).

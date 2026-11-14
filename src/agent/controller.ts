@@ -98,6 +98,7 @@ export class AgentController implements vscode.WebviewViewProvider, vscode.Dispo
     models?.onRecovered((p) => this.post({ type: 'recovered', name: p.name, label: p.label }));
     // Keep the files-changed bar in step with every review decision, wherever it was made.
     review?.onDidChange(() => this.postReviewChanges());
+    review?.comments.queue.onDidChange(() => this.postComments());
     this.logger = redactingLogger({
       info: (m) => output.appendLine(m),
       warn: (m) => output.appendLine(`warn: ${m}`),
@@ -199,6 +200,20 @@ export class AgentController implements vscode.WebviewViewProvider, vscode.Dispo
   private readonly turnLabels = new Map<string, string>();
   /** The newest turn that reached review. */
   private latestTurn: string | undefined;
+
+  /** The comments chip above the composer. */
+  private postComments(): void {
+    const all = this.review?.comments.queue.all ?? [];
+    this.post({
+      type: 'comments',
+      items: all.map((c) => ({
+        id: c.id,
+        path: c.path,
+        lines: c.startLine === c.endLine ? `${c.startLine}` : `${c.startLine}-${c.endLine}`,
+        text: c.text.slice(0, 2_000),
+      })),
+    });
+  }
 
   private postTurns(): void {
     const review = this.review;
@@ -345,7 +360,8 @@ export class AgentController implements vscode.WebviewViewProvider, vscode.Dispo
         this.postModels();
         return;
       case 'submit':
-        await this.start(msg.text);
+        // Review comments go with this request, then they are cleared (step 6).
+        await this.start(this.review?.comments.attach(msg.text) ?? msg.text);
         return;
       case 'retry':
         if (this.run && !this.isBusy()) await this.start(this.run.request);
@@ -382,6 +398,12 @@ export class AgentController implements vscode.WebviewViewProvider, vscode.Dispo
           path: msg.path,
           ...(msg.blockId === undefined ? {} : { blockId: msg.blockId }),
         });
+        return;
+      case 'removeComment':
+        this.review?.comments.remove(msg.id);
+        return;
+      case 'clearComments':
+        this.review?.comments.clear();
         return;
       case 'reviewTurn':
         if (!(await this.review?.resumeTurn(msg.taskId)))
