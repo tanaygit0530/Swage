@@ -89,11 +89,11 @@ suite('Swage inline edit', () => {
     assert.strictEqual(vscode.window.activeTextEditor?.document.uri.scheme, 'swage-staged');
     const titles = await lensTitles();
     assert.ok(
-      titles.some((t) => t.startsWith('Block 1/2')),
+      titles.some((t) => t.startsWith('1 of 2 · +')),
       titles.join(' | '),
     );
     assert.ok(
-      titles.some((t) => t.startsWith('Block 2/2')),
+      titles.some((t) => t.startsWith('2 of 2 · +')),
       titles.join(' | '),
     );
     for (const t of ['Accept all', 'Reject all', '$(check-all) Apply', 'Discard'])
@@ -140,10 +140,10 @@ suite('Swage inline edit', () => {
     assert.strictEqual(result.kind, 'review', result.message);
     const titles = await lensTitles();
     assert.ok(
-      titles.some((t) => t.startsWith('Block 1/1 · +1 -1')),
+      titles.some((t) => t.startsWith('1 of 1 · +1 -1')),
       titles.join(' | '),
     );
-    for (const t of ['✗ Reject', 'Accept all', 'Reject all', '$(check-all) Apply'])
+    for (const t of ['$(close) Reject', 'Accept all', 'Reject all', '$(check-all) Apply'])
       assert.ok(titles.includes(t), `${t} missing: ${titles.join(' | ')}`);
     assert.ok(await vscode.commands.executeCommand('swage.review.discard'));
     assert.strictEqual(read(FLAGS), original);

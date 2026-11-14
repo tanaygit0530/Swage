@@ -51,3 +51,30 @@ export function blockMarks(blocks: readonly PreviewBlock[], lineCount: number): 
   }
   return marks;
 }
+
+/**
+ * The change the cursor is on (review upgrade, step 2): the block whose lines hold `line`, else
+ * the first block after it, else the last block. Undefined when there are no blocks.
+ */
+export function blockAtLine<T extends { start: number; end: number }>(
+  blocks: readonly T[],
+  line: number,
+): T | undefined {
+  const sorted = [...blocks].sort((a, b) => a.start - b.start);
+  return (
+    sorted.find((b) => line >= b.start && line < Math.max(b.end, b.start + 1)) ??
+    sorted.find((b) => b.start > line) ??
+    sorted.at(-1)
+  );
+}
+
+/** The next (or previous) change from `line`, wrapping around the file. */
+export function neighbourBlock<T extends { start: number; end: number }>(
+  blocks: readonly T[],
+  line: number,
+  direction: 1 | -1,
+): T | undefined {
+  const sorted = [...blocks].sort((a, b) => a.start - b.start);
+  if (direction === 1) return sorted.find((b) => b.start > line) ?? sorted[0];
+  return [...sorted].reverse().find((b) => b.start < line) ?? sorted.at(-1);
+}

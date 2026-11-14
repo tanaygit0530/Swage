@@ -151,6 +151,28 @@
         "enablement": "swage.reviewActive"
       },
       {
+        "command": "swage.review.acceptChange",
+        "title": "Accept Change",
+        "category": "Swage",
+        "enablement": "swage.reviewActive"
+      },
+      {
+        "command": "swage.review.rejectChange",
+        "title": "Reject Change",
+        "category": "Swage",
+        "enablement": "swage.reviewActive"
+      },
+      {
+        "command": "swage.review.nextChange",
+        "title": "Next Change",
+        "category": "Swage"
+      },
+      {
+        "command": "swage.review.previousChange",
+        "title": "Previous Change",
+        "category": "Swage"
+      },
+      {
         "command": "swage.review.acceptAll",
         "title": "Accept All",
         "category": "Swage",
@@ -313,6 +335,26 @@
       }
     ],
     "keybindings": [
+      {
+        "command": "swage.review.acceptChange",
+        "key": "alt+enter",
+        "when": "resourceScheme == swage-staged && swage.reviewActive && editorTextFocus"
+      },
+      {
+        "command": "swage.review.rejectChange",
+        "key": "alt+shift+enter",
+        "when": "resourceScheme == swage-staged && swage.reviewActive && editorTextFocus"
+      },
+      {
+        "command": "swage.review.nextChange",
+        "key": "alt+down",
+        "when": "resourceScheme == swage-staged && editorTextFocus"
+      },
+      {
+        "command": "swage.review.previousChange",
+        "key": "alt+up",
+        "when": "resourceScheme == swage-staged && editorTextFocus"
+      },
       {
         "command": "swage.focusComposer",
         "key": "ctrl+l",

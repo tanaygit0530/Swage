@@ -9,6 +9,8 @@ import { BASE_SCHEME, openDiff, ReviewDocuments, STAGED_SCHEME } from './documen
 import { ReviewTree, type ReviewNode } from './tree';
 import { VsCodeWorkspaceFs } from './workspaceFs';
 import { DiffViewSettings } from './diffView';
+import { blockAtLine, neighbourBlock } from '../marks';
+import { pathOf } from './documents';
 
 /**
  * The review experience in VS Code (blueprint section 8): the Review tree, native diffs of
@@ -138,6 +140,14 @@ export class ReviewController implements vscode.Disposable {
         this.undo(opts ?? {}),
       ),
       vscode.commands.registerCommand('swage.review.acceptAll', () => this.decideAll('accept')),
+      vscode.commands.registerCommand('swage.review.acceptChange', () =>
+        this.decideFocused('accept'),
+      ),
+      vscode.commands.registerCommand('swage.review.rejectChange', () =>
+        this.decideFocused('reject'),
+      ),
+      vscode.commands.registerCommand('swage.review.nextChange', () => this.moveFocus(1)),
+      vscode.commands.registerCommand('swage.review.previousChange', () => this.moveFocus(-1)),
       vscode.commands.registerCommand('swage.review.rejectAll', () => this.decideAll('reject')),
     );
   }
@@ -231,6 +241,53 @@ export class ReviewController implements vscode.Disposable {
     return decision === 'accept'
       ? this.session.accept(ref.path, ref.blockId)
       : this.session.reject(ref.path, ref.blockId);
+  }
+
+  /** The staged editor in focus and its file, if it belongs to the current review. */
+  private focusedStaged(): { editor: vscode.TextEditor; path: string } | undefined {
+    const editor = vscode.window.activeTextEditor;
+    const uri = editor?.document.uri;
+    if (!editor || !uri || uri.scheme !== STAGED_SCHEME || uri.query !== this.session?.taskId)
+      return undefined;
+    return { editor, path: pathOf(uri) };
+  }
+
+  /**
+   * Alt+Enter / Alt+Shift+Enter: decides the change under the cursor (or the next one), then
+   * moves the cursor to the next change still pending in the file.
+   */
+  decideFocused(decision: 'accept' | 'reject'): boolean {
+    const focus = this.focusedStaged();
+    if (!focus || !this.session) return false;
+    const line = focus.editor.selection.active.line;
+    const block = blockAtLine(this.session.preview(focus.path).blocks, line);
+    if (!block || !this.decide({ path: focus.path, blockId: block.id }, decision)) return false;
+    const after = this.session.preview(focus.path).blocks.filter((b) => b.state === 'pending');
+    const next = neighbourBlock(after, block.start, 1);
+    if (next) this.reveal(focus.editor, next.start);
+    return true;
+  }
+
+  /** Alt+Down / Alt+Up: the next or previous change in the file, wrapping. */
+  moveFocus(direction: 1 | -1): number | undefined {
+    const focus = this.focusedStaged();
+    if (!focus || !this.session) return undefined;
+    const target = neighbourBlock(
+      this.session.preview(focus.path).blocks,
+      focus.editor.selection.active.line,
+      direction,
+    );
+    if (target) this.reveal(focus.editor, target.start);
+    return target?.start;
+  }
+
+  private reveal(editor: vscode.TextEditor, line: number): void {
+    const at = new vscode.Position(Math.min(line, Math.max(0, editor.document.lineCount - 1)), 0);
+    editor.selection = new vscode.Selection(at, at);
+    editor.revealRange(
+      new vscode.Range(at, at),
+      vscode.TextEditorRevealType.InCenterIfOutsideViewport,
+    );
   }
 
   /** Splits one block into line-sized blocks; returns the new block ids. */

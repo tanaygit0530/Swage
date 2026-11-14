@@ -71,6 +71,31 @@ suite('Swage diff view (spike)', () => {
       `lenses: ${titles.join(' | ')}`,
     );
 
+    // Step 2: the keyboard moves between changes and decides the one under the cursor.
+    // In a diff tab the active text editor is its modified (staged) side.
+    const editor = vscode.window.activeTextEditor;
+    assert.strictEqual(editor?.document.uri.toString(), input.modified.toString());
+    editor.selection = new vscode.Selection(0, 0, 0, 0);
+    const first = session.preview('app/cli.py').blocks[0];
+    assert.ok(first);
+    const line = await vscode.commands.executeCommand<number>('swage.review.nextChange');
+    assert.strictEqual(line, first.start);
+    assert.strictEqual(await vscode.commands.executeCommand('swage.review.acceptChange'), true);
+    assert.strictEqual(session.file('app/cli.py')?.blocks[0]?.state, 'accepted');
+    assert.strictEqual(await vscode.commands.executeCommand('swage.review.rejectChange'), true);
+    assert.strictEqual(session.file('app/cli.py')?.blocks[0]?.state, 'rejected');
+    const counter = (
+      (await vscode.commands.executeCommand<vscode.CodeLens[]>(
+        'vscode.executeCodeLensProvider',
+        input.modified,
+      )) ?? []
+    ).map((l) => l.command?.title ?? '');
+    assert.ok(
+      counter.some((t) => /^1 of \d+ · \+\d+ -\d+/.test(t)),
+      counter.join(' | '),
+    );
+    assert.ok(counter.includes('$(close) Rejected'), counter.join(' | '));
+
     await vscode.commands.executeCommand('workbench.action.closeAllEditors');
     await waitFor(() => sideBySide().global === undefined, 'the setting to come back');
     assert.strictEqual(sideBySide().effective, before.effective);

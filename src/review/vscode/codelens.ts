@@ -40,22 +40,40 @@ export class ReviewCodeLens implements vscode.CodeLensProvider {
       );
       const ref = { path, blockId: b.id };
       const flag = outside.has(b.id) ? ' · ⚠ outside selection' : '';
-      const label = `Block ${i + 1}/${blocks.length} · +${b.added} -${b.removed}${flag}`;
       const cmd = (title: string, command: string, tooltip: string): vscode.CodeLens =>
         new vscode.CodeLens(range, { title, command, arguments: [ref], tooltip });
+      // The counter is a label: an empty command id makes the lens text only.
+      lenses.push(
+        new vscode.CodeLens(range, {
+          title: `${i + 1} of ${blocks.length} · +${b.added} -${b.removed}${flag}`,
+          command: '',
+        }),
+      );
       if (b.state === 'pending') {
-        lenses.push(cmd(`${label}  ✓ Accept`, 'swage.review.acceptBlock', 'Accept this block'));
-        lenses.push(cmd('✗ Reject', 'swage.review.rejectBlock', 'Reject this block'));
+        lenses.push(
+          cmd('$(check) Accept', 'swage.review.acceptBlock', 'Accept this change (Alt+Enter)'),
+        );
+        lenses.push(
+          cmd(
+            '$(close) Reject',
+            'swage.review.rejectBlock',
+            'Reject this change (Alt+Shift+Enter)',
+          ),
+        );
       } else if (b.state === 'accepted') {
-        lenses.push(cmd(`${label}  ✓ Accepted`, 'swage.review.acceptBlock', 'Accepted'));
-        lenses.push(cmd('Reject instead', 'swage.review.rejectBlock', 'Reject this block'));
+        lenses.push(cmd('$(check) Accepted', 'swage.review.acceptBlock', 'Accepted'));
+        lenses.push(cmd('Reject instead', 'swage.review.rejectBlock', 'Reject this change'));
       } else {
-        lenses.push(cmd(`${label}  ✗ Rejected`, 'swage.review.rejectBlock', 'Rejected'));
-        lenses.push(cmd('Accept instead', 'swage.review.acceptBlock', 'Accept this block'));
+        lenses.push(cmd('$(close) Rejected', 'swage.review.rejectBlock', 'Rejected'));
+        lenses.push(cmd('Accept instead', 'swage.review.acceptBlock', 'Accept this change'));
       }
       if (b.added > 1 || b.removed > 1) {
         lenses.push(
-          cmd('⇅ Split', 'swage.review.splitBlock', 'Split this block into line-sized blocks'),
+          cmd(
+            '$(split-vertical) Split',
+            'swage.review.splitBlock',
+            'Split this change into line-sized changes',
+          ),
         );
       }
       // Inline edits always get the bulk actions and Apply, even for one block (blueprint F1, F16).

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { blockMarks } from '../../../src/review/marks';
+import { blockAtLine, blockMarks, neighbourBlock } from '../../../src/review/marks';
 import type { PreviewBlock } from '../../../src/review/model';
 
 const block = (over: Partial<PreviewBlock>): PreviewBlock => ({
@@ -54,5 +54,28 @@ describe('block marks on the staged side', () => {
       { kind: 'removed', start: 0, end: 0, note: '−5 lines' },
     ]);
     expect(blockMarks([], 5)).toEqual([]);
+  });
+});
+
+describe('the focused change', () => {
+  const blocks = [
+    { id: 'a', start: 2, end: 4 },
+    { id: 'b', start: 8, end: 8 },
+    { id: 'c', start: 12, end: 15 },
+  ];
+  it('is the block under the cursor, else the next one, else the last', () => {
+    expect(blockAtLine(blocks, 3)?.id).toBe('a');
+    expect(blockAtLine(blocks, 8)?.id).toBe('b');
+    expect(blockAtLine(blocks, 5)?.id).toBe('b');
+    expect(blockAtLine(blocks, 20)?.id).toBe('c');
+    expect(blockAtLine([], 0)).toBeUndefined();
+  });
+
+  it('moves to the next and previous change, wrapping', () => {
+    expect(neighbourBlock(blocks, 3, 1)?.id).toBe('b');
+    expect(neighbourBlock(blocks, 12, 1)?.id).toBe('a');
+    expect(neighbourBlock(blocks, 8, -1)?.id).toBe('a');
+    expect(neighbourBlock(blocks, 2, -1)?.id).toBe('c');
+    expect(neighbourBlock([], 0, 1)).toBeUndefined();
   });
 });
