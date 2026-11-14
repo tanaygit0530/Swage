@@ -619,3 +619,11 @@ A modern agent-IDE review on the existing engine (change blocks, atomic apply wi
 - **The real-model rehearsal** of Tasks A, B and C needs TrueForge running. The harness compiles against the new review; its Task B path (Accept all, Apply) and Task C path (inline Reject all) are unchanged.
 - **No renames:** Swage stages none (a rename is a delete plus a create), so no old → new tab title.
 - **Other diffs are briefly inline:** while a Swage diff is open, other diffs open inline too, because the setting is global for that time.
+
+### Fix after manual testing (14 November 2026)
+
+- **Rejected changes no longer look deleted.** Rejected changes were struck through, but the struck lines are the original lines being kept, and a rejected insertion (no lines left) marked the next unrelated line. Now:
+  - a rejected change is dimmed with "✗ rejected · original kept";
+  - a decided change with no lines gets only a note on the line above, for example "✗ rejected · 2 added lines dropped" or "✓ accepted · 1 line removed".
+- Tested in `test/unit/review/marks.test.ts`.
+- Found while testing by hand. In the same session Task B passed: the command, the help entry, the masked JSON, 2 new tests and the docs.

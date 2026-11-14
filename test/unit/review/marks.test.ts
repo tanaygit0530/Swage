@@ -41,9 +41,31 @@ describe('block marks on the staged side', () => {
       6,
     );
     expect(marks.filter((m) => m.kind !== 'context')).toEqual([
-      { kind: 'accepted', start: 0, end: 1 },
-      { kind: 'rejected', start: 5, end: 5 },
+      { kind: 'accepted', start: 0, end: 1, note: '✓ accepted' },
+      { kind: 'rejected', start: 5, end: 5, note: '✗ rejected · original kept' },
     ]);
+  });
+
+  it('notes a decided block that shows no lines on the line above, leaving the next line alone', () => {
+    // A rejected insertion (its added lines are dropped) and an accepted deletion show no lines.
+    const marks = blockMarks(
+      [
+        block({ id: 'r', state: 'rejected', start: 3, end: 3, added: 2 }),
+        block({ id: 'a', state: 'accepted', start: 6, end: 6, removed: 1 }),
+      ],
+      10,
+    );
+    expect(marks).toEqual([
+      { kind: 'note', start: 2, end: 2, note: '✗ rejected · 2 added lines dropped' },
+      { kind: 'note', start: 5, end: 5, note: '✓ accepted · 1 line removed' },
+      { kind: 'context', start: 0, end: 9 },
+    ]);
+    // At the top of the file the note goes on the first line.
+    expect(
+      blockMarks([block({ state: 'rejected', start: 0, end: 0, added: 1 })], 4).filter(
+        (m) => m.kind === 'note',
+      ),
+    ).toEqual([{ kind: 'note', start: 0, end: 0, note: '✗ rejected · 1 added line dropped' }]);
   });
 
   it('marks a new file all green and an emptied file on its only line, with no context', () => {

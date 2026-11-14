@@ -3,12 +3,15 @@ import type { PreviewBlock } from './model';
 /**
  * Where Swage's marks go on the staged side of a diff (review upgrade, step 1), as 0-based
  * inclusive line ranges. Pending blocks: green over added lines, and a red mark on the line
- * where lines were removed. Decided blocks: greyed as accepted or rejected. Every other line is
+ * where lines were removed. Decided blocks: greyed as accepted or rejected, with a note saying
+ * what stays. A decided block that shows no lines (a rejected insertion, an accepted deletion)
+ * gets only a note on the line above, so no unrelated line is marked. Every other line is
  * unchanged context, dimmed. Pure, so it is tested without VS Code.
  */
 
 export interface BlockMark {
-  readonly kind: 'added' | 'removed' | 'context' | 'accepted' | 'rejected';
+  /** `note` is text only, for a decided block that shows no lines. */
+  readonly kind: 'added' | 'removed' | 'context' | 'accepted' | 'rejected' | 'note';
   readonly start: number;
   readonly end: number;
   /** Text after the line, for example "−3" for three removed lines. */
@@ -21,12 +24,18 @@ export function blockMarks(blocks: readonly PreviewBlock[], lineCount: number): 
   const marks: BlockMark[] = [];
   const changed = new Set<number>();
   for (const b of blocks) {
-    // A block that shows no lines (only removals, or an accepted deletion) marks the line where it was.
+    if (b.state !== 'pending' && b.end <= b.start) {
+      const line = clamp(b.start - 1);
+      marks.push({ kind: 'note', start: line, end: line, note: emptyNote(b) });
+      continue;
+    }
+    // A pending block that shows no lines (only removals) marks the line where they were.
     const start = clamp(b.start);
     const end = clamp(Math.max(b.end - 1, b.start));
     for (let l = start; l <= end; l++) changed.add(l);
     if (b.state !== 'pending') {
-      marks.push({ kind: b.state, start, end });
+      const note = b.state === 'accepted' ? '✓ accepted' : '✗ rejected · original kept';
+      marks.push({ kind: b.state, start, end, note });
       continue;
     }
     if (b.added > 0) marks.push({ kind: 'added', start, end: clamp(b.start + b.added - 1) });
@@ -50,6 +59,15 @@ export function blockMarks(blocks: readonly PreviewBlock[], lineCount: number): 
     }
   }
   return marks;
+}
+
+const lines = (n: number): string => (n === 1 ? 'line' : 'lines');
+
+/** The note for a decided block that shows no lines. */
+function emptyNote(b: PreviewBlock): string {
+  return b.state === 'rejected'
+    ? `✗ rejected · ${b.added} added ${lines(b.added)} dropped`
+    : `✓ accepted · ${b.removed} ${lines(b.removed)} removed`;
 }
 
 /**

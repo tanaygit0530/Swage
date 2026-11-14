@@ -8,7 +8,9 @@ import { pathOf, STAGED_SCHEME } from './documents';
  * itself draws removed lines red and added lines green with word-level highlights and +/-
  * indicators; Swage adds overview-ruler and minimap ticks (green for additions, red where lines
  * were removed) so changes are easy to find in a long file, dims unchanged context, and greys
- * decided blocks: accepted with a tick, rejected struck through. Colours are theme tokens.
+ * decided blocks: accepted with a tick, rejected with a cross and "original kept" (never struck
+ * through: those lines stay). A decided block with no lines gets only a note on the line above.
+ * Colours are theme tokens.
  * Minimap marks are not in VS Code's public decoration API, so Swage's ticks are on the overview
  * ruler; the diff editor's own minimap still shows its diff colours.
  */
@@ -39,19 +41,24 @@ export class ReviewDecorations implements vscode.Disposable {
       overviewRulerColor: new vscode.ThemeColor('descriptionForeground'),
       overviewRulerLane: vscode.OverviewRulerLane.Left,
       after: {
-        contentText: '  ✓ accepted',
         color: new vscode.ThemeColor('testing.iconPassed'),
         margin: '0 0 0 1.5em',
       },
     }),
     rejected: type({
       isWholeLine: true,
-      opacity: '0.5',
-      textDecoration: 'line-through',
+      opacity: '0.55',
       overviewRulerColor: new vscode.ThemeColor('descriptionForeground'),
       overviewRulerLane: vscode.OverviewRulerLane.Left,
       after: {
-        contentText: '  ✗ rejected',
+        color: new vscode.ThemeColor('descriptionForeground'),
+        margin: '0 0 0 1.5em',
+      },
+    }),
+    note: type({
+      overviewRulerColor: new vscode.ThemeColor('descriptionForeground'),
+      overviewRulerLane: vscode.OverviewRulerLane.Left,
+      after: {
         color: new vscode.ThemeColor('descriptionForeground'),
         margin: '0 0 0 1.5em',
       },
