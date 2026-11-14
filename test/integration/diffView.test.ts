@@ -112,3 +112,53 @@ suite('Swage diff view (spike)', () => {
     await vscode.commands.executeCommand('swage.review.discard');
   });
 });
+
+suite('Swage review options', () => {
+  test('whitespace and unchanged-region options apply to Swage diffs only while they are open', async () => {
+    const ext = vscode.extensions.getExtension('swage-dev.swage');
+    assert.ok(ext);
+    const api = (await ext.activate()) as SwageTestApi;
+    const diff = (): vscode.WorkspaceConfiguration =>
+      vscode.workspace.getConfiguration('diffEditor');
+    const scenario = loadScenarios(
+      path.join(ext.extensionPath, 'test', 'fake-model', 'scenarios'),
+    ).find((s) => s.name === 'four-file-edit');
+    assert.ok(scenario);
+    await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+    await waitFor(() => api.review.diffView.pending.length === 0, 'a clean start');
+    await api.resetRuntime();
+    api.setSdkFactory((mcp) => new FakeTrueForge({ scenario, mcp }).sdk);
+    void api.startRun('Add a config command.');
+    await waitFor(() => api.review.current !== undefined, 'the review');
+    // By default a Swage diff shows whitespace changes too.
+    await waitFor(() => diff().get('ignoreTrimWhitespace') === false, 'whitespace shown');
+    assert.strictEqual(await vscode.commands.executeCommand('swage.review.toggleWhitespace'), true);
+    assert.strictEqual(await vscode.commands.executeCommand('swage.review.toggleUnchanged'), true);
+    await waitFor(
+      () =>
+        diff().get('ignoreTrimWhitespace') === true &&
+        diff().get('hideUnchangedRegions.enabled') === true,
+      'the options applied',
+    );
+    // Open all diffs in tabs: one tab per file still waiting.
+    assert.strictEqual(await vscode.commands.executeCommand('swage.review.openAllDiffs'), 4);
+    const swageTabs = vscode.window.tabGroups.all.flatMap((g) =>
+      g.tabs.filter(
+        (t) =>
+          t.input instanceof vscode.TabInputTextDiff && t.input.modified.scheme === 'swage-staged',
+      ),
+    );
+    assert.strictEqual(swageTabs.length, 4);
+    // Off again, and closing the diffs puts the user's values back.
+    assert.strictEqual(
+      await vscode.commands.executeCommand('swage.review.toggleWhitespace'),
+      false,
+    );
+    assert.strictEqual(await vscode.commands.executeCommand('swage.review.toggleUnchanged'), false);
+    await vscode.commands.executeCommand('swage.review.discard');
+    await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+    await waitFor(() => api.review.diffView.pending.length === 0, 'the restore');
+    for (const key of ['ignoreTrimWhitespace', 'hideUnchangedRegions.enabled', 'renderSideBySide'])
+      assert.strictEqual(diff().inspect(key)?.globalValue, undefined, key);
+  });
+});

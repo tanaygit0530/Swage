@@ -123,6 +123,12 @@ export class ReviewController implements vscode.Disposable {
     this.statusItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 998);
     this.statusItem.name = 'Swage files with changes';
     this.statusItem.command = 'swage.review.pickFile';
+    for (const key of ['swage.review.hideWhitespace', 'swage.review.collapseUnchanged'])
+      void vscode.commands.executeCommand(
+        'setContext',
+        key,
+        context.workspaceState.get<boolean>(key, false),
+      );
     this.tree = new ReviewTree(() => this.session);
     this.lenses = new ReviewCodeLens(
       () => this.session,
@@ -176,6 +182,19 @@ export class ReviewController implements vscode.Disposable {
       ),
       vscode.commands.registerCommand('swage.review.nextChange', () => this.moveFocus(1)),
       vscode.commands.registerCommand('swage.review.pickFile', () => this.pickFile()),
+      vscode.commands.registerCommand('swage.review.toggleWhitespace', () =>
+        this.toggleOption('swage.review.hideWhitespace'),
+      ),
+      vscode.commands.registerCommand('swage.review.toggleWhitespaceOff', () =>
+        this.toggleOption('swage.review.hideWhitespace'),
+      ),
+      vscode.commands.registerCommand('swage.review.toggleUnchanged', () =>
+        this.toggleOption('swage.review.collapseUnchanged'),
+      ),
+      vscode.commands.registerCommand('swage.review.toggleUnchangedOff', () =>
+        this.toggleOption('swage.review.collapseUnchanged'),
+      ),
+      vscode.commands.registerCommand('swage.review.openAllDiffs', () => this.openAllDiffs()),
       vscode.commands.registerCommand('swage.review.expandAll', () => this.expandAll()),
       vscode.commands.registerCommand('swage.review.nextFile', (arg: unknown) =>
         this.openNeighbourFile(1, arg),
@@ -479,6 +498,30 @@ export class ReviewController implements vscode.Disposable {
     );
     if (picked) await this.openFile({ path: picked.path });
     return picked?.path;
+  }
+
+  /**
+   * A review option (step 7): Hide whitespace changes or Collapse unchanged regions. Stored per
+   * workspace and applied to Swage's diff tabs through the same scoped settings as the inline view.
+   */
+  async toggleOption(
+    key: 'swage.review.hideWhitespace' | 'swage.review.collapseUnchanged',
+  ): Promise<boolean> {
+    const on = !this.context.workspaceState.get<boolean>(key, false);
+    await this.context.workspaceState.update(key, on);
+    await vscode.commands.executeCommand('setContext', key, on);
+    if (vscode.window.tabGroups.all.some((g) => g.tabs.some(isSwageDiffTab)))
+      await this.diffView.enter();
+    return on;
+  }
+
+  /** Open all diffs in tabs: every file still waiting, each in its own tab. */
+  async openAllDiffs(): Promise<number> {
+    const session = this.session;
+    if (!session) return 0;
+    const files = session.openFiles();
+    for (const path of files) await this.openFile({ path });
+    return files.length;
   }
 
   /** Expand all in the Review view (Collapse all is built in). */

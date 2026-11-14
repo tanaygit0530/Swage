@@ -104,8 +104,12 @@ export class DiffViewSettings implements vscode.Disposable {
     const review = vscode.workspace.getConfiguration('swage.review');
     const out: Record<string, unknown> = {};
     if (review.get<boolean>('inlineDiff', true)) out['diffEditor.renderSideBySide'] = false;
-    if (this.context.workspaceState.get<boolean>('swage.review.hideWhitespace', false))
-      out['diffEditor.ignoreTrimWhitespace'] = true;
+    // A review shows every change, whitespace included (VS Code hides trim whitespace by
+    // default); "Hide whitespace changes" turns that back on for Swage's diffs.
+    out['diffEditor.ignoreTrimWhitespace'] = this.context.workspaceState.get<boolean>(
+      'swage.review.hideWhitespace',
+      false,
+    );
     if (this.context.workspaceState.get<boolean>('swage.review.collapseUnchanged', false))
       out['diffEditor.hideUnchangedRegions.enabled'] = true;
     return out;

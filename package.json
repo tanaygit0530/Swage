@@ -219,6 +219,32 @@
         "category": "Swage"
       },
       {
+        "command": "swage.review.toggleWhitespace",
+        "title": "Hide Whitespace Changes",
+        "category": "Swage"
+      },
+      {
+        "command": "swage.review.toggleWhitespaceOff",
+        "title": "✓ Hide Whitespace Changes",
+        "category": "Swage"
+      },
+      {
+        "command": "swage.review.toggleUnchanged",
+        "title": "Collapse Unchanged Regions",
+        "category": "Swage"
+      },
+      {
+        "command": "swage.review.toggleUnchangedOff",
+        "title": "✓ Collapse Unchanged Regions",
+        "category": "Swage"
+      },
+      {
+        "command": "swage.review.openAllDiffs",
+        "title": "Open All Diffs in Tabs",
+        "category": "Swage",
+        "icon": "$(files)"
+      },
+      {
         "command": "swage.review.acceptAll",
         "title": "Accept All",
         "category": "Swage",
@@ -296,6 +322,14 @@
         {
           "command": "swage.review.deleteComment",
           "when": "false"
+        },
+        {
+          "command": "swage.review.toggleWhitespaceOff",
+          "when": "false"
+        },
+        {
+          "command": "swage.review.toggleUnchangedOff",
+          "when": "false"
         }
       ],
       "view/title": [
@@ -323,6 +357,31 @@
           "command": "swage.review.expandAll",
           "when": "view == swage.review && swage.reviewActive",
           "group": "navigation@4"
+        },
+        {
+          "command": "swage.review.toggleWhitespace",
+          "when": "view == swage.review && !swage.review.hideWhitespace",
+          "group": "options@1"
+        },
+        {
+          "command": "swage.review.toggleWhitespaceOff",
+          "when": "view == swage.review && swage.review.hideWhitespace",
+          "group": "options@1"
+        },
+        {
+          "command": "swage.review.toggleUnchanged",
+          "when": "view == swage.review && !swage.review.collapseUnchanged",
+          "group": "options@2"
+        },
+        {
+          "command": "swage.review.toggleUnchangedOff",
+          "when": "view == swage.review && swage.review.collapseUnchanged",
+          "group": "options@2"
+        },
+        {
+          "command": "swage.review.openAllDiffs",
+          "when": "view == swage.review && swage.reviewActive",
+          "group": "options@3"
         }
       ],
       "view/item/context": [
