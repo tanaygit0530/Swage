@@ -65,8 +65,8 @@ describe('files-changed bar', () => {
     button('Reject block 2 of a.py').click();
     button('Split block 1 of a.py into line-sized blocks').click();
     root.querySelector<HTMLButtonElement>('.fb-block-main')?.click();
-    button('Accept every block of a.py').click();
-    button('Reject every block of a.py').click();
+    button('Accept file a.py').click();
+    button('Reject file a.py').click();
     expect(sent).toEqual([
       { type: 'openDiff', path: 'a.py' },
       { type: 'reviewAction', action: 'acceptBlock', path: 'a.py', blockId: 'b1' },
@@ -135,6 +135,30 @@ describe('files-changed bar', () => {
       await new Promise((r) => setTimeout(r, 0));
       expect(root.querySelector('.fb-rows')).not.toBeNull();
     });
+  });
+});
+
+describe('files-changed bar: status letters and per-file results', () => {
+  it('shows M, A and D, a partial badge, and settled files without controls', () => {
+    const { root } = mount({
+      phase: 'review',
+      files: [
+        file('a.py', { decision: 'partial' }),
+        file('b.py', { kind: 'create', settled: 'applied', decision: 'accepted' }),
+        file('c.py', { kind: 'delete', settled: 'discarded', decision: 'rejected' }),
+      ],
+    });
+    expect([...root.querySelectorAll('.fb-letter')].map((n) => n.textContent)).toEqual([
+      'M',
+      'A',
+      'D',
+    ]);
+    expect(root.querySelector('.decision-partial .fb-badge')?.textContent).toBe('partial');
+    expect(root.querySelector('.settled-applied .fb-state')?.getAttribute('title')).toBe('Applied');
+    expect(root.querySelector('.settled-discarded .fb-state-text')?.textContent).toBe('discarded');
+    // Only the open file keeps its controls, and the footer counts open files.
+    expect(root.querySelectorAll('.fb-row-actions')).toHaveLength(1);
+    expect(root.querySelector('.fb-title')?.textContent).toBe('1 File With Changes');
   });
 });
 

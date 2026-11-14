@@ -10,6 +10,7 @@ import { ReviewTree, type ReviewNode } from './tree';
 import { VsCodeWorkspaceFs } from './workspaceFs';
 import { DiffViewSettings, isSwageDiffTab } from './diffView';
 import { blockAtLine, neighbourBlock } from '../marks';
+import { statusLetter } from '../../ui/changes';
 import { pathOf } from './documents';
 
 /**
@@ -102,6 +103,8 @@ export class ReviewController implements vscode.Disposable {
   private readonly view: vscode.TreeView<ReviewNode>;
   private applierFor: { root: string; applier: Applier } | undefined;
   private modeValue: ReviewMode = { mode: 'agent' };
+  /** "Swage: N files with changes" in the status bar; opens a quick pick of those files. */
+  private readonly statusItem: vscode.StatusBarItem;
   /** Inline diff view (and the review options) while a Swage diff tab is open. */
   readonly diffView: DiffViewSettings;
   /** A change set still being staged: diffs can open before review (read-only, no decisions). */
@@ -113,6 +116,9 @@ export class ReviewController implements vscode.Disposable {
   constructor(readonly context: vscode.ExtensionContext) {
     this.documents = new ReviewDocuments(() => this.session ?? this.watching);
     this.diffView = new DiffViewSettings(context);
+    this.statusItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 998);
+    this.statusItem.name = 'Swage files with changes';
+    this.statusItem.command = 'swage.review.pickFile';
     this.tree = new ReviewTree(() => this.session);
     this.lenses = new ReviewCodeLens(
       () => this.session,
@@ -165,6 +171,8 @@ export class ReviewController implements vscode.Disposable {
         this.decideFocused('reject'),
       ),
       vscode.commands.registerCommand('swage.review.nextChange', () => this.moveFocus(1)),
+      vscode.commands.registerCommand('swage.review.pickFile', () => this.pickFile()),
+      vscode.commands.registerCommand('swage.review.expandAll', () => this.expandAll()),
       vscode.commands.registerCommand('swage.review.nextFile', (arg: unknown) =>
         this.openNeighbourFile(1, arg),
       ),
@@ -239,10 +247,15 @@ export class ReviewController implements vscode.Disposable {
     this.decorations.update();
     const t = this.session?.totals();
     this.view.message = t ? '' : 'No change set to review. Run the agent first.';
+    // The activity-bar badge and the status bar count files still waiting for a decision.
+    const open = this.session?.openFiles().length ?? 0;
     this.view.badge =
-      t && t.pending > 0
-        ? { value: t.pending, tooltip: `${t.pending} block(s) to review` }
-        : undefined;
+      open > 0 ? { value: open, tooltip: `${open} file(s) with changes to review` } : undefined;
+    if (open > 0 && this.modeValue.mode === 'agent') {
+      this.statusItem.text = `$(diff) Swage: ${open} file${open === 1 ? '' : 's'} with changes`;
+      this.statusItem.tooltip = 'Pick a file to review';
+      this.statusItem.show();
+    } else this.statusItem.hide();
     this.changeEmitter.fire();
   }
 
@@ -404,6 +417,36 @@ export class ReviewController implements vscode.Disposable {
   private async closeSwageDiffs(): Promise<void> {
     const tabs = vscode.window.tabGroups.all.flatMap((g) => g.tabs.filter(isSwageDiffTab));
     if (tabs.length > 0) await vscode.window.tabGroups.close(tabs);
+  }
+
+  /** The status-bar quick pick: files still waiting, with their status letter and counts. */
+  async pickFile(): Promise<string | undefined> {
+    const session = this.session;
+    if (!session) return undefined;
+    const picked = await vscode.window.showQuickPick(
+      session.openFiles().map((path) => {
+        const f = session.file(path);
+        const added = f?.blocks.reduce((n, b) => n + b.newLines.length, 0) ?? 0;
+        const removed = f?.blocks.reduce((n, b) => n + b.oldLines.length, 0) ?? 0;
+        return {
+          label: `$(file) ${path.split('/').pop() ?? path}`,
+          description: `${f ? statusLetter(f.kind) : ''} · +${added} -${removed} · ${path}`,
+          ...(session.status(path) === 'partial' ? { detail: 'partly reviewed' } : {}),
+          path,
+        };
+      }),
+      { title: 'Swage: files with changes', placeHolder: 'Open a file’s diff' },
+    );
+    if (picked) await this.openFile({ path: picked.path });
+    return picked?.path;
+  }
+
+  /** Expand all in the Review view (Collapse all is built in). */
+  async expandAll(): Promise<void> {
+    const session = this.session;
+    if (!session) return;
+    for (const path of session.openFiles())
+      await this.view.reveal({ kind: 'file', path }, { expand: true, select: false, focus: false });
   }
 
   /** Previous / Next file in the per-file controls: the neighbouring open file's diff. */
@@ -669,6 +712,7 @@ export class ReviewController implements vscode.Disposable {
   }
 
   dispose(): void {
+    this.statusItem.dispose();
     void this.diffView.restore();
     this.diffView.dispose();
     this.changeEmitter.dispose();

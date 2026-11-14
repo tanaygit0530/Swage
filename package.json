@@ -185,6 +185,18 @@
         "icon": "$(arrow-left)"
       },
       {
+        "command": "swage.review.pickFile",
+        "title": "Files With Changes…",
+        "category": "Swage",
+        "icon": "$(list-flat)"
+      },
+      {
+        "command": "swage.review.expandAll",
+        "title": "Expand All",
+        "category": "Swage",
+        "icon": "$(expand-all)"
+      },
+      {
         "command": "swage.review.acceptAll",
         "title": "Accept All",
         "category": "Swage",
@@ -276,6 +288,11 @@
           "command": "swage.review.discard",
           "when": "view == swage.review && swage.reviewActive",
           "group": "navigation@3"
+        },
+        {
+          "command": "swage.review.expandAll",
+          "when": "view == swage.review && swage.reviewActive",
+          "group": "navigation@4"
         }
       ],
       "view/item/context": [

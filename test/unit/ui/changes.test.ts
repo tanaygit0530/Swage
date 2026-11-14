@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ReviewFile } from '../../../src/changeset/changeSet';
-import { blockSummary, changeRows, fileDecision } from '../../../src/ui/changes';
+import { blockSummary, changeRows, fileDecision, statusLetter } from '../../../src/ui/changes';
 import { barModel, barTitle, createdFiles, editingPaths } from '../../../src/ui/webview/changes';
 import { initialState, reduce, type PanelState } from '../../../src/ui/webview/state';
 import type { ChangeFile } from '../../../src/ui/protocol';
@@ -40,6 +40,19 @@ describe('change rows (host)', () => {
     expect(rows[1]?.blocks.map((b) => [b.line, b.summary])).toEqual([
       [2, 'new one'],
       [5, 'Removes: gone'],
+    ]);
+  });
+
+  it('marks settled files and gives status letters', () => {
+    const rows = changeRows(files, base, new Map(), (p) =>
+      p === 'docs/cli.rst' ? 'applied' : undefined,
+    );
+    expect(rows[0]?.settled).toBe('applied');
+    expect(rows[1]).not.toHaveProperty('settled');
+    expect([statusLetter('create'), statusLetter('delete'), statusLetter('modify')]).toEqual([
+      'A',
+      'D',
+      'M',
     ]);
   });
 

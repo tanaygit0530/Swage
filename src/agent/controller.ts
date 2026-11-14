@@ -204,7 +204,15 @@ export class AgentController implements vscode.WebviewViewProvider, vscode.Dispo
       this.post({
         type: 'changes',
         phase: 'review',
-        files: changeRows(session.files(), (p) => session.base(p), reasons),
+        files: changeRows(
+          session.files(),
+          (p) => session.base(p),
+          reasons,
+          (p) => {
+            const s = session.status(p);
+            return s === 'applied' || s === 'discarded' ? s : undefined;
+          },
+        ),
       });
     } else if (this.barPhase === 'review') {
       this.post({ type: 'changes', phase: 'none', files: [] });

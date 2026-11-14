@@ -67,8 +67,14 @@ function Row({
 }) {
   const { name, dir } = splitPath(row.path);
   const blocks = row.blocks.length;
+  const letter = row.kind === 'create' ? 'A' : row.kind === 'delete' ? 'D' : 'M';
+  const letterName = { A: 'added', D: 'deleted', M: 'modified' }[letter];
+  // A file applied or discarded on its own is settled: no more decisions on it.
+  const decide = canDecide && !row.settled;
   return (
-    <li class={`fb-row decision-${row.decision}${row.editing ? ' editing' : ''}`}>
+    <li
+      class={`fb-row decision-${row.decision}${row.editing ? ' editing' : ''}${row.settled ? ` settled-${row.settled}` : ''}`}
+    >
       <div class="fb-line">
         <button
           type="button"
@@ -84,10 +90,13 @@ function Row({
         <button
           type="button"
           class="fb-main"
-          title={`Open the diff of ${row.path} (${DECISION_LABEL[row.decision]})`}
-          aria-label={`Open the diff of ${row.path}, +${row.added} -${row.removed}, ${DECISION_LABEL[row.decision]}${row.editing ? ', still being edited' : ''}`}
+          title={`Open the diff of ${row.path} (${row.settled ?? DECISION_LABEL[row.decision]})`}
+          aria-label={`Open the diff of ${row.path}, ${letterName}, +${row.added} -${row.removed}, ${row.settled ?? DECISION_LABEL[row.decision]}${row.editing ? ', still being edited' : ''}`}
           onClick={() => send({ type: 'openDiff', path: row.path })}
         >
+          <span class={`fb-letter letter-${letter}`} title={letterName}>
+            {letter}
+          </span>
           <Counts added={row.added} removed={row.removed} />
           <FileGlyph path={row.path} />
           <span class="fb-name">{name}</span>
@@ -104,18 +113,21 @@ function Row({
             title="The agent is editing this file"
           />
         )}
-        {!row.editing && row.decision === 'accepted' && (
-          <span class="fb-state ok" title="Accepted">
-            <Tick />
-          </span>
-        )}
-        {canDecide && (
+        {!row.editing &&
+          (row.settled === 'applied' || (!row.settled && row.decision === 'accepted')) && (
+            <span class="fb-state ok" title={row.settled === 'applied' ? 'Applied' : 'Accepted'}>
+              <Tick />
+            </span>
+          )}
+        {row.settled === 'discarded' && <span class="fb-state-text">discarded</span>}
+        {row.decision === 'partial' && !row.settled && <span class="fb-badge">partial</span>}
+        {decide && (
           <span class="fb-row-actions">
             <button
               type="button"
               class="icon-button"
-              title="Accept this file"
-              aria-label={`Accept every block of ${row.path}`}
+              title="Accept file: apply it now"
+              aria-label={`Accept file ${row.path}`}
               onClick={() => send({ type: 'reviewAction', action: 'acceptFile', path: row.path })}
             >
               <Tick />
@@ -123,8 +135,8 @@ function Row({
             <button
               type="button"
               class="icon-button"
-              title="Reject this file"
-              aria-label={`Reject every block of ${row.path}`}
+              title="Reject file: discard its changes"
+              aria-label={`Reject file ${row.path}`}
               onClick={() => send({ type: 'reviewAction', action: 'rejectFile', path: row.path })}
             >
               <Cross />
@@ -147,7 +159,7 @@ function Row({
                 <Counts added={b.added} removed={b.removed} />
                 <span class="fb-block-summary">{b.summary}</span>
               </button>
-              {canDecide && (
+              {decide && (
                 <span class="fb-block-actions">
                   <button
                     type="button"
@@ -239,7 +251,7 @@ export function FilesBar({ model, send }: { model: BarModel; send: Send }) {
         <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
           <path d="M3.5 1.5h6l3 3v10h-9z" fill="none" stroke="currentColor" stroke-width="1.2" />
         </svg>
-        <span class="fb-title">{barTitle(model.files)}</span>
+        <span class="fb-title">{barTitle(model.open)}</span>
         <Counts added={model.added} removed={model.removed} />
         {model.phase === 'staging' && <span class="fb-hint">Agent is editing…</span>}
         <span class="spacer" />

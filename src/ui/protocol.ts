@@ -53,6 +53,8 @@ export const ChangeFile = z.object({
     )
     .max(500),
   reason: Short.optional(),
+  /** Settled one file at a time: applied to disk, or discarded. */
+  settled: z.enum(['applied', 'discarded']).optional(),
 });
 export type ChangeFile = z.infer<typeof ChangeFile>;
 

@@ -29,6 +29,13 @@ export interface ChangeFileRow {
   readonly blocks: ChangeBlockRow[];
   /** The reason the agent gave in declare_context, if any. */
   readonly reason?: string;
+  /** Settled one file at a time (review upgrade, step 3). */
+  readonly settled?: 'applied' | 'discarded';
+}
+
+/** The status letter of a changed file, as in source control: Added, Deleted, Modified. */
+export function statusLetter(kind: FileKind): 'A' | 'D' | 'M' {
+  return kind === 'create' ? 'A' : kind === 'delete' ? 'D' : 'M';
 }
 
 const SUMMARY_CHARS = 80;
@@ -57,12 +64,14 @@ export function changeRows(
   files: readonly ReviewFile[],
   base: (path: string) => string,
   reasons: ReadonlyMap<string, string> = new Map(),
+  settled: (path: string) => 'applied' | 'discarded' | undefined = () => undefined,
 ): ChangeFileRow[] {
   return files
     .map((f): ChangeFileRow => {
       const stats = fileStats(f);
       const starts = new Map(preview(base(f.path), f.blocks).blocks.map((b) => [b.id, b.start]));
       const reason = reasons.get(f.path);
+      const done = settled(f.path);
       return {
         path: f.path,
         kind: f.kind,
@@ -78,6 +87,7 @@ export function changeRows(
           summary: blockSummary(b.newLines, b.oldLines),
         })),
         ...(reason ? { reason } : {}),
+        ...(done ? { settled: done } : {}),
       };
     })
     .sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));

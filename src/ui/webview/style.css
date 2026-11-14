@@ -1452,3 +1452,46 @@ button.primary:disabled,
     animation: none;
   }
 }
+
+/* ---- Status letters and settled files (review upgrade, step 4) ---- */
+
+.fb-letter {
+  flex: none;
+  width: 1.2em;
+  text-align: center;
+  font-family: var(--vscode-editor-font-family);
+  font-weight: 600;
+  font-size: 0.9em;
+}
+
+.letter-M {
+  color: var(--vscode-gitDecoration-modifiedResourceForeground, #e2c08d);
+}
+
+.letter-A {
+  color: var(--vscode-gitDecoration-addedResourceForeground, #81b88b);
+}
+
+.letter-D {
+  color: var(--vscode-gitDecoration-deletedResourceForeground, #c74e39);
+}
+
+.fb-badge,
+.fb-state-text {
+  flex: none;
+  padding: 0 5px;
+  border: 1px solid var(--swage-border);
+  border-radius: 4px;
+  font-size: 0.8em;
+  color: var(--vscode-descriptionForeground);
+}
+
+.fb-row.settled-applied > .fb-line .fb-main {
+  opacity: 0.6;
+}
+
+.fb-row.settled-discarded > .fb-line .fb-name,
+.fb-row.settled-discarded > .fb-line .fb-dir {
+  text-decoration: line-through;
+  opacity: 0.6;
+}

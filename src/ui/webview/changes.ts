@@ -17,6 +17,8 @@ export interface BarModel {
   readonly phase: PanelState['changes']['phase'];
   readonly rows: readonly BarRow[];
   readonly files: number;
+  /** Files not applied or discarded yet (the count the footer shows). */
+  readonly open: number;
   readonly added: number;
   readonly removed: number;
   readonly blocks: number;
@@ -64,7 +66,7 @@ export function barModel(state: Pick<PanelState, 'changes' | 'timeline'>): BarMo
   let blocks = 0;
   let accepted = 0;
   let rejected = 0;
-  for (const r of rows)
+  for (const r of rows.filter((x) => !x.settled))
     for (const b of r.blocks) {
       blocks++;
       if (b.state === 'accepted') accepted++;
@@ -75,6 +77,7 @@ export function barModel(state: Pick<PanelState, 'changes' | 'timeline'>): BarMo
     phase,
     rows,
     files: rows.length,
+    open: rows.filter((r) => !r.settled).length,
     added: rows.reduce((n, r) => n + r.added, 0),
     removed: rows.reduce((n, r) => n + r.removed, 0),
     blocks,

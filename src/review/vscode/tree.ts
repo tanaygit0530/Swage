@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
-import { describeStats, fileStats } from '../model';
+import { fileStats } from '../model';
+import { statusLetter } from '../../ui/changes';
 import type { ReviewSession } from '../session';
 
 /**
@@ -33,15 +34,27 @@ export class ReviewTree implements vscode.TreeDataProvider<ReviewNode> {
     this.emitter.fire(undefined);
   }
 
+  /** Blocks belong to their file; files sit at the top (needed for Expand all). */
+  getParent(node: ReviewNode): ReviewNode | undefined {
+    return node.kind === 'block' ? { kind: 'file', path: node.path } : undefined;
+  }
+
   getChildren(node?: ReviewNode): ReviewNode[] {
     const session = this.current();
     if (!session) return [];
     if (!node)
       return [
         { kind: 'summary' },
-        ...session.files().map((f): ReviewNode => ({ kind: 'file', path: f.path })),
+        // The same order as the files-changed bar: by path.
+        ...session
+          .files()
+          .map((f) => f.path)
+          .sort()
+          .map((path): ReviewNode => ({ kind: 'file', path })),
       ];
     if (node.kind === 'file') {
+      const settled = ['applied', 'discarded'].includes(session.status(node.path));
+      if (settled) return [];
       return (session.file(node.path)?.blocks ?? []).map((b, index): ReviewNode => ({
         kind: 'block',
         path: node.path,
@@ -57,8 +70,9 @@ export class ReviewTree implements vscode.TreeDataProvider<ReviewNode> {
     if (!session) return new vscode.TreeItem('');
     if (node.kind === 'summary') {
       const t = session.totals();
+      const open = session.openFiles().length;
       const item = new vscode.TreeItem(
-        `${t.files} file${t.files === 1 ? '' : 's'}, ${t.blocks} block${t.blocks === 1 ? '' : 's'}`,
+        `${open} file${open === 1 ? '' : 's'} with changes, ${t.blocks} block${t.blocks === 1 ? '' : 's'}`,
       );
       item.description = `${t.accepted} accepted · ${t.rejected} rejected · ${t.pending} pending`;
       item.iconPath = new vscode.ThemeIcon('checklist');
@@ -68,10 +82,30 @@ export class ReviewTree implements vscode.TreeDataProvider<ReviewNode> {
     }
     if (node.kind === 'file') {
       const file = session.file(node.path);
-      const item = new vscode.TreeItem(node.path, vscode.TreeItemCollapsibleState.Expanded);
-      item.description = `${file?.kind === 'create' ? 'new · ' : file?.kind === 'delete' ? 'delete · ' : ''}${file ? describeStats(fileStats(file)) : ''}`;
+      const status = session.status(node.path);
+      const settled = status === 'applied' || status === 'discarded';
+      const name = node.path.split('/').pop() ?? node.path;
+      const dir = node.path.slice(0, Math.max(0, node.path.length - name.length - 1));
+      const stats = file ? fileStats(file) : undefined;
+      const item = new vscode.TreeItem(
+        name,
+        settled
+          ? vscode.TreeItemCollapsibleState.Collapsed
+          : vscode.TreeItemCollapsibleState.Expanded,
+      );
+      item.id = `file:${session.taskId}:${node.path}`;
+      // Status letter as in source control, signed counts, the folder, and where the file stands.
+      item.description = [
+        file ? statusLetter(file.kind) : '',
+        stats ? `+${stats.added} -${stats.removed}` : '',
+        dir,
+        status === 'pending' ? '' : status,
+      ]
+        .filter(Boolean)
+        .join(' · ');
+      item.tooltip = `${node.path}\n${status}${settled ? '' : ' · Accept file applies it now; Reject file discards it'}`;
       item.resourceUri = vscode.Uri.file(node.path);
-      item.contextValue = 'swage.review.file';
+      item.contextValue = settled ? 'swage.review.file.settled' : 'swage.review.file';
       item.command = {
         command: 'swage.review.openFile',
         title: 'Open diff',
