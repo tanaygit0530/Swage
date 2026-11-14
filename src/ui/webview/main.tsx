@@ -10,7 +10,7 @@ import { Composer } from './composerView';
 import { PlanCard } from './planCard';
 import { ApprovalCard } from './approvalCard';
 import { isNearBottom, isThinking, streamingId } from './view';
-import { initialState, isBusy, reducePanel, type TimelineItem } from './state';
+import { initialState, isBusy, reducePanel, type PanelState, type TimelineItem } from './state';
 import { Logo } from './logo';
 
 /**
@@ -24,6 +24,7 @@ const send = (msg: WebviewToHost): void => vscode.postMessage(msg);
 /** Render context for the memoised items: which message streams, whether the bar shows. */
 let streamingNow: string | undefined;
 let barShown = false;
+let turnsNow: PanelState['turns'] = { current: undefined, latest: undefined, items: [] };
 /** The App's dispatch for local actions (set once the App mounts). */
 let dispatchLocal: (action: LocalAction) => void = () => undefined;
 
@@ -154,16 +155,20 @@ function Notice({ item }: { item: Extract<TimelineItem, { kind: 'notice' }> }) {
 }
 
 /** One timeline entry. Unchanged entries keep their object, so only the streaming one re-renders. */
-class ItemView extends Component<{ item: TimelineItem; streaming: boolean; bar: boolean }> {
-  override shouldComponentUpdate(next: {
-    item: TimelineItem;
-    streaming: boolean;
-    bar: boolean;
-  }): boolean {
+interface ItemProps {
+  item: TimelineItem;
+  streaming: boolean;
+  bar: boolean;
+  turns: PanelState['turns'];
+}
+
+class ItemView extends Component<ItemProps> {
+  override shouldComponentUpdate(next: ItemProps): boolean {
     return (
       next.item !== this.props.item ||
       next.streaming !== this.props.streaming ||
-      next.bar !== this.props.bar
+      next.bar !== this.props.bar ||
+      (next.item.kind === 'walkthrough' && next.turns !== this.props.turns)
     );
   }
 
@@ -219,7 +224,15 @@ function Item({ item }: { item: TimelineItem }) {
     case 'edit':
       return <EditCard item={item} send={send} />;
     case 'walkthrough':
-      return <WalkthroughCard item={item} send={send} onView={viewFilesBar} />;
+      return (
+        <WalkthroughCard
+          item={item}
+          send={send}
+          onView={viewFilesBar}
+          turn={turnsNow.items.find((t) => t.taskId === item.taskId)}
+          current={turnsNow.current === item.taskId}
+        />
+      );
   }
 }
 
@@ -289,6 +302,7 @@ function App() {
   const bar = barModel(state);
   streamingNow = streamingId(state);
   barShown = bar.visible;
+  turnsNow = state.turns;
 
   // The "Applied N files. Undo" toast stays 10 s.
   const toastId = state.toast?.id;
@@ -329,6 +343,7 @@ function App() {
             item={item}
             streaming={item.id === streamingNow}
             bar={bar.visible}
+            turns={state.turns}
           />
         ))}
         {isThinking(state) && <Thinking />}
@@ -349,7 +364,19 @@ function App() {
         )}
       </main>
       <footer>
-        <FilesBar model={bar} send={send} />
+        <FilesBar
+          model={bar}
+          send={send}
+          turn={
+            state.turns.current && state.turns.current !== state.turns.latest
+              ? {
+                  label:
+                    state.turns.items.find((t) => t.taskId === state.turns.current)?.label ?? '',
+                  latest: state.turns.latest,
+                }
+              : undefined
+          }
+        />
         {state.toast && (
           <Toast
             text={state.toast.text}

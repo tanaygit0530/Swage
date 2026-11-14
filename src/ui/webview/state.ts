@@ -64,6 +64,8 @@ export type TimelineItem =
   | {
       kind: 'walkthrough';
       id: string;
+      /** The turn it ends, for its "N files changed · Review" line. */
+      taskId?: string;
       summary: string;
       files: readonly {
         path: string;
@@ -98,6 +100,12 @@ export interface PanelState {
     readonly phase: 'none' | 'staging' | 'review';
     readonly files: readonly ChangeFile[];
   };
+  /** Each turn with a review, and which one the bar shows (review upgrade, step 5). */
+  readonly turns: {
+    readonly current: string | undefined;
+    readonly latest: string | undefined;
+    readonly items: readonly { taskId: string; label: string; files: number; open: number }[];
+  };
   /** Planning waits for plan approval before any edit; Fast runs straight through. */
   readonly mode: 'planning' | 'fast';
   /** Stop was pressed and the cancelled turn has not drained yet ("Stopping…"). */
@@ -124,6 +132,7 @@ export const initialState: PanelState = {
   completions: { requestId: -1, items: [] },
   changes: { phase: 'none', files: [] },
   toast: undefined,
+  turns: { current: undefined, latest: undefined, items: [] },
   mode: 'planning',
   stopping: false,
   autoFallback: false,
@@ -381,8 +390,19 @@ export function reduce(state: PanelState, msg: HostToWebview): PanelState {
         ...state,
         timeline: [
           ...state.timeline,
-          { kind: 'walkthrough', id: nextId('w'), summary: msg.summary, files: msg.files },
+          {
+            kind: 'walkthrough',
+            id: nextId('w'),
+            ...(msg.taskId ? { taskId: msg.taskId } : {}),
+            summary: msg.summary,
+            files: msg.files,
+          },
         ],
+      };
+    case 'turns':
+      return {
+        ...state,
+        turns: { current: msg.current, latest: msg.latest, items: msg.items },
       };
     case 'applied':
       return {

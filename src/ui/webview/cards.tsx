@@ -62,14 +62,57 @@ export function EditCard({
   );
 }
 
+/** Under a finished turn: "N files changed" and Review, live from the turn's review. */
+export function TurnReview({
+  taskId,
+  files,
+  turn,
+  current,
+  send,
+}: {
+  taskId: string;
+  files: number;
+  turn: { files: number; open: number } | undefined;
+  current: boolean;
+  send: Send;
+}) {
+  const n = turn?.files ?? files;
+  const open = turn?.open ?? 0;
+  return (
+    <div class="turn-review" role="group" aria-label="Changes of this turn">
+      <span class="turn-review-count">
+        {n} file{n === 1 ? '' : 's'} changed
+      </span>
+      <span class="card-sub">
+        {turn === undefined ? 'reviewed' : open === 0 ? 'all decided' : `${open} to review`}
+      </span>
+      <span class="spacer" />
+      {turn !== undefined && open > 0 && (
+        <button
+          type="button"
+          class={current ? 'link' : 'primary'}
+          aria-label={`Review the ${n} file${n === 1 ? '' : 's'} of this turn`}
+          onClick={() => send({ type: 'reviewTurn', taskId })}
+        >
+          {current ? 'Reviewing' : 'Review'}
+        </button>
+      )}
+    </div>
+  );
+}
+
 export function WalkthroughCard({
   item,
   send,
   onView,
+  turn,
+  current = false,
 }: {
   item: Extract<TimelineItem, { kind: 'walkthrough' }>;
   send: Send;
   onView: () => void;
+  turn?: { files: number; open: number } | undefined;
+  current?: boolean;
 }) {
   const created = createdFiles(item.files);
   return (
@@ -129,6 +172,15 @@ export function WalkthroughCard({
             </li>
           ))}
         </ul>
+        {item.taskId && (
+          <TurnReview
+            taskId={item.taskId}
+            files={item.files.length}
+            turn={turn}
+            current={current}
+            send={send}
+          />
+        )}
       </div>
     </section>
   );

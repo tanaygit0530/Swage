@@ -300,6 +300,7 @@ export class AgentRun {
     const reasons = this.reasons();
     this.post({
       type: 'walkthrough',
+      taskId: this.taskId,
       summary: this.submitSummary?.trim() || fallback,
       files: changeRows(changeSet.review(), (p) => changeSet.base(p) ?? '', reasons).map((f) => ({
         path: f.path,

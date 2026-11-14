@@ -3,6 +3,7 @@ import { Applier, type ApplyResult, type UndoResult } from '../../changeset/appl
 import { checkpointFile, loadCheckpoints, saveCheckpoints } from '../checkpoints';
 import type { ChangeSet, FileChange } from '../../changeset/changeSet';
 import { ReviewSession } from '../session';
+import { ReviewQueue, type TurnSummary } from '../queue';
 import { ReviewCodeLens } from './codelens';
 import { ReviewDecorations } from './decorations';
 import { BASE_SCHEME, openDiff, ReviewDocuments, STAGED_SCHEME } from './documents';
@@ -114,7 +115,7 @@ export class ReviewController implements vscode.Disposable {
   readonly onDidChange = this.changeEmitter.event;
 
   constructor(readonly context: vscode.ExtensionContext) {
-    this.documents = new ReviewDocuments(() => this.session ?? this.watching);
+    this.documents = new ReviewDocuments((taskId) => this.findSession(taskId));
     this.diffView = new DiffViewSettings(context);
     this.statusItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 998);
     this.statusItem.name = 'Swage files with changes';
@@ -188,6 +189,45 @@ export class ReviewController implements vscode.Disposable {
     return this.session;
   }
 
+  /** Reviews of this window's session, one per agent turn (review upgrade, step 5). */
+  private readonly queue = new ReviewQueue<(outcome: ReviewOutcome) => void, ReviewMode>();
+
+  /** The review that owns a task id: the current one, a parked turn, or one still staging. */
+  private findSession(taskId: string): ReviewSession | undefined {
+    if (this.session?.taskId === taskId) return this.session;
+    if (this.watching?.taskId === taskId) return this.watching;
+    return this.queue.sessionOf(taskId);
+  }
+
+  /** Every turn with a review in this window, the current one first. */
+  turns(): TurnSummary[] {
+    return this.queue.summaries();
+  }
+
+  /** Brings back an earlier turn's review ("Review" on a turn card). False if it is gone. */
+  async resumeTurn(taskId: string): Promise<boolean> {
+    if (!this.queue.resume(taskId)) return false;
+    await this.activate();
+    if (this.modeValue.mode === 'agent') await this.show();
+    return true;
+  }
+
+  /** Mirrors the queue's current review into the fields the commands use. */
+  private async activate(): Promise<void> {
+    const cur = this.queue.current;
+    this.sessionSub?.dispose();
+    this.session = cur?.session;
+    this.onFinish = cur?.onFinish;
+    this.modeValue = cur?.mode ?? { mode: 'agent' };
+    this.sessionSub = this.session?.onDidChange((paths) => this.changed(paths));
+    await vscode.commands.executeCommand(
+      'setContext',
+      'swage.reviewActive',
+      this.session !== undefined,
+    );
+    this.refresh();
+  }
+
   /** The mode of the current review. */
   get mode(): ReviewMode {
     return this.modeValue;
@@ -203,17 +243,15 @@ export class ReviewController implements vscode.Disposable {
     onFinish?: (outcome: ReviewOutcome) => void,
     mode: ReviewMode = { mode: 'agent' },
   ): Promise<void> {
-    this.sessionSub?.dispose();
-    this.watching = undefined;
-    this.session = new ReviewSession(taskId, changeSet);
-    this.onFinish = onFinish;
-    this.modeValue = mode;
-    this.sessionSub = this.session.onDidChange((paths) => this.changed(paths));
-    await vscode.commands.executeCommand('setContext', 'swage.reviewActive', true);
-    this.refresh();
+    if (this.watching?.taskId === taskId) this.watching = undefined;
+    // A review in progress for another turn is parked, not lost (review upgrade, step 5).
+    this.queue.start({ session: new ReviewSession(taskId, changeSet), onFinish, mode });
+    await this.activate();
+    const session = this.session;
+    if (!session) return;
     if (mode.mode === 'inline') {
-      const first = this.session.files()[0];
-      const block = first ? this.session.preview(first.path).blocks[0] : undefined;
+      const first = session.files()[0];
+      const block = first ? session.preview(first.path).blocks[0] : undefined;
       if (first) await this.openFile({ path: first.path, ...(block ? { blockId: block.id } : {}) });
     } else {
       await this.show();
@@ -225,7 +263,7 @@ export class ReviewController implements vscode.Disposable {
    * the review starts. Refreshes open diffs of the paths just staged.
    */
   watch(taskId: string, changeSet: ChangeSet, paths: readonly string[] = []): void {
-    if (this.session) return;
+    if (this.findSession(taskId) && this.watching?.taskId !== taskId) return;
     if (this.watching?.taskId !== taskId) this.watching = new ReviewSession(taskId, changeSet);
     this.documents.refresh(taskId, paths);
   }
@@ -262,12 +300,11 @@ export class ReviewController implements vscode.Disposable {
   /** Ends the review and reports the outcome to whoever started it. */
   protected async finish(outcome: ReviewOutcome): Promise<void> {
     const cb = this.onFinish;
-    this.onFinish = undefined;
-    this.sessionSub?.dispose();
-    this.session = undefined;
-    this.modeValue = { mode: 'agent' };
-    await vscode.commands.executeCommand('setContext', 'swage.reviewActive', false);
-    this.refresh();
+    this.queue.finishCurrent();
+    // An earlier turn still waiting comes back, so the bar never hides open changes.
+    const parked = this.queue.summaries()[0];
+    if (parked) this.queue.resume(parked.taskId);
+    await this.activate();
     cb?.(outcome);
   }
 
@@ -702,7 +739,12 @@ export class ReviewController implements vscode.Disposable {
 
   async openFile(arg: unknown): Promise<void> {
     const ref = toRef(arg);
-    const session = this.session ?? this.watching;
+    // A file of a turn still being staged opens from that turn, even while another is reviewed.
+    const session =
+      (this.session?.file(ref?.path ?? '') ? this.session : undefined) ??
+      (this.watching?.file(ref?.path ?? '') ? this.watching : undefined) ??
+      this.session ??
+      this.watching;
     if (!ref || !session) return;
     const line = ref.blockId
       ? session.preview(ref.path).blocks.find((b) => b.id === ref.blockId)?.start

@@ -27,11 +27,12 @@ export class ReviewDocuments implements vscode.TextDocumentContentProvider {
   private readonly emitter = new vscode.EventEmitter<vscode.Uri>();
   readonly onDidChange = this.emitter.event;
 
-  constructor(private readonly current: () => ReviewSession | undefined) {}
+  /** `find` returns the review (current, parked or still staging) that owns a task id. */
+  constructor(private readonly find: (taskId: string) => ReviewSession | undefined) {}
 
   provideTextDocumentContent(uri: vscode.Uri): string {
-    const session = this.current();
-    if (!session || uri.query !== session.taskId) return '';
+    const session = this.find(uri.query);
+    if (!session) return '';
     const path = pathOf(uri);
     return uri.scheme === BASE_SCHEME ? session.base(path) : session.preview(path).content;
   }

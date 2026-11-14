@@ -156,8 +156,20 @@ export const HostToWebview = z.discriminatedUnion('type', [
   /** The end of a task: the model's summary and the changed files. */
   z.object({
     type: z.literal('walkthrough'),
+    /** The turn (agent run) this walkthrough ends; its card offers Review. */
+    taskId: Short.optional(),
     summary: Text,
     files: z.array(FileSummary).max(200),
+  }),
+  /**
+   * Every turn with a review in this window (review upgrade, step 5): the one the bar shows,
+   * the newest, and each turn's file counts, for the "N files changed · Review" cards.
+   */
+  z.object({
+    type: z.literal('turns'),
+    current: Short.optional(),
+    latest: Short.optional(),
+    items: z.array(z.object({ taskId: Short, label: Short, files: Count, open: Count })).max(100),
   }),
   /** Accept all applied the change set: the inline "Applied N files. Undo" toast. */
   z.object({ type: z.literal('applied'), files: Count, message: Short }),
@@ -213,6 +225,8 @@ export const WebviewToHost = z.discriminatedUnion('type', [
     path: Short,
     blockId: Short.optional(),
   }),
+  /** A turn card's Review, or the bar's Clear filter (back to the newest turn). */
+  z.object({ type: z.literal('reviewTurn'), taskId: Short }),
   /** Accept all: accept every block and apply atomically. */
   z.object({ type: z.literal('acceptAll') }),
   /** Reject all: discard the change set; the workspace stays unchanged. */

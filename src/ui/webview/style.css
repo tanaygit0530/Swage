@@ -1495,3 +1495,36 @@ button.primary:disabled,
   text-decoration: line-through;
   opacity: 0.6;
 }
+
+/* ---- Per-turn review (review upgrade, step 5) ---- */
+
+.turn-review {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid var(--swage-border);
+}
+
+.turn-review-count {
+  font-weight: 600;
+}
+
+.fb-turn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  border-bottom: 1px solid var(--swage-border);
+  font-size: 0.9em;
+  color: var(--vscode-descriptionForeground);
+}
+
+.fb-turn-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

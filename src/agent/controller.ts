@@ -195,8 +195,35 @@ export class AgentController implements vscode.WebviewViewProvider, vscode.Dispo
   /** The phase the files-changed bar shows, so a finished review empties it exactly once. */
   private barPhase: 'none' | 'staging' | 'review' = 'none';
 
+  /** Each agent turn's request, for the per-turn cards and the bar's "For this turn". */
+  private readonly turnLabels = new Map<string, string>();
+  /** The newest turn that reached review. */
+  private latestTurn: string | undefined;
+
+  private postTurns(): void {
+    const review = this.review;
+    if (!review) return;
+    const items = review
+      .turns()
+      .filter((t) => this.turnLabels.has(t.taskId))
+      .map((t) => ({
+        taskId: t.taskId,
+        label: (this.turnLabels.get(t.taskId) ?? '').slice(0, 120),
+        files: t.files,
+        open: t.open,
+      }));
+    const current = review.current?.taskId;
+    this.post({
+      type: 'turns',
+      ...(current && this.turnLabels.has(current) ? { current } : {}),
+      ...(this.latestTurn ? { latest: this.latestTurn } : {}),
+      items,
+    });
+  }
+
   /** The files-changed bar for the agent-mode review in progress (inline reviews stay in the editor). */
   private postReviewChanges(): void {
+    this.postTurns();
     const session = this.review?.current;
     if (session && this.review?.mode.mode === 'agent') {
       const declared = session.changeSet.declaredContext;
@@ -355,6 +382,14 @@ export class AgentController implements vscode.WebviewViewProvider, vscode.Dispo
           path: msg.path,
           ...(msg.blockId === undefined ? {} : { blockId: msg.blockId }),
         });
+        return;
+      case 'reviewTurn':
+        if (!(await this.review?.resumeTurn(msg.taskId)))
+          this.post({
+            type: 'notice',
+            tone: 'info',
+            message: 'That turn has no changes left to review: they were applied or discarded.',
+          });
         return;
       case 'acceptAll':
       case 'applyAccepted': {
@@ -550,6 +585,8 @@ export class AgentController implements vscode.WebviewViewProvider, vscode.Dispo
         ? {
             review: (taskId: string, changeSet: Parameters<ReviewController['start']>[1]) =>
               new Promise<{ applied: boolean; message: string }>((resolve) => {
+                this.turnLabels.set(taskId, prompt);
+                this.latestTurn = taskId;
                 void this.review?.start(taskId, changeSet, (outcome) => resolve(outcome));
               }),
           }

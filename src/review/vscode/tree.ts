@@ -75,6 +75,7 @@ export class ReviewTree implements vscode.TreeDataProvider<ReviewNode> {
         `${open} file${open === 1 ? '' : 's'} with changes, ${t.blocks} block${t.blocks === 1 ? '' : 's'}`,
       );
       item.description = `${t.accepted} accepted · ${t.rejected} rejected · ${t.pending} pending`;
+      item.id = `summary:${session.taskId}`;
       item.iconPath = new vscode.ThemeIcon('checklist');
       item.contextValue = 'swage.review.summary';
       item.tooltip = 'Accept or reject each block, then Apply. Nothing is written until you apply.';
@@ -116,6 +117,7 @@ export class ReviewTree implements vscode.TreeDataProvider<ReviewNode> {
     const block = session.file(node.path)?.blocks.find((b) => b.id === node.blockId);
     const pos = session.preview(node.path).blocks.find((b) => b.id === node.blockId);
     const item = new vscode.TreeItem(`Block ${node.index + 1}`);
+    item.id = `block:${session.taskId}:${node.path}:${node.blockId}`;
     item.description = `${block?.state ?? ''} · line ${(pos?.start ?? 0) + 1} · +${block?.newLines.length ?? 0} -${block?.oldLines.length ?? 0}${block?.whitespaceOnly ? ' · whitespace' : ''}`;
     item.iconPath = new vscode.ThemeIcon(ICONS[block?.state ?? 'pending']);
     item.contextValue = `swage.review.block.${block?.state ?? 'pending'}`;

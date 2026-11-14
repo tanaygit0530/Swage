@@ -220,7 +220,16 @@ function Row({
   );
 }
 
-export function FilesBar({ model, send }: { model: BarModel; send: Send }) {
+export function FilesBar({
+  model,
+  send,
+  turn,
+}: {
+  model: BarModel;
+  send: Send;
+  /** Set when the bar shows an earlier turn: its request, and the newest turn to go back to. */
+  turn?: { label: string; latest: string | undefined } | undefined;
+}) {
   const [collapsed, setCollapsed] = useState(false);
   const [open, setOpen] = useState<ReadonlySet<string>>(new Set());
   if (!model.visible) return null;
@@ -232,7 +241,24 @@ export function FilesBar({ model, send }: { model: BarModel; send: Send }) {
   };
   const waiting = 'Available when the agent submits the change set';
   return (
-    <section id="files-bar" class="files-bar" tabIndex={-1} aria-label={barTitle(model.files)}>
+    <section id="files-bar" class="files-bar" tabIndex={-1} aria-label={barTitle(model.open)}>
+      {turn && (
+        <div class="fb-turn">
+          <span class="fb-turn-label" title={turn.label}>
+            For this turn: {turn.label}
+          </span>
+          {turn.latest && (
+            <button
+              type="button"
+              class="link"
+              aria-label="Clear the turn filter and show the newest turn"
+              onClick={() => turn.latest && send({ type: 'reviewTurn', taskId: turn.latest })}
+            >
+              Clear filter
+            </button>
+          )}
+        </div>
+      )}
       {!collapsed && (
         <ul class="fb-rows">
           {model.rows.map((r) => (
