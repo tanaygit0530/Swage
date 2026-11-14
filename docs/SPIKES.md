@@ -180,3 +180,44 @@ Effect: Swage unwraps `input` before summarising arguments or reading a `run_com
 
 - The inline agent sets `preload: true`. It enables only `declare_context` and `stage_edit`, so this adds no tool definitions, and the instruction goes away.
 - The main agent keeps `preload: false` with `preload_tools`, so deferred discovery of `run_tests`, `get_symbol`, `repo_map` and `run_command` stays visible for B4. Its instructions now name the tools that are already loaded and say to call them directly.
+
+## Review upgrade spike: an inline red and green diff in VS Code (14 November 2026)
+
+**Question:** how to show removed lines in red and added lines in green inside the editor, before anything is written to the workspace.
+
+**Chosen: VS Code's own diff editor in its inline view.** `vscode.diff(swage-base:…, swage-staged:…)` opens the original against the staged preview. Both are read-only virtual documents from Swage's content provider, so the real file buffer is never touched before Accept, and autosave or format-on-save cannot act on it. In the inline view the diff editor draws:
+
+- removed lines red, above added lines green;
+- word-level highlights inside changed lines;
+- `-` and `+` gutter indicators (`diffEditor.renderIndicators`);
+- its own overview-ruler marks;
+- the theme's colours (`diffEditor.removedLineBackground`, `insertedLineBackground`, and the text variants), so light, dark and high-contrast themes all work.
+
+New files diff against an empty original, so they are all green. Deleted files diff against an empty preview, so they are all red.
+
+**What VS Code allows:** there is no per-tab or per-call inline option. `vscode.diff` takes no view mode. The command `toggle.diff.renderSideBySide` flips the user's `diffEditor.renderSideBySide` setting for every diff. Language-scoped overrides do not apply to a virtual-document scheme.
+
+**So Swage scopes the setting to its own tabs** (`src/review/vscode/diffView.ts`):
+
+- **Before a Swage diff opens:** it sets `renderSideBySide: false` at the level where the user's value lives (global unless the workspace sets it).
+- **The user's value is saved first:** the original value goes into the extension's global state before the setting is written, so a crash in between can't strand an override.
+- **When the last Swage diff tab closes:** the user's exact previous value comes back, and a removed key is removed again (`tabGroups.onDidChangeTabs`).
+- **On deactivate and at the next start:** if a Swage diff was open, the value is restored then.
+- **A value the user changes while a Swage diff is open** is left as they set it.
+- **Turning it off:** `swage.review.inlineDiff: false` turns the override off.
+- **The review options use the same mechanism:** "Hide whitespace changes" (`diffEditor.ignoreTrimWhitespace`) and "Collapse unchanged regions" (`diffEditor.hideUnchangedRegions.enabled`).
+
+**Verified** (`test/integration/diffView.test.ts`, real VS Code 1.146):
+
+- The tab is a `TabInputTextDiff` of `swage-base` against `swage-staged`.
+- The two documents hold exactly the original and the staged text.
+- The effective `renderSideBySide` is `false` while the tab is open.
+- Closing the tabs removes the user-level key again; the test profile's `settings.json` ends as `{}`.
+- `vscode.executeCodeLensProvider` on the staged side returns the Accept and Reject lenses, so CodeLens works inside the diff editor.
+- The `editor/title` buttons (Accept file, Reject file) are declared with `resourceScheme == swage-staged`, which in a diff editor refers to the modified side; the review screenshots (step 9) are where they are confirmed on screen.
+
+**Limitations:**
+
+- **Other diffs are briefly inline:** while a Swage diff tab is open, other diffs the user opens (a git diff, say) are inline too, because the setting is global for that time.
+- **Renames:** Swage stages no renames (an agent rename is a delete plus a create), so there is no old → new title.
+- **Per-file colours:** the colours of the native diff come from the theme. Swage adds its own overview-ruler and gutter marks per block (green for additions, red for removals, grey for decided blocks) on the staged side.

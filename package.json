@@ -480,6 +480,21 @@
           "default": true,
           "markdownDescription": "Start TrueForge automatically when the extension activates."
         },
+        "swage.review.inlineDiff": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Show Swage's diffs inline (one column: removed lines red above added lines green). While a Swage diff tab is open Swage sets `diffEditor.renderSideBySide` to `false` and puts your own value back when the last one closes."
+        },
+        "swage.review.autoAdvance": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "After **Accept file** or **Reject file**, open the next file that still has changes."
+        },
+        "swage.review.openFirstFileAutomatically": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "When the agent submits a change set, open the first changed file's diff."
+        },
         "swage.rateLimitWaitSeconds": {
           "type": "number",
           "default": 60,

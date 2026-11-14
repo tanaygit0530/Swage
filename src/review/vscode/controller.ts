@@ -8,6 +8,7 @@ import { ReviewDecorations } from './decorations';
 import { BASE_SCHEME, openDiff, ReviewDocuments, STAGED_SCHEME } from './documents';
 import { ReviewTree, type ReviewNode } from './tree';
 import { VsCodeWorkspaceFs } from './workspaceFs';
+import { DiffViewSettings } from './diffView';
 
 /**
  * The review experience in VS Code (blueprint section 8): the Review tree, native diffs of
@@ -81,6 +82,8 @@ export class ReviewController implements vscode.Disposable {
   private readonly view: vscode.TreeView<ReviewNode>;
   private applierFor: { root: string; applier: Applier } | undefined;
   private modeValue: ReviewMode = { mode: 'agent' };
+  /** Inline diff view (and the review options) while a Swage diff tab is open. */
+  readonly diffView: DiffViewSettings;
   /** A change set still being staged: diffs can open before review (read-only, no decisions). */
   private watching: ReviewSession | undefined;
   private readonly changeEmitter = new vscode.EventEmitter<void>();
@@ -89,6 +92,7 @@ export class ReviewController implements vscode.Disposable {
 
   constructor(readonly context: vscode.ExtensionContext) {
     this.documents = new ReviewDocuments(() => this.session ?? this.watching);
+    this.diffView = new DiffViewSettings(context);
     this.tree = new ReviewTree(() => this.session);
     this.lenses = new ReviewCodeLens(
       () => this.session,
@@ -450,10 +454,13 @@ export class ReviewController implements vscode.Disposable {
     const line = ref.blockId
       ? session.preview(ref.path).blocks.find((b) => b.id === ref.blockId)?.start
       : undefined;
+    await this.diffView.enter();
     await openDiff(session, ref.path, line);
   }
 
   dispose(): void {
+    void this.diffView.restore();
+    this.diffView.dispose();
     this.changeEmitter.dispose();
     this.sessionSub?.dispose();
     for (const d of this.disposables) d.dispose();

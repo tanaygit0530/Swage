@@ -110,6 +110,8 @@ export function activate(context: vscode.ExtensionContext): SwageTestApi | undef
 }
 
 export async function deactivate(): Promise<void> {
+  // The user's own diff settings come back before VS Code closes.
+  await review?.diffView.restore();
   // TrueForge stops before the MCP server (upstream issue 878).
   await controller?.shutdown();
   controller = undefined;
