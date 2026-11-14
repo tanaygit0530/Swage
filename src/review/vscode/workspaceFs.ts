@@ -51,13 +51,12 @@ export class VsCodeWorkspaceFs implements WorkspaceFs {
     if (!(await vscode.workspace.applyEdit(edit))) {
       throw new Error('VS Code refused the workspace edit');
     }
-    for (const { uri, content } of replaced) {
+    for (const { uri } of replaced) {
       const doc = await vscode.workspace.openTextDocument(uri);
       if (doc.isDirty) await doc.save();
-      // Save participants (format on save, trim whitespace) must not change the reviewed bytes.
-      const onDisk = new TextDecoder().decode(await vscode.workspace.fs.readFile(uri));
-      if (onDisk !== content)
-        await vscode.workspace.fs.writeFile(uri, new TextEncoder().encode(content));
     }
+    // A save participant (format on save, trim whitespace) or another extension may change the
+    // bytes after the write. That is checked and reported by the caller, never silently undone
+    // or re-applied (review upgrade, step 8).
   }
 }

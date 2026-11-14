@@ -22,6 +22,9 @@ import { pathOf } from './documents';
 
 export const REVIEW_VIEW_ID = 'swage.review';
 
+/** Read-only documents with what an applied file should hold (for the altered-file diff). */
+export const APPLIED_SCHEME = 'swage-applied';
+
 /** Undo depth: every apply (all at once, or one file) is one checkpoint, undone in order. */
 export const MAX_UNDO = 10;
 
@@ -60,6 +63,8 @@ export interface ApplyOptions {
   readonly confirmPending?: boolean;
   /** On a conflict, re-stage without asking (tests). */
   readonly restageOnConflict?: boolean;
+  /** False: on a conflict, report it without the modal question (tests). Default true. */
+  readonly ask?: boolean;
 }
 
 export type ApplyCommandResult =
@@ -143,6 +148,9 @@ export class ReviewController implements vscode.Disposable {
       this.view,
       vscode.workspace.registerTextDocumentContentProvider(BASE_SCHEME, this.documents),
       vscode.workspace.registerTextDocumentContentProvider(STAGED_SCHEME, this.documents),
+      vscode.workspace.registerTextDocumentContentProvider(APPLIED_SCHEME, {
+        provideTextDocumentContent: (uri) => this.expected.get(uri.path.replace(/^\//, '')) ?? '',
+      }),
       vscode.commands.registerCommand('swage.reviewChanges', () => this.show()),
       vscode.commands.registerCommand('swage.review.openFile', (arg: unknown) =>
         this.openFile(arg),
@@ -403,14 +411,24 @@ export class ReviewController implements vscode.Disposable {
     // From the diff editor title the argument is the staged URI; with none, use the active editor.
     const ref = toRef(arg) ?? toRef(vscode.window.activeTextEditor?.document.uri);
     if (!this.session || !ref || !this.session.file(ref.path)) return false;
-    if (this.modeValue.mode === 'agent') return this.settleFile(ref.path, decision);
+    if (this.modeValue.mode === 'agent') {
+      const a = (arg ?? {}) as ApplyOptions;
+      return this.settleFile(ref.path, decision, {
+        ...(a.restageOnConflict === undefined ? {} : { restageOnConflict: a.restageOnConflict }),
+        ...(a.ask === undefined ? {} : { ask: a.ask }),
+      });
+    }
     if (decision === 'accept') this.session.acceptFile(ref.path);
     else this.session.rejectFile(ref.path);
     return true;
   }
 
   /** Applies or discards one file of an agent-mode review, then moves on. */
-  async settleFile(path: string, decision: 'accept' | 'reject'): Promise<FileSettleResult> {
+  async settleFile(
+    path: string,
+    decision: 'accept' | 'reject',
+    options: ApplyOptions = {},
+  ): Promise<FileSettleResult> {
     const session = this.session;
     if (!session || this.modeValue.mode !== 'agent' || !session.openFiles().includes(path))
       return { ok: false, path, reason: 'not_open', message: `${path} is not waiting for review.` };
@@ -424,7 +442,7 @@ export class ReviewController implements vscode.Disposable {
       session.settle(path, 'discarded');
       return this.afterSettle(path, { ok: true, path, how: 'discarded' });
     }
-    const r = await this.applyChanges(session, [change], { restageOnConflict: false });
+    const r = await this.applyChanges(session, [change], options);
     if (!r.ok) return { ok: false, path, reason: r.reason, message: r.message };
     session.settle(path, 'applied');
     return this.afterSettle(path, { ok: true, path, how: 'applied' });
@@ -712,11 +730,13 @@ export class ReviewController implements vscode.Disposable {
       if (error.code === 'conflict') {
         const choice = options.restageOnConflict
           ? 'Re-stage from current files'
-          : await vscode.window.showWarningMessage(
-              error.message,
-              { modal: true },
-              'Re-stage from current files',
-            );
+          : options.ask === false
+            ? undefined
+            : await vscode.window.showWarningMessage(
+                error.message,
+                { modal: true },
+                'Re-stage from current files',
+              );
         if (choice !== 'Re-stage from current files')
           return { ok: false, reason: 'conflict', message: error.message };
         const fs = new VsCodeWorkspaceFs(this.root() ?? vscode.Uri.file('/'));
@@ -738,7 +758,57 @@ export class ReviewController implements vscode.Disposable {
     }
 
     await this.afterApply();
+    await this.verifyWritten(changes);
     return { ok: true, files: applied.checkpoint.entries.map((e) => e.path) };
+  }
+
+  /** What each applied file should hold, for "Open diff" after something altered it. */
+  private readonly expected = new Map<string, string>();
+
+  /**
+   * After Accept, each file is read back from disk and compared with what was accepted. If a
+   * formatter, autosave or another extension changed it, a warning names the files and offers
+   * the real diff. Nothing is re-applied: the user decides.
+   */
+  protected async verifyWritten(changes: readonly FileChange[]): Promise<string[]> {
+    const root = this.root();
+    if (!root) return [];
+    const fs = new VsCodeWorkspaceFs(root);
+    const altered: string[] = [];
+    for (const c of changes) {
+      const onDisk = await fs.read(c.path);
+      const want = c.op === 'delete' ? undefined : c.content;
+      if (onDisk === want) continue;
+      altered.push(c.path);
+      if (want !== undefined) this.expected.set(c.path, want);
+    }
+    this.lastAltered = altered;
+    if (altered.length > 0)
+      void vscode.window
+        .showWarningMessage(
+          `Applied, but ${altered.join(', ')} changed after the write (a formatter, autosave or another extension). Swage did not re-apply anything.`,
+          'Open diff',
+        )
+        .then((choice) => {
+          const first = altered[0];
+          if (choice === 'Open diff' && first) void this.openAlteredDiff(first);
+        });
+    return altered;
+  }
+
+  /** Files that changed after the last apply wrote them (tests and the warning). */
+  lastAltered: readonly string[] = [];
+
+  /** The accepted text against what is on disk now. */
+  async openAlteredDiff(path: string): Promise<void> {
+    const root = this.root();
+    if (!root) return;
+    await vscode.commands.executeCommand(
+      'vscode.diff',
+      vscode.Uri.from({ scheme: APPLIED_SCHEME, path: `/${path}` }),
+      vscode.Uri.joinPath(root, path),
+      `${path} (accepted ↔ on disk now)`,
+    );
   }
 
   /** Time the last apply took, for the performance report. */
