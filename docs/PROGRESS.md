@@ -558,3 +558,64 @@ A modern agent chat with a files-changed bar, in the layout of the two reference
   - edit anchors copied from redacted tool results now match (`e3b43af`).
 - **Task B still needs a capable model** with enough quota for the recording.
 - **Cmd/Ctrl+L** replaces VS Code's "Expand Line Selection" on that key (noted in the README).
+
+## Phase 11: Review upgrade (14 November 2026)
+
+A modern agent-IDE review on the existing engine (change blocks, atomic apply with hash checks, checkpoint undo). One commit per step.
+
+### Built
+
+0. **Spike** (`docs/SPIKES.md`): Swage's diffs use VS Code's inline diff view.
+   - VS Code has no per-tab option, so `diffEditor.renderSideBySide` is set to `false` only while a Swage diff tab is open, then restored exactly.
+   - Your original value is recorded first, a stale configuration read is never mistaken for yours, and after a quit the value is restored at the next start.
+   - The diff pair stays the read-only `swage-base` and `swage-staged` documents, so nothing touches the workspace before Accept.
+1. **Inline red and green diff:**
+   - From the theme: removed lines red, added lines green, word-level highlights, `+`/`-` gutter.
+   - Swage adds overview-ruler ticks per change and dims unchanged context.
+   - Decided changes are greyed: accepted with a tick, rejected struck through.
+   - Minimap marks are not public API.
+2. **Per-change controls:**
+   - Above each change: "n of m · +a -r", Accept, Reject and Split.
+   - Alt+Enter accepts and Alt+Shift+Enter rejects the change under the cursor; Alt+Down and Alt+Up move between changes. These work only in Swage diff tabs.
+3. **Per-file accept and reject:**
+   - **Accept file** applies only that file through the atomic, hash-checked apply, as its own undo checkpoint (undo depth 10). A partly reviewed file applies exactly its accepted changes.
+   - **Reject file** discards only that file.
+   - After either, the next file opens (`swage.review.autoAdvance`).
+   - When none is left, the tabs close and "All changes reviewed" offers Undo.
+   - The controls are a CodeLens at the top of the file (Accept file, Reject file, "file k of N", Previous, Next) and icon buttons in the editor title. Both work inside the diff editor.
+   - Inline edits keep Accept all, Reject all and Apply.
+4. **Files-changed list:**
+   - **Bar:** status letters (M, A, D), signed counts, a "partial" badge, and settled files (applied: ticked and dimmed; discarded: struck through).
+   - **Tree:** files by path with the letter, counts, folder and status; Expand all and Collapse all; a badge counting files to review.
+   - **Status bar:** "Swage: N files with changes" opens a quick pick of those files.
+5. **Per-turn review:**
+   - A new turn's review parks the one in progress (`src/review/queue.ts`), with its decisions and its waiting agent run.
+   - Each turn's Walkthrough card shows "N files changed" with Review; the bar then reads "For this turn" with "Clear filter".
+   - Applying an older turn is hash-checked.
+6. **Comments:**
+   - Cmd+Alt+M (Ctrl+Alt+M) or the gutter "+" adds a comment on selected diff lines (VS Code Comments API).
+   - Comments show as threads, and as a chip ("2 Comments") above the composer.
+   - The next request carries file, lines, quoted code and text, redacted; then the comments clear.
+7. **Review options** in the Review view's menu: Hide whitespace changes (whitespace is shown by default in Swage's diffs), Collapse unchanged regions, Open all diffs in tabs. Settings: `swage.review.inlineDiff`, `autoAdvance`, `openFirstFileAutomatically`.
+8. **Safety:**
+   - After Accept, every written file is read back.
+   - If a formatter, autosave or another extension changed it, a warning names it and offers the real diff. Swage no longer re-writes its own bytes, so it can never loop.
+   - Per-file Accept refuses a file changed on disk since staging, and can re-stage it.
+
+### Tested
+
+- **Unit:** 679 passed, 3 skipped. New coverage: per-file review (all statuses including partial, order, settle), block marks and focus, the per-turn queue, the comment queue and attach, the status letter, the bar's settled rows, the per-turn card, the comments chip.
+- **Integration (VS Code 1.146):** 17 passing. New tests:
+  - the diff-view spike, keyboard and options (`diffView.test.ts`);
+  - four files: accept one file, reject one, accept one change then the file, reject the last, with the disk checked after each step, then undo in reverse order across a reload of the undo history (`perFile.test.ts`);
+  - per-turn review (`turns.test.ts`);
+  - comments (`comments.test.ts`);
+  - safety: no write before Accept, an altered file reported once with no re-apply, a conflict refused and re-staged (`safety.test.ts`).
+  - A root teardown leaves the test profile's settings as they were (`{}`).
+- **Screenshots:** `npm run screenshots` produces `docs/images/review-{diff,file-controls,comment,applied}-{dark,light}.png` and the panel states, including `panel-turn-review-*` and `panel-comment-chip-*`. The data is scripted, so no secrets appear.
+
+### Open
+
+- **The real-model rehearsal** of Tasks A, B and C needs TrueForge running. The harness compiles against the new review; its Task B path (Accept all, Apply) and Task C path (inline Reject all) are unchanged.
+- **No renames:** Swage stages none (a rename is a delete plus a create), so no old → new tab title.
+- **Other diffs are briefly inline:** while a Swage diff is open, other diffs open inline too, because the setting is global for that time.
