@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="160" viewBox="0 0 720 160" role="img" aria-label="Swage: an editor-native coding agent for VS Code, running on TrueForge">
+  <title>Swage</title>
+  <!-- The Swage mark (media/swage-logo.svg) scaled 4x, with the wordmark. Original Swage artwork. -->
+  <g transform="translate(16 16) scale(4)">
+    <path fill="#A7B0BB" d="M4 12H12A4 4 0 0 0 20 12H28V17L24 20V24H27V27H5V24H8V20L4 17Z"/>
+    <path fill="#F26B1D" d="M23 1.5L24.3 4.7L27.5 6L24.3 7.3L23 10.5L21.7 7.3L18.5 6L21.7 4.7Z"/>
+    <circle fill="#F26B1D" cx="28.2" cy="1.8" r="1.1"/>
+  </g>
+  <text x="168" y="88" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="64" font-weight="700" fill="#E6EDF3" letter-spacing="-1">Swage</text>
+  <text x="170" y="124" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="20" fill="#9DA7B3">Forge code changes you can review, apply and undo.</text>
+</svg>

@@ -1,18 +1,172 @@
-# Swage
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="media/swage-banner-dark.svg">
+    <img src="media/swage-banner-light.svg" alt="Swage" width="560">
+  </picture>
+</p>
 
-**An editor-native coding agent for VS Code whose agent loop runs on [TrueForge](https://github.com/truefoundry/trueforge).** Built from scratch for the TrueFoundry Forge-a-thon (Techfest 2026-27).
+<p align="center">
+  <b>An editor-native coding agent for VS Code whose agent loop runs on <a href="https://github.com/truefoundry/trueforge">TrueForge</a>.</b><br>
+  Built from scratch for the TrueFoundry Forge-a-thon (Techfest 2026-27).
+</p>
 
-Swage makes inline edits and multi-file changes the way a careful engineer reviews them: every change is staged in memory, shown as a native diff with **Accept, Reject and Split on each block**, applied atomically, and undoable. The model never writes to disk.
+<p align="center">
+  <img alt="Licence: MIT" src="https://img.shields.io/badge/licence-MIT-blue">
+  <img alt="VS Code 1.96 or newer" src="https://img.shields.io/badge/VS%20Code-1.96%2B-007ACC">
+  <img alt="Node 22.14 or newer" src="https://img.shields.io/badge/node-22.14%2B-339933">
+  <img alt="Agent loop on TrueForge 0.184.2" src="https://img.shields.io/badge/agent%20loop-TrueForge%200.184.2-F26B1D">
+  <img alt="Tools over MCP" src="https://img.shields.io/badge/tools-MCP-8A63D2">
+</p>
 
-- **Thin client:** the extension is a TrueForge client. It creates sessions and turns through the TrueForge SDK and renders the streamed events.
-- **Tools, not logic:** the editor's capabilities (search, read, propose a write, run tests, run a command) are exposed to the agent as **MCP tools**, so the agent decides what to read and change.
-- **Models live in TrueForge:** Swage never calls a model provider directly.
+---
+
+## What Swage is
+
+Swage makes inline edits and multi-file changes the way a careful engineer reviews them. Every change is **staged in memory**, shown as a **red and green inline diff** with Accept and Reject on each change, **applied atomically**, and **undoable**. The model never writes to disk.
+
+|                         |                                                                                                                               |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| ✏️ **Inline edit**      | Select code, press **Cmd/Ctrl+Alt+K**, describe the change. The edit stays inside your selection.                             |
+| 🤖 **Agent mode**       | One request. The agent finds the files itself, plans, edits several files, runs the tests and hands you the result to review. |
+| 🧭 **Context assembly** | Symbol, BM25 and import-graph retrieval under a token budget. The agent must say which files it chose and why before editing. |
+| 🔍 **Review and undo**  | Per-change, per-file and per-turn Accept or Reject, comments for the agent, hash-checked atomic apply, and up to 10 undos.    |
+| ⚡ **Streaming**        | Tokens and tool calls stream live. Escape stops at once and leaves the workspace untouched.                                   |
+| 🛟 **Fallback**         | If a model fails or runs out of quota, Swage switches to the next one and carries the task over, with no click needed.        |
 
 ![Inline red and green diff with file controls and per-change Accept, Reject and Split](docs/images/review-diff-dark.png)
 
-![One file accepted: the tree marks it applied and the next file opens](docs/images/review-applied-dark.png)
+> **No keys in this repository.** API keys are entered only in TrueForge's own settings, stored in its database outside this folder. Swage's profiles name TrueForge models only. The git history is scanned for secrets in CI (`npm run scan:secrets`), and tool output is redacted.
 
-> **No keys in this repository.** API keys and provider URLs are entered only in TrueForge's own settings, stored in its database outside this folder. Swage's profiles name TrueForge models only. The whole git history is scanned for secrets in CI (`npm run scan:secrets`), and tool output is redacted.
+## Architecture
+
+Swage is a **thin client**. TrueForge runs the agent loop and calls the models. The editor's abilities (search, read, stage an edit, run tests, run a command) are **MCP tools** that Swage serves, so the agent decides what to read and change. Only the review engine ever writes to your files, and only after you accept.
+
+```mermaid
+flowchart LR
+  subgraph VSC["VS Code: the Swage extension"]
+    direction TB
+    UI["Agent panel<br/>Preact webview"]
+    INL["Inline edit<br/>Cmd+Alt+K"]
+    CTRL["Run controller<br/>streaming, stop, fallback"]
+    MCP["MCP server<br/>9 editor tools"]
+    CS["Change set<br/>in-memory overlay"]
+    REV["Review engine<br/>inline diff, CodeLens, comments"]
+    UI --> CTRL
+    INL --> CTRL
+    MCP -- "stage_edit" --> CS
+    CS --> REV
+  end
+
+  subgraph TF["TrueForge (local, port 8790)"]
+    direction TB
+    AG["Agents<br/>swage-main, swage-plan, swage-inline"]
+    LOOP["Agent loop<br/>sessions, turns, approvals"]
+    GW["Model gateway"]
+    AG --> LOOP --> GW
+  end
+
+  subgraph M["Models"]
+    G["Gemini"]
+    Q["Groq"]
+    O["Ollama (local)"]
+  end
+
+  WS[("Your workspace<br/>files on disk")]
+
+  CTRL -- "SDK: sessions and turns" --> LOOP
+  LOOP -- "event stream" --> CTRL
+  LOOP -- "MCP tool calls" --> MCP
+  GW --> G & Q & O
+  MCP -. "read only" .-> WS
+  REV == "atomic apply<br/>after Accept" ==> WS
+```
+
+### One agent turn
+
+```mermaid
+sequenceDiagram
+  autonumber
+  actor You
+  participant P as Swage panel
+  participant T as TrueForge
+  participant L as Model
+  participant S as Swage MCP tools
+  participant R as Review engine
+
+  You->>P: Request, no files named
+  P->>T: Start a turn (agent swage-main or swage-plan)
+  loop Until the change set is submitted
+    T->>L: Messages and tool definitions
+    L-->>T: Tool call
+    T->>S: find_relevant_code, read_files, declare_context, stage_edit, run_tests
+    S-->>T: Result (secrets redacted)
+    T-->>P: Streamed tokens and tool events
+  end
+  L-->>T: submit_change_set
+  T-->>P: Approval pause
+  P->>R: Open the inline diffs
+  You->>R: Accept or Reject each change, file or turn
+  R->>R: Hash-checked atomic apply, checkpoint for Undo
+  R-->>You: Applied N files. Undo
+```
+
+### The life of a change
+
+Nothing reaches the disk until you accept it, and every apply can be undone.
+
+```mermaid
+stateDiagram-v2
+  direction LR
+  [*] --> Staged: stage_edit
+  Staged --> Pending: submit_change_set
+  Pending --> Accepted: Accept (Alt+Enter)
+  Pending --> Rejected: Reject (Alt+Shift+Enter)
+  Accepted --> Pending: Undo the decision
+  Rejected --> Pending: Accept instead
+  Accepted --> Applied: Apply, hash-checked and atomic
+  Rejected --> Discarded: original kept
+  Applied --> Restored: Undo (last 10 change sets)
+  Staged --> Discarded: Escape or Stop
+  Applied --> [*]
+  Discarded --> [*]
+  Restored --> [*]
+```
+
+### Context assembly
+
+The agent gets a ranked, budgeted view of the repository, and has to declare its plan before the first edit.
+
+```mermaid
+flowchart LR
+  REQ["Your request<br/>and @mentions"] --> RET
+  subgraph RET["Retrieval"]
+    direction TB
+    SYM["tree-sitter symbols"]
+    BM["BM25 over code"]
+    IMP["import graph"]
+    MAP["repo map"]
+  end
+  RET --> RANK["Rank and cut<br/>to the token budget"]
+  RANK --> EX["Code excerpts<br/>in the first message"]
+  EX --> DEC["declare_context<br/>plan, files and reasons"]
+  DEC --> GATE{"Declared?"}
+  GATE -- "no" --> DEC
+  GATE -- "yes" --> EDIT["stage_edit allowed"]
+```
+
+### Fallback without losing work
+
+```mermaid
+flowchart LR
+  A["Call the primary model"] --> B{"Result"}
+  B -- "OK" --> DONE["Stream to the panel"]
+  B -- "401, 403, refused,<br/>unknown model" --> SW["Switch to the next profile"]
+  B -- "429 or 5xx" --> W["Wait or back off,<br/>honour retry-after"] --> A
+  B -- "timeout" --> R1["Retry once"] --> A
+  SW --> C["Carry over the task,<br/>plan and staged edits"]
+  C --> N["Toast: Switched to X because Y"]
+  N --> A2["Continue on the fallback"]
+```
 
 ## Requirements
 
@@ -41,11 +195,11 @@ npm run build
 trueforge/start.sh
 ```
 
-**3. Add models in the TrueForge UI.** Open <http://localhost:8790>, go to **Settings → Models**, add a provider (for example Google Gemini from the catalog) and paste its key there. Note the model names TrueForge lists, such as `google-gemini/gemini-flash-lite-latest`; you need them in step 5.
+**3. Add models in the TrueForge UI.** Open <http://localhost:8790>, go to **Settings → Models**, add a provider (for example Google Gemini from the catalog) and paste its key there. Note the model names TrueForge lists, such as `google-gemini/gemini-flash-lite-latest`.
 
-**4. Run Swage.** Use either option:
+**4. Run Swage.** Either:
 
-- **From source:** open the `Swage` folder in VS Code and press **F5** (configuration **Run Swage Extension**). A new window titled **[Extension Development Host]** opens.
+- **From source:** open the `Swage` folder in VS Code and press **F5** (configuration **Run Swage Extension**). A window titled **[Extension Development Host]** opens.
 - **As an extension:** build the VSIX and install it.
 
   ```bash
@@ -56,9 +210,7 @@ trueforge/start.sh
   code --install-extension swage-0.1.0.vsix
   ```
 
-  If `code` is not found, run **Shell Command: Install 'code' command in PATH** from VS Code's command palette, or use **Extensions → … → Install from VSIX…** instead.
-
-**5. Point Swage at your models.** In the window where Swage runs, open the folder you want to work on, then add this to its `.vscode/settings.json` (or to your user settings). Use the model names from step 3.
+**5. Point Swage at your models.** In the folder you want to work on, add this to `.vscode/settings.json` (or your user settings), with the model names from step 3:
 
 ```json
 {
@@ -79,38 +231,42 @@ trueforge/start.sh
 }
 ```
 
-The status bar now shows **Swage: Gemini Flash Lite**.
+**6. Check everything.** Press Cmd/Ctrl+Shift+P and run **Swage: Doctor**. It checks Node, TrueForge and its version, the MCP server with and without its token, the agents and a tool call from each model, and ripgrep, Python, pytest and workspace trust. Every row should be green; a red row says how to fix it.
 
-**6. Check everything.** Press Cmd/Ctrl+Shift+P and run **Swage: Doctor**. It checks:
-
-- Node, and TrueForge with its version;
-- the MCP server with and without its token;
-- the agents, and a tool call from each model;
-- ripgrep, Python, pytest and workspace trust.
-
-Every row should be green; a red row says how to fix it.
-
-The **agent definitions** in `trueforge/agents/*.json` are loaded automatically. Swage registers its MCP server and creates or updates the agents `swage-main-<profile>` and `swage-inline-<profile>` in TrueForge on the first request, and Doctor does the same. You can see them on TrueForge's **Agents** page.
+The **agent definitions** in [`trueforge/agents/`](trueforge/agents) are loaded automatically: Swage registers its MCP server and creates or updates the agents `swage-main-<profile>`, `swage-plan-<profile>` and `swage-inline-<profile>` in TrueForge on the first request. You can see them on TrueForge's **Agents** page.
 
 ## Using Swage
 
-| What                                | How                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Inline edit                         | Select code (or put the cursor in a function), press **Cmd/Ctrl+Alt+K**, type the instruction. Review the blocks in the diff, then **Apply**.                                                                                                                                                                                                                                                                                  |
-| Agent mode                          | Click the **Swage** icon (or press **Cmd/Ctrl+L**), type a request (`@` mentions files and symbols, `/` offers workflows, **+** attaches the selection), press Enter. Review in the **files-changed bar** above the composer: open a diff per file, accept or reject per file or block, then **Accept all** (applies atomically, with **Undo** in the toast) or **Reject all**. The **Review** view shows the same change set. |
-| Planning or Fast                    | The mode dropdown under the composer. **Planning** (the default) shows the Plan card and stages no edit until you click **Approve** (or **Edit** to send the plan back); **Fast** runs straight through. Both remember their choice per workspace.                                                                                                                                                                             |
-| Stop                                | **Escape** while a run is going, or **Swage: Stop Run**. The workspace is never changed by a stopped run.                                                                                                                                                                                                                                                                                                                      |
-| Undo                                | **Swage: Undo Last Change Set**; it works twice in a row and after a window reload.                                                                                                                                                                                                                                                                                                                                            |
-| Switch model                        | Use the **model dropdown** under the composer (profiles in order, with a health dot), or click the status bar item. **Other models… → Add a model from TrueForge…** adds any model TrueForge has (Gemini, Groq, Ollama…) and uses it next.                                                                                                                                                                                     |
-| Make the primary fail (demo Task C) | `npm run break-primary -- --workspace ../flask`, then `npm run restore-primary`.                                                                                                                                                                                                                                                                                                                                               |
+| What                  | How                                                                                                                                                                                      |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Inline edit**       | Select code, press **Cmd/Ctrl+Alt+K** (on a Mac, ⌥ is Alt), type the instruction. Review the changes in the inline diff, then **Apply**.                                                 |
+| **Agent mode**        | Click the **Swage** icon or press **Cmd/Ctrl+L**. Type a request (`@` mentions files and symbols, **+** attaches the selection). Review in the **files-changed bar** above the composer. |
+| **Planning or Fast**  | The mode dropdown under the composer. **Planning** shows a Plan card and stages nothing until you click **Approve**; **Fast** runs straight through.                                     |
+| **Review a change**   | In the diff: **Alt+Enter** accepts, **Alt+Shift+Enter** rejects, **Alt+↓ / Alt+↑** move between changes. **Accept file** and **Reject file** settle a file and open the next one.        |
+| **Comment for agent** | Select lines in a Swage diff and press **Cmd/Ctrl+Alt+M**. Comments go to the agent with your next request.                                                                              |
+| **Stop**              | **Escape** while a run is going, or **Swage: Stop Run**. A stopped run never changes the workspace.                                                                                      |
+| **Undo**              | **Undo** in the toast, or **Swage: Undo Last Change Set**. Up to 10 change sets, also after a window reload.                                                                             |
+| **Switch model**      | The **model dropdown** under the composer, or the status bar item. **Other models… → Add a model from TrueForge…** adds any model TrueForge has.                                         |
+| **Demo the fallback** | `npm run break-primary -- --workspace ../flask`, then `npm run restore-primary`.                                                                                                         |
 
-**Note:** **Cmd/Ctrl+L** focuses the agent composer, which replaces VS Code's "Expand Line Selection" on that key. Rebind `swage.focusComposer` in Keyboard Shortcuts if you want it back.
+<table>
+  <tr>
+    <td><img src="docs/images/panel-plan-dark.png" alt="Plan card with the files the agent chose and why" width="260"></td>
+    <td><img src="docs/images/panel-bar-expanded-dark.png" alt="Files-changed bar with per-file and per-change controls" width="260"></td>
+    <td><img src="docs/images/panel-fallback-dark.png" alt="Automatic switch to the fallback model" width="260"></td>
+  </tr>
+  <tr>
+    <td align="center">Plan with files and reasons</td>
+    <td align="center">Files-changed bar</td>
+    <td align="center">Automatic fallback</td>
+  </tr>
+</table>
 
-Screenshots of every panel state, in dark and light themes, are in [`docs/images`](docs/images) (`npm run screenshots:panel` regenerates them).
+Every panel state, in dark and light themes, is in [`docs/images`](docs/images) (`npm run screenshots:panel` regenerates them).
 
 ## Model profiles
 
-Profiles are an ordered list: the first is the primary, the rest are fallbacks tried in order. Each names a **TrueForge model** and nothing else secret.
+Profiles are an ordered list: the first is the primary, the rest are fallbacks tried in order. Each names a **TrueForge model** and nothing secret.
 
 ```yaml
 # config/models.example.yaml (the same fields go in the swage.models setting)
@@ -123,52 +279,55 @@ profiles:
     timeouts: { connectMs: 10000, firstTokenMs: 45000, stallMs: 30000, totalMs: 600000 }
 ```
 
-- **Timeouts:** each attempt has a connect, first-token, stall and total timer. Missing values come from `kind`:
-  - hosted: 10 s / 45 s / 30 s / 10 min;
-  - local: 10 s / 120 s / 60 s / 15 min, so a slow local model is not mistaken for a dead one.
-- **Hard failures** (401, 403, a refused connection, an unknown model) switch to the next profile at once.
-- **Transient failures** (429, 5xx) retry with backoff and honour the server's "retry in N s". Timeouts retry once. Then Swage switches, carrying the task, plan and staged edits over. The panel says _"Switched to Groq because Gemini returned 429."_ and no click is needed.
-- **Swapping the primary** (for example the organisers' model) is just editing the setting or using **Swage: Switch Model → Change the primary model**. No model name is hard-coded anywhere.
+- **Timeouts** come from `kind` when missing: hosted 10 s / 45 s / 30 s / 10 min; local 10 s / 120 s / 60 s / 15 min.
+- **Hard failures** (401, 403, a refused connection, an unknown model) switch at once. **Transient failures** (429, 5xx) wait and retry first.
+- **Local models:** add Ollama (`http://127.0.0.1:11434/v1`) or a llama.cpp server as a custom provider in TrueForge. A small model can be marked `inlineOnly` so agent mode skips it.
+- No model name is hard-coded anywhere.
 
-Local models: add Ollama (`http://127.0.0.1:11434/v1`) or a llama.cpp server (`http://127.0.0.1:8080/v1`) as custom providers in TrueForge. `trueforge/start.sh` already allows 127.0.0.1.
+## Where the code lives
 
-## The five required capabilities, and where they live
+| Capability                     | Code                                                                                                                                                                                       |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Inline edit**                | [`src/inline/`](src/inline), [`trueforge/agents/inline.agent.json`](trueforge/agents/inline.agent.json)                                                                                    |
+| **Agent mode**                 | [`src/agent/`](src/agent), [`src/mcp/tools/`](src/mcp/tools) (nine MCP tools), [`src/ui/webview/`](src/ui/webview), [`trueforge/agents/main.agent.json`](trueforge/agents/main.agent.json) |
+| **Context assembly**           | [`src/context/`](src/context) (symbols, BM25, import graph, repo map, budgets, mentions), [`src/agent/context.ts`](src/agent/context.ts)                                                   |
+| **Diff review and undo**       | [`src/changeset/`](src/changeset) (overlay, blocks, apply, test guard), [`src/review/`](src/review) (session, queue, marks, comments, checkpoints, `vscode/`)                              |
+| **Streaming and cancellation** | [`src/client/events.ts`](src/client/events.ts), [`src/agent/run.ts`](src/agent/run.ts), [`src/mcp/tasks.ts`](src/mcp/tasks.ts)                                                             |
+| **Resilience**                 | [`src/resilience/`](src/resilience) (classify, fallback, carry-over, probes)                                                                                                               |
+| **Safety and setup**           | [`src/safety/`](src/safety) (path guard, redaction, command policy), [`src/doctor/`](src/doctor), [`src/supervisor/`](src/supervisor)                                                      |
 
-| Capability                        | What you see                                                                                                                                        | Code                                                                                                                                                                                                                                                                                   |
-| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **1. Inline edit**                | Keybinding, instruction box, native diff in the editor with per-block Accept, Reject and Split; edits locked to the selection                       | [`src/inline/`](src/inline) (context, range lock, code-block fallback, `vscode/controller.ts`), [`trueforge/agents/inline.agent.json`](trueforge/agents/inline.agent.json)                                                                                                             |
-| **2. Agent mode**                 | One request; the agent searches, reads, plans, stages several files, runs tests and submits for review                                              | [`src/agent/`](src/agent) (`run.ts`, `controller.ts`), [`src/mcp/tools/`](src/mcp/tools) (nine MCP tools), [`src/ui/webview/`](src/ui/webview) (panel), [`trueforge/agents/main.agent.json`](trueforge/agents/main.agent.json)                                                         |
-| **3. Context assembly**           | `@file` / `@symbol` mentions, automatic retrieval, a plan with files and reasons, a token budget bar                                                | [`src/context/`](src/context) (tree-sitter symbols, BM25, import graph, repo map, budgets, mentions), [`src/agent/context.ts`](src/agent/context.ts), [`src/mcp/tools/findRelevantCode.ts`](src/mcp/tools/findRelevantCode.ts), [`declareContext.ts`](src/mcp/tools/declareContext.ts) |
-| **4. Diff review and undo**       | Review view of files and blocks, Accept or Reject each block, atomic Apply with a hash check, Undo twice                                            | [`src/changeset/`](src/changeset) (overlay, blocks, apply, checkpoints), [`src/review/`](src/review) (model, session, `vscode/` tree, CodeLens, diff documents, WorkspaceEdit)                                                                                                         |
-| **5. Streaming and cancellation** | Tokens and tool calls appear as TrueForge streams them; Escape stops at once; tools are aborted and staged edits discarded; the editor never blocks | [`src/client/events.ts`](src/client/events.ts), [`src/agent/run.ts`](src/agent/run.ts) (`cancel`), [`src/mcp/tasks.ts`](src/mcp/tasks.ts), [`src/mcp/tools/exec.ts`](src/mcp/tools/exec.ts)                                                                                            |
-
-Also: resilience and fallback in [`src/resilience/`](src/resilience), Doctor in [`src/doctor/`](src/doctor), path guard, redaction and the command policy in [`src/safety/`](src/safety), and the TrueForge supervisor in [`src/supervisor/`](src/supervisor).
+| MCP tool             | What it does                                           | Needs approval |
+| -------------------- | ------------------------------------------------------ | :------------: |
+| `find_relevant_code` | Ranked code search with excerpts, within a budget      |                |
+| `repo_map`           | A compact map of files and symbols                     |                |
+| `read_files`         | Reads files (secrets redacted)                         |                |
+| `get_symbol`         | One symbol's definition                                |                |
+| `declare_context`    | The plan: files chosen and why (required before edits) |                |
+| `stage_edit`         | Stages an edit in memory, never on disk                |                |
+| `run_tests`          | Runs the tests against the staged files                |                |
+| `run_command`        | Runs an allowed command                                |       ✅       |
+| `submit_change_set`  | Hands the change set to you for review                 |       ✅       |
 
 ## Development
 
 ```bash
-npm run lint && npm test && npm run build   # or ./scripts/verify.sh
-npm run test:integration                    # VS Code integration tests
-npm run fake-model                          # scripted OpenAI-compatible model server for offline demos
-node scripts/rehearse.mjs setup             # clean Flask 3.1.3 clone and baseline
-node scripts/rehearse.mjs run               # Tasks A, B and C on real models, evidence in docs/
+./scripts/verify.sh                 # lint, unit tests and build
+npm run test:integration            # VS Code integration tests
+npm run fake-model                  # scripted model server for offline demos
 npm run scan:secrets && npm run check:licences
 ```
 
-Design and decisions: [`docs/BLUEPRINT.md`](docs/BLUEPRINT.md), verified TrueForge behaviour: [`docs/SPIKES.md`](docs/SPIKES.md), build log: [`docs/PROGRESS.md`](docs/PROGRESS.md), rehearsal evidence: [`docs/EVIDENCE.md`](docs/EVIDENCE.md).
+Design and decisions: [`docs/BLUEPRINT.md`](docs/BLUEPRINT.md) · verified TrueForge behaviour: [`docs/SPIKES.md`](docs/SPIKES.md) · build log: [`docs/PROGRESS.md`](docs/PROGRESS.md) · rehearsal evidence: [`docs/EVIDENCE.md`](docs/EVIDENCE.md).
 
 ## Limitations
 
-- **Free-tier models are slow and rate-limited.**
-  - Inline edits took 5 to 36 s from instruction to diff in rehearsals.
-  - Agent-mode runs exhausted Gemini's free tier (250,000 input tokens per minute per model). Swage waits out quotas and caps switches, but finishing Task B reliably needs a paid key or a model with more quota.
-- **Models tested:** Gemini (free tier) end to end. Ollama Qwen 7B answered but made no native tool calls through TrueForge (Swage hands the task on). Groq is supported but was not verified.
+- **Free-tier models are slow and rate-limited.** Inline edits took 5 to 36 s in rehearsals. Agent mode can finish the Flask `config` task on free Gemini, but not every run: quotas run out and the model sometimes makes mistakes.
+- **Models tested:** Gemini end to end. Ollama Qwen 2.5 Coder 3B is used for inline edits only. Groq is supported but was not verified.
 - The inline instruction box is VS Code's quick input at the top of the window, not a widget inside the editor (that needs a proposed API).
 - Retrieval is lexical, symbol and import based, with no embeddings.
-- A running task does not yet survive a window reload (applied change sets and their undo do).
-- There is no session log export, no "open TrueForge session" command and no performance report command yet.
-- Windows is not tested, and CI runs on Ubuntu only.
+- A running task does not survive a window reload (applied change sets and their undo do).
+- Windows is not tested: CI requires Linux and macOS, and runs Windows only as an experiment.
 
 ## Licence
 
-[MIT](LICENSE). Built from scratch; no code was copied or forked. Dependencies are listed in `package.json` and checked by `npm run check:licences`; all shipped ones are MIT, ISC or BSD.
+[MIT](LICENSE). Built from scratch; no code was copied or forked. All shipped dependencies are MIT, ISC or BSD (`npm run check:licences`).
